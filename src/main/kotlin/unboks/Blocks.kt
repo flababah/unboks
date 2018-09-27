@@ -5,15 +5,15 @@ import unboks.internal.RefCountsImpl
 import unboks.invocation.Invocation
 
 sealed class Block(val flow: FlowGraph) : IrFactory, Nameable {
-	private val mutOpcodes = mutableListOf<Ir>()
+	private val _opcodes = mutableListOf<Ir>()
+	val opcodes: List<Ir> get() = _opcodes
+
 	open val root get() = flow.root === this
-	val opcodes: List<Ir> get() = mutOpcodes
 
 	val inputs: RefCounts<Block> = RefCountsImpl()
 	val phiReferences: RefCounts<IrPhi> = RefCountsImpl()
 
-	val terminal: IrTerminal? get() = mutOpcodes.lastOrNull() as? IrTerminal
-
+	val terminal: IrTerminal? get() = opcodes.lastOrNull() as? IrTerminal
 
 	data class ExceptionEntry(val handler: HandlerBlock, val type: Reference?)
 
@@ -41,7 +41,7 @@ sealed class Block(val flow: FlowGraph) : IrFactory, Nameable {
 
 	override fun newThrow(exception: Def): IrThrow = append(IrThrow(this, exception))
 
-	private fun <T: Ir> append(ir: T): T = ir.apply { mutOpcodes += this }
+	private fun <T: Ir> append(ir: T): T = ir.apply { _opcodes += this }
 
 	override fun toString(): String = name
 }
