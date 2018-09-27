@@ -48,6 +48,10 @@ internal class NameRegistry(private val prefix: String) {
 	}
 }
 
+// TODO Maybe rethink. We should use one registry and let different types
+// have their own specific prefixes still. If one parameter and phi are
+// named the same, they should get a number difference even through they
+// are from different categories.
 internal enum class AutoNameType(val prefix: String) {
 	PARAMETER("P"),
 	EXCEPTION("e"),
