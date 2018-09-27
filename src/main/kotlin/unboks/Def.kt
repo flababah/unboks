@@ -1,6 +1,7 @@
 package unboks
 
-interface Def /*: Nameable*/ {
+interface Def : Nameable {
+
 	val type: Thing
 
 	/**

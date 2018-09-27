@@ -1,5 +1,9 @@
 package unboks
 
 interface Nameable {
-	var name: String // TODO Delegate by i internal
+
+	/**
+	 * Set to empty string to reset to default.
+	 */
+	var name: String
 }

@@ -33,6 +33,10 @@ import unboks.internal.RefCountsImpl
  */
 
 sealed class Constant<T>(val value: T) : Def {
+	override var name: String
+		get() = value.toString() // TODO Display strings with quotes "...", etc...
+		set(value) { /* No-op */ }
+
 	override val uses: RefCounts<Use> = RefCountsImpl() // TODO Cache same values -- per FlowGraph
 }
 

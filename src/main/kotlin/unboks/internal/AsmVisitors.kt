@@ -50,9 +50,16 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 		markUsedLabel(start, end, handler)
 	}
 
-//	override fun visitLocalVariable(name: String?, descriptor: String?, signature: String?, start: Label?, end: Label?, index: Int) {
-//		super.visitLocalVariable(name, descriptor, signature, start, end, index) // TODO
-//	}
+	override fun visitLocalVariable(name: String, desc: String?, sig: String?, start: Label?, end: Label?, index: Int) {
+		var i = 0
+		for (parameter in graph.parameters) {
+			if (i == index) {
+				parameter.name = name
+				return
+			}
+			i += parameter.type.width
+		}
+	}
 
 	override fun visitMaxs(maxStack: Int, maxLocals: Int) {
 		state.maxLocals = maxLocals
@@ -580,6 +587,10 @@ private class LocalsMap(initials: Iterable<Def>, maxLocals: Int) : Iterable<Def>
 		private object WIDE : DummyDef()
 
 		private open class DummyDef : Invalid {
+			override var name: String
+				get() = throw IllegalStateException()
+				set(value) { }
+
 			override val type get() = unboks.TOP
 			override val uses get() = throw IllegalStateException()
 		}

@@ -1,9 +1,10 @@
 package unboks
 
+import unboks.internal.AutoNameType
 import unboks.internal.RefCountsImpl
 import unboks.invocation.Invocation
 
-sealed class Block(val flow: FlowGraph) : IrFactory/*: Nameable*/ {
+sealed class Block(val flow: FlowGraph) : IrFactory, Nameable {
 	private val mutOpcodes = mutableListOf<Ir>()
 	open val root get() = flow.root === this
 	val opcodes: List<Ir> get() = mutOpcodes
@@ -41,6 +42,8 @@ sealed class Block(val flow: FlowGraph) : IrFactory/*: Nameable*/ {
 	override fun newThrow(exception: Def): IrThrow = append(IrThrow(this, exception))
 
 	private fun <T: Ir> append(ir: T): T = ir.apply { mutOpcodes += this }
+
+	override fun toString(): String = name
 }
 
 // TODO IrFactoryDelegate.
@@ -72,6 +75,8 @@ sealed class Block(val flow: FlowGraph) : IrFactory/*: Nameable*/ {
 //}
 
 class BasicBlock internal constructor(flow: FlowGraph) : Block(flow) {
+	override var name by flow.autoName(AutoNameType.BASIC_BLOCK, this)
+
 	override var root
 		get() = flow.root === this
 		set(value) {
@@ -82,6 +87,7 @@ class BasicBlock internal constructor(flow: FlowGraph) : Block(flow) {
 }
 
 class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Block(flow) {
+	override var name by flow.autoName(AutoNameType.HANDLER_BLOCK, this)
 
 	/**
 	 * Defaults to the highest possible exception type, [java.lang.Throwable].
@@ -93,6 +99,8 @@ class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Blo
 	 * the stack when an exception is caught.
 	 */
 	val exception = object : Def {
+		override var name by flow.autoName(AutoNameType.EXCEPTION, this)
+
 		override val type get() = this@HandlerBlock.type
 		override val uses: RefCounts<Use> = RefCountsImpl()
 	}

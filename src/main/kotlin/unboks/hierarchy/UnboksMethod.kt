@@ -8,4 +8,10 @@ class UnboksMethod internal constructor(val type: UnboksClass, val name: String,
 	var access = 0
 	val throws = mutableSetOf<Reference>()
 	val flow = FlowGraph(*parameterTypes)
+
+	override fun toString(): String = flow.parameters.joinToString(
+		prefix = "$name(",
+		separator = ", ",
+		postfix = ")"
+	)
 }
