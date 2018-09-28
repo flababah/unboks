@@ -1,5 +1,9 @@
 package unboks
 
+/**
+ * @see Def
+ * @see Block
+ */
 interface Nameable {
 
 	/**
