@@ -20,7 +20,7 @@ internal class NameRegistry(private val prefix: String) {
 		} else {
 			if (currentGroup != group) {
 				forget(key)
-				addNewKey(key, group);
+				addNewKey(key, group)
 			}
 		}
 	}
@@ -37,7 +37,7 @@ internal class NameRegistry(private val prefix: String) {
 		if (type != null) {
 			types.remove(key)
 			val order = registry[type]!!
-			order.set(order.indexOf(key), null)
+			order[order.indexOf(key)] = null
 		}
 	}
 
