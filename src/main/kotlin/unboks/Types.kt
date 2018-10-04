@@ -44,19 +44,26 @@ class Reference(val internal: String) : SomeReference() {
 	override fun equals(other: Any?): Boolean = other is Reference && internal == other.internal
 
 	override fun hashCode(): Int = internal.hashCode()
+
+	override fun toString(): String = internal.split("/").last()
 }
 
-sealed class Primitive(override val width: Int) : Thing()
+sealed class Primitive(override val width: Int, private val repr: String) : Thing() {
 
-object BOOLEAN : Primitive(1)
-object BYTE : Primitive(1)
-object CHAR : Primitive(1)
-object SHORT : Primitive(1)
+	override fun toString(): String = repr
+}
 
-object INT : Primitive(1)
-object LONG : Primitive(2)
-object FLOAT : Primitive(1)
-object DOUBLE : Primitive(2)
+sealed class INT_TYPE(repr: String) : Primitive(1, repr)
+
+object BOOLEAN : INT_TYPE("boolean")
+object BYTE : INT_TYPE("byte")
+object CHAR : INT_TYPE("char")
+object SHORT : INT_TYPE("short")
+object INT : INT_TYPE("int")
+
+object LONG : Primitive(2, "long")
+object FLOAT : Primitive(1, "float")
+object DOUBLE : Primitive(2, "double")
 object VOID : SomeReference() {
 	override val width get() = throw UnsupportedOperationException("Hmm void doesn't have a width... hmmmmm")
 }
@@ -66,4 +73,4 @@ object OBJECT : SomeReference() {
 }
 
 
-object TOP : Primitive(1)
+object TOP : Primitive(1, "~TOP~")

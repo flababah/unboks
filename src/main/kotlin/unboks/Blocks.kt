@@ -43,7 +43,7 @@ sealed class Block(val flow: FlowGraph) : IrFactory, Nameable {
 
 	private fun <T: Ir> append(ir: T): T = ir.apply { _opcodes += this }
 
-	override fun toString(): String = name
+	override fun toString(): String = name + if (root) " [ROOT]"  else ""
 }
 
 // TODO IrFactoryDelegate.

@@ -4,6 +4,7 @@ import org.objectweb.asm.*
 import org.objectweb.asm.Opcodes.ASM6
 import unboks.Reference
 import unboks.Thing
+import unboks.internal.DebugMethodVisitor
 import unboks.internal.FlowGraphVisitor
 import unboks.internal.MethodSignature
 import java.lang.reflect.Modifier
@@ -48,6 +49,10 @@ class UnboksContext(private val resolver: (String) -> ClassReader? = { null }) {
 
 				if (exs != null)
 					throws.addAll(exs.map { Reference(it) })
+			}
+			if (name == "choice") {
+				println("Tracing 'choice'...................")
+				return FlowGraphVisitor(method.flow, DebugMethodVisitor())
 			}
 			return FlowGraphVisitor(method.flow)
 		}

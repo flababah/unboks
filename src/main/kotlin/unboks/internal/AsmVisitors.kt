@@ -14,19 +14,41 @@ import unboks.invocation.Invocation
 /**
  * Builds a [FlowGraph] using the ASM library.
  */
-internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(ASM6) {
+internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisitor? = null)
+		: MethodVisitor(ASM6, debug) {
+
 	private lateinit var state: State
 
 	private fun defer(terminalOp: Boolean = false, deferred: DeferredOp) = withState {
-		if (it is Expecting.NewBlock) {
-			blocks += AsmBlock.Basic(it.labels)
-			if (!terminalOp)
-				expecting = Expecting.Any
-		}
-		if (blocks.isEmpty())
-			blocks += AsmBlock.Basic(setOf()) // Root block without a label prior.
+		val debugMv = mv
+		if (debugMv != null)
+			deferred(debugMv)
 
-		blocks.last().operations += deferred
+		when (it) {
+			is Expecting.FrameInfo -> throw ParseException("Expected frame info after handler label, not op")
+			is Expecting.Any -> {
+				if (blocks.isEmpty())
+					blocks += AsmBlock.Basic(setOf()) // Root block without a label prior.
+			}
+			is Expecting.NewBlock -> {
+				blocks += AsmBlock.Basic(it.labels)
+			}
+		}
+		val last = blocks.last()
+		if (terminalOp)
+			// No labels associated here, since this split was caused by encountering
+			// a terminal op, not by a visiting a label.
+			setState(Expecting.NewBlock(setOf()))
+		else if (it != Expecting.Any)
+			setState(Expecting.Any)
+
+		last.hasTerminal = terminalOp
+		last.operations += deferred
+	}
+
+	private fun setState(expecting: Expecting) {
+		println("--- state: $expecting")
+		state.expecting = expecting
 	}
 
 	private fun markUsedLabel(vararg labels: Label) = labels.forEach { state.usedLabels += it }
@@ -34,23 +56,37 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 	private inline fun <R> withState(block: State.(Expecting) -> R): R = block(state, state.expecting)
 
 	override fun visitCode() {
+		super.visitCode()
 		state = State()
 	}
 
 	override fun visitLabel(label: Label) = withState {
-		exceptions.visitLabel(label)
-		expecting = when (exceptions.isHandlerLabel(label)) {
-			true  -> Expecting.FrameInfo(setOf(label))
-			false -> Expecting.NewBlock(setOf(label))
+		super.visitLabel(label)
+
+		// In case multiple labels without anything of interest (line number markers) appeared
+		// before we need to make sure all those labels are registered for the resulting block.
+		val accumulatedLabels = when (it) {
+			is Expecting.FrameInfo -> throw ParseException("Expected frame info after handler label, not another label")
+			is Expecting.NewBlock -> it.labels + label
+			is Expecting.Any -> setOf(label)
 		}
+		exceptions.visitLabel(label)
+		setState(when (exceptions.isHandlerLabel(label)) {
+			true  -> Expecting.FrameInfo(accumulatedLabels)
+			false -> Expecting.NewBlock(accumulatedLabels)
+		})
 	}
 
 	override fun visitTryCatchBlock(start: Label, end: Label, handler: Label, type: String?) {
+		super.visitTryCatchBlock(start, end, handler, type)
+
 		state.exceptions.addEntry(start, end, handler, type?.let(::Reference))
 		markUsedLabel(start, end, handler)
 	}
 
 	override fun visitLocalVariable(name: String, desc: String?, sig: String?, start: Label?, end: Label?, index: Int) {
+		super.visitLocalVariable(name, desc, sig, start, end, index)
+
 		var i = 0
 		for (parameter in graph.parameters) {
 			if (i == index) {
@@ -62,10 +98,13 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 	}
 
 	override fun visitMaxs(maxStack: Int, maxLocals: Int) {
+		super.visitMaxs(maxStack, maxLocals)
 		state.maxLocals = maxLocals
 	}
 
 	override fun visitFrame(type: Int, nLocal: Int, local: Array<out Any>?, nStack: Int, stack: Array<out Any>?) = withState {
+		super.visitFrame(type, nLocal, local, nStack, stack)
+
 		if (it is Expecting.FrameInfo) {
 			when (type) {
 				F_FULL, F_SAME1 -> assert(nStack == 1) { "Stack size at handler is not 1" }
@@ -73,7 +112,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 			}
 			val exceptionType = Reference(stack!![0] as String) // Mmm, unsafe Java.
 			blocks += AsmBlock.Handler(it.labels, exceptionType)
-			expecting = Expecting.Any
+			setState(Expecting.Any)
 		}
 	}
 
@@ -86,12 +125,14 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 			}
 			merged.operations += operations
 			merged.operations += with.operations
+			merged.hasTerminal = with.hasTerminal
 			return merged
 		}
 
 		return mergePairs(state.blocks) { previous, current ->
-			val used = current.labels.any { it in state.usedLabels }
-			if (!used)
+			val currentUsed = current.labels.any { it in state.usedLabels }
+
+			if (!previous.hasTerminal && !currentUsed)
 				// It's OK to cast block to Basic because Handler blocks are created
 				// based on entries in the exception table, ie they are never unused.
 				previous.merge(current as AsmBlock.Basic)
@@ -100,39 +141,48 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 		}
 	}
 
+	/**
+	 * List of first pass blocks must be ordered by the sequence they appear in the code.
+	 * The first block must therefore be the root block.
+	 */
+	private class SecondPass(graph: FlowGraph, firstPassBlocks: List<AsmBlock>) {
+		val fromLabel: Map<Label, AsmBackingBlock>
+		val fromBlock: Map<Block, AsmBackingBlock>
+		val root: AsmBackingBlock?
+
+		init {
+			val fromLabel = mutableMapOf<Label, AsmBackingBlock>()
+			val fromBlock = mutableMapOf<Block, AsmBackingBlock>()
+			var root: AsmBackingBlock? = null
+			var previous: AsmBackingBlock? = null
+
+			for (block in firstPassBlocks) {
+				val backing = when (block) {
+					is AsmBlock.Basic -> AsmBackingBlock.Basic(graph.createBasicBlock(), block.operations)
+					is AsmBlock.Handler -> AsmBackingBlock.Handler(graph.createHandlerBlock(block.type), block.operations)
+				}
+				if (root == null)
+					root = backing
+
+				if (previous != null)
+					previous.successor = backing
+				previous = backing
+
+				block.labels.forEach { fromLabel += it to backing }
+				fromBlock += backing.backing to backing
+			}
+			this.fromLabel = fromLabel
+			this.fromBlock = fromBlock
+			this.root = root
+		}
+	}
+
 	override fun visitEnd() {
+		super.visitEnd()
+
 		val visitedBlocks = mutableSetOf<AsmBackingBlock>()
 		val maxLocals = state.maxLocals ?: throw ParseException("visitMaxs not invoked")
-
-		fun AsmBlock.toBacking() = when(this) {
-			is AsmBlock.Basic   -> AsmBackingBlock.Basic(graph.createBasicBlock(), operations)
-			is AsmBlock.Handler -> AsmBackingBlock.Handler(graph.createHandlerBlock(type), operations)
-		}
-
-		// Order so root is correctly created for the first block.
-		val mergedBlocks = createMergedBlocks()
-		var root: AsmBackingBlock? = null
-
-		var previous: AsmBackingBlock? = null
-		val labelToBlock = mergedBlocks.asSequence()
-				.flatMap { block ->
-					val backing = block.toBacking()
-
-					if (root == null)
-						root = backing
-
-					val previousCopy = previous
-					if (previousCopy != null)
-						previousCopy.successor = backing
-
-					previous = backing
-					block.labels.asSequence().map { l -> l to backing }
-				}
-				.toMap()
-
-		val blockToAsm = labelToBlock.values.asSequence()
-				.map { it.backing to it }
-				.toMap()
+		val info = SecondPass(graph, createMergedBlocks())
 
 		fun createFallthroughGoto(block: AsmBackingBlock): IrGoto {
 			val successor = block.successor
@@ -171,7 +221,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 
 				// Replay deferred operations on the block visitor.
 				val mv = FlowGraphBlockVisitor(localsState, stackState, backing, block.successor) {
-					val resolved = labelToBlock[it] ?: throw ParseException("Unknown label: ${it}")
+					val resolved = info.fromLabel[it] ?: throw ParseException("Unknown label: $it")
 					resolved.backing as BasicBlock // TODO Better check if not ok...
 				}
 				block.operations.forEach { it(mv) }
@@ -182,13 +232,13 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 
 				// Traverse out edges.
 				for (next in terminal.successors) {
-					val nextBacking = blockToAsm[next]!!
+					val nextBacking = info.fromBlock[next]!!
 					traverse(nextBacking, block, localsState, stackState)
 				}
 
 				// Traverse exception handlers.
 				for (exception in backing.exceptions) {
-					val nextBacking = blockToAsm[exception.handler]!!
+					val nextBacking = info.fromBlock[exception.handler]!!
 					traverse(nextBacking, block, localsState, StackMap(emptyList()))
 				}
 			}
@@ -201,7 +251,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 			predStack.mergeInto(stackPhis, pred.backing)
 		}
 
-		val finalRoot = root ?: throw ParseException("No blocks in method")
+		val finalRoot = info.root ?: throw ParseException("No blocks in method")
 
 		val startLocals = LocalsMap(graph.parameters, maxLocals)
 		val startStack = StackMap(emptyList())
@@ -210,7 +260,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 		// are "assigned" in root block.
 		traverse(finalRoot, finalRoot, startLocals, startStack)
 
-		if (visitedBlocks.size != mergedBlocks.size)
+		if (visitedBlocks.size != info.fromBlock.size)
 			throw ParseException("Dead code") // TODO Just delete unused blocks.
 
 		// TODO Run weeding...
@@ -296,7 +346,7 @@ private class FlowGraphBlockVisitor(
 			ICONST_4,
 			ICONST_5 -> stack.push(IntConst(opcode - ICONST_0))
 
-			IRETURN -> appender.newReturn(stack.pop<INT>())
+			IRETURN -> appender.newReturn(stack.pop<INT_TYPE>())
 			LRETURN -> appender.newReturn(stack.pop<LONG>())
 			FRETURN -> appender.newReturn(stack.pop<FLOAT>())
 			DRETURN -> appender.newReturn(stack.pop<DOUBLE>())
@@ -320,7 +370,7 @@ private class FlowGraphBlockVisitor(
 			IFEQ, IFNE, IFLT, IFGT, IFLE, IFGE, IFNULL, IFNONNULL -> 1
 			IF_ACMPEQ, IF_ICMPEQ, IF_ACMPNE, IF_ICMPNE, IF_ICMPLT, IF_ICMPGT, IF_ICMPLE, IF_ICMPGE -> 2
 
-			else -> throw java.lang.IllegalStateException("Unknown jump opcode: $opcode")
+			else -> throw IllegalStateException("Unknown jump opcode: $opcode")
 		}
 
 		fun getComparisonFor(opcode: Int) = when (opcode) {
@@ -334,7 +384,7 @@ private class FlowGraphBlockVisitor(
 			IFNONNULL -> Cmp.NOT_NULL
 
 			JSR -> throw ParseException("JSR opcode not supported")
-			else -> throw java.lang.IllegalStateException("Unknown compare opcode: $opcode")
+			else -> throw IllegalStateException("Unknown compare opcode: $opcode")
 		}
 
 		fun AsmBackingBlock?.checked() : BasicBlock = (this
@@ -366,13 +416,13 @@ private class FlowGraphBlockVisitor(
 		when (opcode) {
 			LLOAD -> stack.push(locals.get<LONG>(index))
 			DLOAD -> stack.push(locals.get<DOUBLE>(index))
-			ILOAD -> stack.push(locals.get<INT>(index))
+			ILOAD -> stack.push(locals.get<INT_TYPE>(index))
 			FLOAD -> stack.push(locals.get<FLOAT>(index))
 			ALOAD -> stack.push(locals.get<SomeReference>(index))
 
 			LSTORE -> locals[index] = stack.pop<LONG>()
 			DSTORE -> locals[index] = stack.pop<DOUBLE>()
-			ISTORE -> locals[index] = stack.pop<INT>()
+			ISTORE -> locals[index] = stack.pop<INT_TYPE>()
 			FSTORE -> locals[index] = stack.pop<FLOAT>()
 			ASTORE -> locals[index] = stack.pop<SomeReference>()
 
@@ -407,7 +457,7 @@ private class FlowGraphBlockVisitor(
 	override fun visitIincInsn(varId: Int, increment: Int) {
 		// IINC doesn't exist in our internal representation. Lower it into IADD.
 		locals[varId] = appender.newInvoke(InvIntrinsic.IADD,
-				locals.get<INT>(varId),
+				locals.get<INT>(varId), // TODO This needs to be INT_TYPE, right?
 				IntConst(increment))
 	}
 
@@ -437,6 +487,7 @@ private class State {
  */
 private sealed class AsmBlock(val labels: Set<Label>) {
 	val operations = mutableListOf<DeferredOp>()
+	var hasTerminal = false
 
 	class Basic(labels: Set<Label>) : AsmBlock(labels)
 
@@ -456,10 +507,12 @@ private sealed class AsmBackingBlock(val operations: List<DeferredOp>) {
 }
 
 private sealed class Expecting {
-	class NewBlock(val labels: Set<Label> = setOf()) : Expecting()
-	class FrameInfo(val labels: Set<Label>) : Expecting()
+	data class NewBlock(val labels: Set<Label> = setOf()) : Expecting()
+	data class FrameInfo(val labels: Set<Label>) : Expecting()
 
-	object Any : Expecting()
+	object Any : Expecting() {
+		override fun toString(): String = "Any"
+	}
 }
 
 private class ExceptionBoundsMap {
@@ -491,6 +544,8 @@ private class StackMap(initials: Iterable<Def>) : Iterable<Def> {
 	private val stack = mutableListOf<Def>().apply {
 		addAll(initials)
 	}
+
+	val size get() = stack.size
 
 	fun push(def: Def) = stack.add(def)
 
@@ -589,7 +644,7 @@ private class LocalsMap(initials: Iterable<Def>, maxLocals: Int) : Iterable<Def>
 		private open class DummyDef : Invalid {
 			override var name: String
 				get() = throw IllegalStateException()
-				set(value) { }
+				set(_) { }
 
 			override val type get() = unboks.TOP
 			override val uses get() = throw IllegalStateException()

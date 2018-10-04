@@ -39,6 +39,14 @@
             <scope>test</scope>
         </dependency>
 
+
+        <!-- only for debug - separate module? -->
+        <dependency>
+            <groupId>org.ow2.asm</groupId>
+            <artifactId>asm-util</artifactId>
+            <version>${asm.version}</version>
+        </dependency>
+
     </dependencies>
 
     <build>

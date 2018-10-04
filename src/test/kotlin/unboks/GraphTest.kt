@@ -11,7 +11,7 @@ class GraphTest {
 	fun simpleBlocksTest() {
 		val graph = FlowGraph(INT, LONG)
 
-		val root = graph.root
+		val root = graph.createBasicBlock()
 		val b2 = graph.createBasicBlock()
 		val b3 = graph.createHandlerBlock()
 
