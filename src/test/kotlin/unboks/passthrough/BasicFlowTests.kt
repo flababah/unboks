@@ -28,14 +28,14 @@ class BasicFlowTests {
 //		return flags;
 //	}
 
-//	fun multiply(a: Int, b: Int): Int { // TODO Handle negative.
-//		var x = 0
-//		for (i in (0 .. a)) {
-//			x += 1 // TODO Fjern.
-//			x += b
-//		}
-//		return x
-//	}
+	fun multiply(a: Int, b: Int): Int { // TODO Handle negative.
+		var x = 0
+		for (i in (0 .. a)) {
+			x += 1 // TODO Fjern.
+			x += b
+		}
+		return x
+	}
 
 	fun add(a: Int, b: Int): Int = a + b
 

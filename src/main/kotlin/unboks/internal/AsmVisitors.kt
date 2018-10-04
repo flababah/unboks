@@ -565,7 +565,7 @@ private class StackMap(initials: Iterable<Def>) : Iterable<Def> {
 		if(stack.size != phis.size)
 			throw ParseException("Merge mismatch: ${stack.size} != ${phis.size}")
 
-		phis.zip(stack) { phi, def -> phi.phiDefs.add(def to definedIn) }
+		phis.zip(stack) { phi, def -> phi.phiDefs += def to definedIn }
 	}
 
 	override fun iterator() = stack.iterator()
@@ -622,12 +622,12 @@ private class LocalsMap(initials: Iterable<Def>, maxLocals: Int) : Iterable<Def>
 		if (withHistory) {
 			phis.zip(history) { phi, hist ->
 				for (def in hist)
-					phi.phiDefs.add(def to definedIn)
+					phi.phiDefs += def to definedIn
 			}
 		} else {
 			phis.zip(current) { phi, def ->
 				if (def !is Invalid)
-					phi.phiDefs.add(def to definedIn)
+					phi.phiDefs += def to definedIn
 			}
 		}
 	}
