@@ -47,7 +47,6 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 	}
 
 	private fun setState(expecting: Expecting) {
-		println("--- state: $expecting")
 		state.expecting = expecting
 	}
 

@@ -50,10 +50,10 @@ class UnboksContext(private val resolver: (String) -> ClassReader? = { null }) {
 				if (exs != null)
 					throws.addAll(exs.map { Reference(it) })
 			}
-			if (name == "choice") {
-				println("Tracing 'choice'...................")
-				return FlowGraphVisitor(method.flow, DebugMethodVisitor())
-			}
+//			if (name == "choice") {
+//				println("Tracing 'choice'...................")
+//				return FlowGraphVisitor(method.flow, DebugMethodVisitor())
+//			}
 			return FlowGraphVisitor(method.flow)
 		}
 	}
