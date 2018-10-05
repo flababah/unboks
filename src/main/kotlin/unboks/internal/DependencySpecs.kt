@@ -2,7 +2,7 @@ package unboks.internal
 
 import unboks.*
 
-internal class TargetSpecification<A, B>(val accessor: (B) -> RefCounts<A>)
+internal class TargetSpecification<out A, in B>(val accessor: (B) -> RefCounts<A>)
 
 
 internal val blockInputs = TargetSpecification<Block, Block> { it.inputs }

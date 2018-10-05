@@ -3,7 +3,7 @@ package unboks
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
-import unboks.internal.EventType
+import unboks.internal.ObservableEvent
 import unboks.internal.ObservableSet
 import kotlin.test.assertEquals
 
@@ -11,12 +11,12 @@ import kotlin.test.assertEquals
 private class ObservableCollectionsTest {
 
 //	private class Hej
-	val actual = mutableListOf<Pair<EventType, Int>>()
-	val expected = mutableListOf<Pair<EventType, Int>>()
+	val actual = mutableListOf<Pair<ObservableEvent, Int>>()
+	val expected = mutableListOf<Pair<ObservableEvent, Int>>()
 
-	private fun expectAdd(elm: Int) = expected.add(EventType.ADDED to elm)
+	private fun expectAdd(elm: Int) = expected.add(ObservableEvent.ADD to elm)
 
-	private fun expectRemove(elm: Int) = expected.add(EventType.REMOVED to elm)
+	private fun expectRemove(elm: Int) = expected.add(ObservableEvent.DEL to elm)
 
 	@Nested
 	inner class SetTest {

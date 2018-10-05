@@ -98,7 +98,9 @@ class IrInvoke internal constructor(block: Block, val spec: Invocation, argument
 	override val uses: RefCounts<Use> = RefCountsImpl()
 	override val type get() = spec.returnType
 
-	override val defs: MutableList<Def> = dependencyList(defUses, arguments)
+	override val defs: MutableList<Def> = dependencyList(defUses).apply {
+		addAll(arguments)
+	}
 
 	override fun toString() = "$name = ${spec.representation}${createUseTuple(this)}"
 }
@@ -117,7 +119,7 @@ class IrPhi internal constructor(block: Block, private val explicitType: Thing)
 		else -> TOP
 	}
 
-	val phiDefs: MutableSet<Pair<Def, Block>> = mutableSetOf()
+	val phiDefs: MutableSet<Pair<Def, Block>> = dependencySet(defUses, phiReferences)
 	// TODO rename når Def bliver fyldt ud.
 	// TODO Måske lav subtype af Def, der har block i sig?
 

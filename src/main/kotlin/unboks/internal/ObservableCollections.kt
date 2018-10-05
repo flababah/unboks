@@ -1,17 +1,17 @@
 package unboks.internal
 
-internal enum class EventType {
-	ADDED,
-	REMOVED
+internal enum class ObservableEvent {
+	ADD,
+	DEL
 }
 
 internal sealed class ObservableCollection<Del : MutableCollection<E>, E>(
 		protected val delegate: Del,
-		protected val observer: (EventType, E) -> Unit): MutableCollection<E> by delegate {
+		protected val observer: (ObservableEvent, E) -> Unit): MutableCollection<E> by delegate {
 
 	override fun add(element: E): Boolean = delegate
 			.add(element)
-			.andIfTrue { observer(EventType.ADDED, element) }
+			.andIfTrue { observer(ObservableEvent.ADD, element) }
 
 	override fun addAll(elements: Collection<E>): Boolean = elements
 			.asSequence()
@@ -20,7 +20,7 @@ internal sealed class ObservableCollection<Del : MutableCollection<E>, E>(
 
 	override fun clear() = ArrayList<E>(this)
 			.apply { delegate.clear() }
-			.forEach { observer(EventType.REMOVED, it) }
+			.forEach { observer(ObservableEvent.DEL, it) }
 
 	override fun iterator(): MutableIterator<E> = delegate.iterator().let {
 		object : MutableIterator<E> by it {
@@ -33,13 +33,13 @@ internal sealed class ObservableCollection<Del : MutableCollection<E>, E>(
 			// Delegate would have thrown if null.
 			override fun remove() = it
 					.remove()
-					.apply { observer(EventType.REMOVED, current!!) }
+					.apply { observer(ObservableEvent.DEL, current!!) }
 		}
 	}
 
 	override fun remove(element: E): Boolean = delegate
 			.remove(element)
-			.andIfTrue { observer(EventType.REMOVED, element) }
+			.andIfTrue { observer(ObservableEvent.DEL, element) }
 
 	override fun removeAll(elements: Collection<E>): Boolean = elements
 			.asSequence()
@@ -61,18 +61,18 @@ internal sealed class ObservableCollection<Del : MutableCollection<E>, E>(
 
 internal class ObservableSet<E> private constructor(
 		delegate: MutableSet<E>,
-		observer: (EventType, E) -> Unit
+		observer: (ObservableEvent, E) -> Unit
 ) : ObservableCollection<MutableSet<E>, E>(delegate, observer), MutableSet<E> {
 
-	constructor(observer: (EventType, E) -> Unit) : this(hashSetOf(), observer)
+	constructor(observer: (ObservableEvent, E) -> Unit) : this(hashSetOf(), observer)
 }
 
 internal class ObservableList<E> private constructor(
 		delegate: MutableList<E>,
-		observer: (EventType, E) -> Unit
+		observer: (ObservableEvent, E) -> Unit
 ) : ObservableCollection<MutableList<E>, E>(delegate, observer), MutableList<E> {
 
-	constructor(observer: (EventType, E) -> Unit) : this(mutableListOf(), observer)
+	constructor(observer: (ObservableEvent, E) -> Unit) : this(mutableListOf(), observer)
 
 	override fun get(index: Int): E = delegate.get(index)
 
@@ -82,11 +82,11 @@ internal class ObservableList<E> private constructor(
 
 	override fun add(index: Int, element: E) = delegate
 			.add(index, element)
-			.apply { observer(EventType.ADDED, element) }
+			.apply { observer(ObservableEvent.ADD, element) }
 
 	override fun addAll(index: Int, elements: Collection<E>): Boolean = delegate
 			.addAll(index, elements)
-			.apply { elements.forEach { observer(EventType.ADDED, it) } }
+			.apply { elements.forEach { observer(ObservableEvent.ADD, it) } }
 
 	override fun listIterator(): MutableListIterator<E> = listIterator(0)
 
@@ -100,7 +100,7 @@ internal class ObservableList<E> private constructor(
 
 			override fun add(element: E) = it
 					.add(element)
-					.apply { observer(EventType.ADDED, element )}
+					.apply { observer(ObservableEvent.ADD, element )}
 
 			override fun next() = it
 					.next()
@@ -108,14 +108,14 @@ internal class ObservableList<E> private constructor(
 
 			override fun remove() = it
 					.remove()
-					.apply { observer(EventType.REMOVED, current!!) }
+					.apply { observer(ObservableEvent.DEL, current!!) }
 
 			override fun set(element: E) = it
 					.set(element)
 					.apply {
 						if (this !== element) {
-							observer(EventType.ADDED, element)
-							observer(EventType.REMOVED, current!!)
+							observer(ObservableEvent.ADD, element)
+							observer(ObservableEvent.DEL, current!!)
 							current = element
 						}
 					}
@@ -124,14 +124,14 @@ internal class ObservableList<E> private constructor(
 
 	override fun removeAt(index: Int): E = delegate
 			.removeAt(index)
-			.apply { observer(EventType.REMOVED, this) }
+			.apply { observer(ObservableEvent.DEL, this) }
 
 	override fun set(index: Int, element: E): E = delegate
 			.set(index, element)
 			.apply {
 				if (this !== element) {
-					observer(EventType.ADDED, element)
-					observer(EventType.REMOVED, this)
+					observer(ObservableEvent.ADD, element)
+					observer(ObservableEvent.DEL, this)
 				}
 			}
 

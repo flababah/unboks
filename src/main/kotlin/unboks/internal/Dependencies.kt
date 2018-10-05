@@ -9,7 +9,8 @@ import kotlin.reflect.KProperty
  *
  * All places [RefCounts] is used, we must assume it's safe to cast to [RefCountsImpl].
  *
- * @see cast
+ * @see RefCounts.inc
+ * @see RefCounts.dec
  */
 internal class RefCountsImpl<T> private constructor(
 		private val refs: MutableMap<T, Int>) : RefCounts<T>, Set<T> by refs.keys {
@@ -39,36 +40,39 @@ internal class RefCountsImpl<T> private constructor(
 	override fun hashCode(): Int = refs.hashCode()
 }
 
-private inline fun <T> RefCounts<T>.cast(): RefCountsImpl<T> = this as RefCountsImpl<T>
-
-
-
-
+private infix fun <T> RefCounts<T>.inc(ref: T) = (this as RefCountsImpl<T>).inc(ref)
+private infix fun <T> RefCounts<T>.dec(ref: T) = (this as RefCountsImpl<T>).dec(ref)
 
 internal fun <A, B> A.dependencySet(spec: TargetSpecification<A, B>): Set<B> {
 	TODO()
 }
 
-internal fun <A, B1, B2> A.dependencyCompositeSet(
+/**
+ * Creates a composite dependency set of a pair of specifications.
+ */
+internal fun <A, B1, B2> A.dependencySet(
 		spec1: TargetSpecification<A, B1>,
-		spec2: TargetSpecification<A, B2>): Set<Pair<B1, B2>> {
-	TODO()
-
-	// TODO How med proxy depender?
+		spec2: TargetSpecification<A, B2>)
+: MutableSet<Pair<B1, B2>> = ObservableSet { event, (elm1, elm2) ->
+	when (event) {
+		ObservableEvent.ADD -> {
+			spec1.accessor(elm1) inc this
+			spec2.accessor(elm2) inc this
+		}
+		ObservableEvent.DEL -> {
+			spec1.accessor(elm1) dec this
+			spec2.accessor(elm2) dec this
+		}
+	}
 }
 
 internal fun <A, B> A.dependencyList(
-		spec: TargetSpecification<A, B>,
-		initials: List<B>): MutableList<B> {
-
-	val list = ObservableList<B> { event, elm ->
-		when (event) {
-			EventType.ADDED -> spec.accessor(elm).cast().inc(this)
-			EventType.REMOVED -> spec.accessor(elm).cast().dec(this)
-		}
+		spec: TargetSpecification<A, B>)
+: MutableList<B> = ObservableList { event, elm ->
+	when (event) {
+		ObservableEvent.ADD -> spec.accessor(elm) inc this
+		ObservableEvent.DEL -> spec.accessor(elm) dec this
 	}
-	list.addAll(initials)
-	return list
 }
 
 //internal fun <A, B> A.dependencyProperty(
@@ -84,7 +88,7 @@ internal fun <A, B, R : B> dependencyProperty(
 		source: A,
 		initial: R): ReadWriteProperty<Any, R> {
 
-	spec.accessor(initial).cast().inc(source)
+	spec.accessor(initial) inc source
 
 	return object : ReadWriteProperty<Any, R> {
 		private var current = initial
@@ -93,8 +97,8 @@ internal fun <A, B, R : B> dependencyProperty(
 
 		override fun setValue(thisRef: Any, property: KProperty<*>, value: R) {
 			if (value != current) {
-				spec.accessor(current).cast().dec(source)
-				spec.accessor(value).cast().inc(source)
+				spec.accessor(current) dec source
+				spec.accessor(value) inc source
 				current = value
 			}
 		}
@@ -107,7 +111,7 @@ internal fun <A, B, R : B> dependencyNullableProperty(
 		initial: R? = null): ReadWriteProperty<Any, R?> {
 
 	if (initial != null)
-		spec.accessor(initial).cast().inc(source)
+		spec.accessor(initial) inc source
 
 	return object : ReadWriteProperty<Any, R?> {
 		private var current = initial
@@ -118,9 +122,9 @@ internal fun <A, B, R : B> dependencyNullableProperty(
 			val c = current
 			if (value != c) {
 				if (c != null)
-					spec.accessor(c).cast().dec(source)
+					spec.accessor(c) dec source
 				if (value != null)
-					spec.accessor(value).cast().inc(source)
+					spec.accessor(value) inc source
 				current = value
 			}
 		}
