@@ -68,12 +68,7 @@ internal fun <A, B1, B2> A.dependencySet(
 
 internal fun <A, B> A.dependencyList(
 		spec: TargetSpecification<A, B>)
-: MutableList<B> = ObservableList { event, elm ->
-	when (event) {
-		ObservableEvent.ADD -> spec.accessor(elm) inc this
-		ObservableEvent.DEL -> spec.accessor(elm) dec this
-	}
-}
+: MutableList<B> = dependencyList(spec) { it }
 
 /**
  * Creates a dependency list where the target is embedded in some wrapper type.
