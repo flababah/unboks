@@ -10,7 +10,7 @@ import java.lang.IllegalStateException
 /**
  * Entry point into the API.
  */
-class FlowGraph(vararg parameterTypes: Thing) {
+class FlowGraph(vararg parameterTypes: Thing) : ConstantStore() {
 	private val _blocks = mutableSetOf<Block>()
 	val blocks: Set<Block> get() = _blocks
 

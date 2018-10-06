@@ -32,15 +32,57 @@ import unboks.internal.RefCountsImpl
 	}
  */
 
-sealed class Constant<T>(val value: T) : Def {
+abstract class ConstantStore internal constructor() {
+	private val map = mutableMapOf<Any, Constant<*>>() // TODO WeakReference
+
+	@Suppress("UNCHECKED_CAST")
+	private fun <C : Constant<*>> cache(const: C) = map.computeIfAbsent(const.value) { const } as C
+
+	/**
+	 * Gives the set of constants in use in the given [FlowGraph].
+	 */
+	val constants: Set<Constant<*>> get() = map.values.asSequence()
+			.filter { it.uses.count > 0 }
+			.toSet()
+
+	fun constant(value: Int): IntConst = cache(IntConst(value))
+	fun constant(value: Float): FloatConst = cache(FloatConst(value))
+	fun constant(value: String): StringConst = cache(StringConst(value))
+
+	fun constant(value: Any): Constant<*> = when (value) {
+		is Int    -> constant(value)
+		is Float  -> constant(value)
+		is String -> constant(value)
+		else -> throw IllegalArgumentException("Unsupported constant type: ${value::class}}")
+	}
+}
+
+sealed class Constant<out T : Any>(val value: T, override val type: Thing,
+                                   private val prefix: String = "", private val suffix: String = "")
+: Def {
 	override var name: String
-		get() = value.toString() // TODO Display strings with quotes "...", etc...
-		set(value) { /* No-op */ }
+		get() = "$prefix$value$suffix"
+		set(_) { }
 
-	override val uses: RefCounts<Use> = RefCountsImpl() // TODO Cache same values -- per FlowGraph
+	override val uses: RefCounts<Use> = RefCountsImpl()
+
+	override fun equals(other: Any?) = other is Constant<*> && other.value == value
+
+	override fun hashCode() = value.hashCode()
 }
 
-class IntConst(value: Int) : Constant<Int>(value) {
-	override val type = INT
-}
+/**
+ * @see ConstantStore.constant
+ */
+class IntConst internal constructor(value: Int) : Constant<Int>(value, INT)
 
+/**
+ * @see ConstantStore.constant
+ */
+class FloatConst internal constructor(value: Float) : Constant<Float>(value, FLOAT, suffix = "f")
+
+/**
+ * @see ConstantStore.constant
+ */
+class StringConst internal constructor(value: String)
+	: Constant<String>(value, Reference(String::class), prefix = "\"", suffix = "\"")

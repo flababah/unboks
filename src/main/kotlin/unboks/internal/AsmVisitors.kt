@@ -219,7 +219,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 				val stackState = StackMap(initialStack)
 
 				// Replay deferred operations on the block visitor.
-				val mv = FlowGraphBlockVisitor(localsState, stackState, backing, block.successor) {
+				val mv = FlowGraphBlockVisitor(localsState, stackState, backing, block.successor, graph) {
 					val resolved = info.fromLabel[it] ?: throw ParseException("Unknown label: $it")
 					resolved.backing as BasicBlock // TODO Better check if not ok...
 				}
@@ -325,6 +325,7 @@ private class FlowGraphBlockVisitor(
 		private val stack: StackMap,
 		private val appender: IrFactory,
 		private val successor: AsmBackingBlock?,
+		private val constants: ConstantStore,
 		private val resolver: (Label) -> BasicBlock) : MethodVisitor(ASM6) {
 
 	private fun appendInvocation(spec: Invocation) {
@@ -343,7 +344,7 @@ private class FlowGraphBlockVisitor(
 			ICONST_2,
 			ICONST_3,
 			ICONST_4,
-			ICONST_5 -> stack.push(IntConst(opcode - ICONST_0))
+			ICONST_5 -> stack.push(constants.constant(opcode - ICONST_0))
 
 			IRETURN -> appender.newReturn(stack.pop<INT_TYPE>())
 			LRETURN -> appender.newReturn(stack.pop<LONG>())
@@ -457,7 +458,7 @@ private class FlowGraphBlockVisitor(
 		// IINC doesn't exist in our internal representation. Lower it into IADD.
 		locals[varId] = appender.newInvoke(InvIntrinsic.IADD,
 				locals.get<INT>(varId), // TODO This needs to be INT_TYPE, right?
-				IntConst(increment))
+				constants.constant(increment))
 	}
 
 	override fun visitMultiANewArrayInsn(descriptor: String?, numDimensions: Int) =
