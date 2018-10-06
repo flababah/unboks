@@ -77,6 +77,14 @@ internal fun <A, B> A.dependencyList(
 
 /**
  * Creates a dependency list where the target is embedded in some wrapper type.
+ *
+ * ### Example:
+ * ```
+ * spec = TargetSpec<A, B> { it.sourceRefs }
+ * class A {
+ *     val targetsAndInfo: Pair<B, Int> = dependencyList(spec) { it.first }
+ * }
+ * ```
  */
 internal fun <A, B, X> A.dependencyList(
 		spec: TargetSpecification<A, B>,
