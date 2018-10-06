@@ -75,6 +75,20 @@ internal fun <A, B> A.dependencyList(
 	}
 }
 
+/**
+ * Creates a dependency list where the target is embedded in some wrapper type.
+ */
+internal fun <A, B, X> A.dependencyList(
+		spec: TargetSpecification<A, B>,
+		extractor: (X) -> B)
+: MutableList<X> = ObservableList { event, someElm ->
+	val elm = extractor(someElm)
+	when (event) {
+		ObservableEvent.ADD -> spec.accessor(elm) inc this
+		ObservableEvent.DEL -> spec.accessor(elm) dec this
+	}
+}
+
 //internal fun <A, B> A.dependencyProperty(
 //		spec: TargetSpecification<A, B>,
 //		initial: B): ReadWriteProperty<A, B> {

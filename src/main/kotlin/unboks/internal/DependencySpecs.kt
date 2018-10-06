@@ -5,7 +5,9 @@ import unboks.*
 internal class TargetSpecification<out A, in B>(val accessor: (B) -> RefCounts<A>)
 
 
-internal val blockInputs = TargetSpecification<Block, Block> { it.inputs }
+internal val blockInputs = TargetSpecification<Block, BasicBlock> { it.inputs }
+
+internal val handlerUses = TargetSpecification<Block, HandlerBlock> { it.inputs }
 
 internal val phiReferences = TargetSpecification<IrPhi, Block> { it.phiReferences }
 

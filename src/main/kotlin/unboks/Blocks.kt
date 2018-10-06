@@ -2,7 +2,10 @@ package unboks
 
 import unboks.internal.AutoNameType
 import unboks.internal.RefCountsImpl
+import unboks.internal.dependencyList
+import unboks.internal.handlerUses
 import unboks.invocation.Invocation
+import kotlin.reflect.KClass
 
 sealed class Block(val flow: FlowGraph) : IrFactory, Nameable {
 	private val _opcodes = mutableListOf<Ir>()
@@ -11,13 +14,12 @@ sealed class Block(val flow: FlowGraph) : IrFactory, Nameable {
 	open val root get() = flow.root === this
 
 	val inputs: RefCounts<Block> = RefCountsImpl()
+
 	val phiReferences: RefCounts<IrPhi> = RefCountsImpl()
 
 	val terminal: IrTerminal? get() = opcodes.lastOrNull() as? IrTerminal
 
-	data class ExceptionEntry(val handler: HandlerBlock, val type: Reference?)
-
-	val exceptions: MutableList<ExceptionEntry> = mutableListOf() // TODO observable -- lav som dependency -- a la phi.
+	val exceptions: MutableList<ExceptionEntry> = dependencyList(handlerUses) { it.handler }
 
 	inline fun <reified T : Ir> filter(): Sequence<T> = opcodes.asSequence().filterIsInstance<T>()
 
@@ -45,6 +47,10 @@ sealed class Block(val flow: FlowGraph) : IrFactory, Nameable {
 
 	override fun toString(): String = name + if (root) " [ROOT]"  else ""
 }
+
+data class ExceptionEntry(val handler: HandlerBlock, val type: Reference?)
+
+infix fun HandlerBlock.handles(type: Reference?) = ExceptionEntry(this, type)
 
 // TODO IrFactoryDelegate.
 

@@ -36,4 +36,25 @@ class GraphTest {
 		assertEquals(setOf(goto.block, b2), target.inputs)
 		assertEquals(3, target.inputs.count)
 	}
+
+	@Test
+	fun testHandlerUsage() {
+		val re = Reference(RuntimeException::class)
+		val npe = Reference(NullPointerException::class)
+
+		val graph = FlowGraph()
+		val b1 = graph.createBasicBlock()
+		val b2 = graph.createBasicBlock()
+		val handler = graph.createHandlerBlock()
+		b1.exceptions += handler handles re
+		b1.exceptions += handler handles npe
+		b2.exceptions += handler handles npe
+		assertEquals(setOf(b1, b2), handler.inputs as Set<*>)
+
+		b1.exceptions.clear()
+		assertEquals(setOf(b2), handler.inputs as Set<*>)
+
+		b2.exceptions.clear()
+		assertEquals(emptySet<Block>(), handler.inputs as Set<*>)
+	}
 }
