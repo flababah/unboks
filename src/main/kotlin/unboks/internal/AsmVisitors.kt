@@ -157,8 +157,8 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 
 			for (block in firstPassBlocks) {
 				val backing = when (block) {
-					is AsmBlock.Basic -> AsmBackingBlock.Basic(graph.createBasicBlock(), block.operations)
-					is AsmBlock.Handler -> AsmBackingBlock.Handler(graph.createHandlerBlock(block.type), block.operations)
+					is AsmBlock.Basic -> AsmBackingBlock.Basic(graph.newBasicBlock(), block.operations)
+					is AsmBlock.Handler -> AsmBackingBlock.Handler(graph.newHandlerBlock(block.type), block.operations)
 				}
 				if (root == null)
 					root = backing

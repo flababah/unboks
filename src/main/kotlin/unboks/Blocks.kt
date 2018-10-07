@@ -5,9 +5,8 @@ import unboks.internal.RefCountsImpl
 import unboks.internal.dependencyList
 import unboks.internal.handlerUses
 import unboks.invocation.Invocation
-import kotlin.reflect.KClass
 
-sealed class Block(val flow: FlowGraph) : IrFactory, Nameable {
+sealed class Block(val flow: FlowGraph) : Removable(), IrFactory, Nameable {
 	private val _opcodes = mutableListOf<Ir>()
 	val opcodes: List<Ir> get() = _opcodes
 
@@ -46,6 +45,15 @@ sealed class Block(val flow: FlowGraph) : IrFactory, Nameable {
 	private fun <T: Ir> append(ir: T): T = ir.apply { _opcodes += this }
 
 	override fun toString(): String = name + if (root) " [ROOT]"  else ""
+
+	internal fun detachIr(ir: Ir) = _opcodes.remove(ir)
+
+	override fun traverseChildren(): Sequence<Removable> = _opcodes.asSequence()
+
+	override fun doRemove() {
+		flow.detachBlock(this)
+		TODO("fix dependencies")
+	}
 }
 
 data class ExceptionEntry(val handler: HandlerBlock, val type: Reference?)
@@ -90,6 +98,14 @@ class BasicBlock internal constructor(flow: FlowGraph) : Block(flow) {
 					if (value) this
 					else throw IllegalArgumentException("Cannot unset root")
 		}
+
+	override fun checkRemove(batch: Set<Removable>, addObjection: (Objection) -> Unit) {
+		inputs.forEach { addObjection(Objection.BlockHasInput(this, it)) }
+		phiReferences.forEach { addObjection(Objection.BlockHasPhiReference(this, it)) }
+
+		if (root)
+			addObjection(Objection.BlockIsRoot(this))
+	}
 }
 
 class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Block(flow) {
@@ -109,5 +125,16 @@ class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Blo
 
 		override val type get() = this@HandlerBlock.type
 		override val uses: RefCounts<Use> = RefCountsImpl()
+	}
+
+	override fun checkRemove(batch: Set<Removable>, addObjection: (Objection) -> Unit) {
+		inputs.forEach { addObjection(Objection.HandlerIsUsed(this, it)) }
+		phiReferences.forEach { addObjection(Objection.BlockHasPhiReference(this, it)) }
+
+		for (use in exception.uses) {
+			// At the moment all Uses are also Entities, but check anyway...
+			if (use !is Removable || use !in batch)
+				addObjection(Objection.DefHasUseDependency(exception, use))
+		}
 	}
 }

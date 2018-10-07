@@ -54,13 +54,15 @@ class FlowGraph(vararg parameterTypes: Thing) : ConstantStore() {
 		return AutoNameDelegate(registry)
 	}
 
-	fun createBasicBlock(): BasicBlock = BasicBlock(this).apply {
+	internal fun detachBlock(block: Block) = _blocks.remove(block)
+
+	fun newBasicBlock(): BasicBlock = BasicBlock(this).apply {
 		_blocks += this
 		if (_root == null)
 			_root = this
 	}
 
-	fun createHandlerBlock(type: Reference? = null): HandlerBlock =
+	fun newHandlerBlock(type: Reference? = null): HandlerBlock =
 			HandlerBlock(this, type).apply { _blocks += this }
 
 	/**

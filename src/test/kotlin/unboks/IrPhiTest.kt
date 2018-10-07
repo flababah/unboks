@@ -12,7 +12,7 @@ class IrPhiTest {
 		val graph = FlowGraph(INT, INT)
 		val p1 = graph.parameters[0]
 		val p2 = graph.parameters[1]
-		val b = graph.createBasicBlock()
+		val b = graph.newBasicBlock()
 
 		val phi1 = b.newPhi()
 		phi1.phiDefs += p1 to b

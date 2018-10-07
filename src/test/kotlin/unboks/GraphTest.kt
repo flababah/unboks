@@ -11,9 +11,9 @@ class GraphTest {
 	fun simpleBlocksTest() {
 		val graph = FlowGraph(INT, LONG)
 
-		val root = graph.createBasicBlock()
-		val b2 = graph.createBasicBlock()
-		val b3 = graph.createHandlerBlock()
+		val root = graph.newBasicBlock()
+		val b2 = graph.newBasicBlock()
+		val b3 = graph.newHandlerBlock()
 
 		assertEquals(setOf(root, b2, b3), graph.blocks)
 	}
@@ -22,13 +22,13 @@ class GraphTest {
 	fun testBlockInputs() {
 		val graph = FlowGraph(INT, LONG)
 
-		val target = graph.createBasicBlock()
+		val target = graph.newBasicBlock()
 		val goto = graph.root.newGoto(target)
 
 		assertEquals(target, goto.target)
 		assertEquals(setOf(goto.block), target.inputs)
 
-		val b2 = graph.createBasicBlock()
+		val b2 = graph.newBasicBlock()
 		val cmp = b2.newCmp(Cmp.EQ, target, target, graph.parameters[0])
 
 		assertEquals(target, cmp.yes)
@@ -43,9 +43,9 @@ class GraphTest {
 		val npe = Reference(NullPointerException::class)
 
 		val graph = FlowGraph()
-		val b1 = graph.createBasicBlock()
-		val b2 = graph.createBasicBlock()
-		val handler = graph.createHandlerBlock()
+		val b1 = graph.newBasicBlock()
+		val b2 = graph.newBasicBlock()
+		val handler = graph.newHandlerBlock()
 		b1.exceptions += handler handles re
 		b1.exceptions += handler handles npe
 		b2.exceptions += handler handles npe
