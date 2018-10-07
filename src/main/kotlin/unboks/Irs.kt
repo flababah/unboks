@@ -101,7 +101,7 @@ class IrGoto internal constructor(block: Block, target: BasicBlock)
 
 	override val successors get() = setOf(target)
 
-	var target by dependencyProperty(blockInputs, block, target)
+	var target: BasicBlock by dependencyProperty(blockInputs, block, target)
 
 	override fun toString() = "GOTO $target"
 }
@@ -166,7 +166,7 @@ class IrSwitch internal constructor(block: Block, key: Def, default: BasicBlock)
 
 	override val defs: Collection<Def> get() = setOf(key)
 
-	var default by dependencyProperty(blockInputs, block, default)
+	var default: BasicBlock by dependencyProperty(blockInputs, block, default)
 
 	val key: Def by dependencyProperty(defUses, this, key)
 

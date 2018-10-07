@@ -23,15 +23,14 @@ abstract class Removable internal constructor() {
 	 */
 	protected abstract fun checkRemove(batch: Set<Removable>, addObjection: (Objection) -> Unit)
 
-	private fun traverseRec(entity: Removable, acc: MutableSet<Removable>) {
-		acc += entity
-		entity.traverseChildren().forEach { traverseRec(it, acc) }
-	}
-
 	/**
 	 * Tries to remove an entity from its context.
 	 */
 	fun remove(batch: Set<Removable> = setOf(this), throws: Boolean = true): Set<Objection> {
+		fun traverseRec(entity: Removable, acc: MutableSet<Removable>) {
+			acc += entity
+			entity.traverseChildren().forEach { traverseRec(it, acc) }
+		}
 		val hierarchy = mutableSetOf<Removable>()
 		batch.forEach { traverseRec(it, hierarchy) }
 		if (this !in batch)
