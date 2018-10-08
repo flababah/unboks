@@ -72,10 +72,10 @@ class IrCmp1 internal constructor(block: Block, var cmp: Cmp, yes: BasicBlock, n
 
 	override val successors get() = setOf(yes, no)
 
-	var yes: BasicBlock by dependencyProperty(blockInputs, block, yes)
-	var no: BasicBlock by dependencyProperty(blockInputs, block, no)
+	var yes: BasicBlock by dependencyProxyProperty(blockInputs, block, yes)
+	var no: BasicBlock by dependencyProxyProperty(blockInputs, block, no)
 
-	var op: Def by dependencyProperty(defUses, this, op)
+	var op: Def by dependencyProperty(defUses, op)
 
 	override fun toString() = "$cmp ${op.name} --> $yes else $no"
 }
@@ -87,11 +87,11 @@ class IrCmp2 internal constructor(block: Block, var cmp: Cmp, yes: BasicBlock, n
 
 	override val successors get() = setOf(yes, no)
 
-	var yes: BasicBlock by dependencyProperty(blockInputs, block, yes)
-	var no: BasicBlock by dependencyProperty(blockInputs, block, no)
+	var yes: BasicBlock by dependencyProxyProperty(blockInputs, block, yes)
+	var no: BasicBlock by dependencyProxyProperty(blockInputs, block, no)
 
-	var op1: Def by dependencyProperty(defUses, this, op1)
-	var op2: Def by dependencyProperty(defUses, this, op2)
+	var op1: Def by dependencyProperty(defUses, op1)
+	var op2: Def by dependencyProperty(defUses, op2)
 
 	override fun toString() = "${op1.name} $cmp ${op2.name} --> $yes else $no"
 }
@@ -101,7 +101,7 @@ class IrGoto internal constructor(block: Block, target: BasicBlock)
 
 	override val successors get() = setOf(target)
 
-	var target: BasicBlock by dependencyProperty(blockInputs, block, target)
+	var target: BasicBlock by dependencyProxyProperty(blockInputs, block, target)
 
 	override fun toString() = "GOTO $target"
 }
@@ -152,7 +152,7 @@ class IrReturn internal constructor(block: Block, value: Def?)
 		return if (v != null) setOf(v) else emptySet()
 	}
 
-	val value: Def? by dependencyNullableProperty(defUses, this, value)
+	val value: Def? by dependencyNullableProperty(defUses, value)
 
 	override fun toString() = value.let {
 		if (it == null) "RETURN" else "RETURN ${it.name}"
@@ -166,9 +166,9 @@ class IrSwitch internal constructor(block: Block, key: Def, default: BasicBlock)
 
 	override val defs: Collection<Def> get() = setOf(key)
 
-	var default: BasicBlock by dependencyProperty(blockInputs, block, default)
+	var default: BasicBlock by dependencyProxyProperty(blockInputs, block, default)
 
-	val key: Def by dependencyProperty(defUses, this, key)
+	val key: Def by dependencyProperty(defUses, key)
 
 	// TODO map.
 

@@ -100,19 +100,18 @@ internal fun <A, B, X> A.dependencyList(
 //}
 // TODO Lav version uden "source" hvis source == this... kan sparer et field.
 
-internal fun <A, B, R : B> dependencyProperty(
+internal fun <A, B> dependencyProxyProperty(
 		spec: TargetSpecification<A, B>,
 		source: A,
-		initial: R): ReadWriteProperty<Any, R> {
-
+		initial: B): ReadWriteProperty<Any, B> {
 	spec.accessor(initial) inc source
 
-	return object : ReadWriteProperty<Any, R> {
+	return object : ReadWriteProperty<Any, B> {
 		private var current = initial
 
-		override fun getValue(thisRef: Any, property: KProperty<*>): R = current
+		override fun getValue(thisRef: Any, property: KProperty<*>): B = current
 
-		override fun setValue(thisRef: Any, property: KProperty<*>, value: R) {
+		override fun setValue(thisRef: Any, property: KProperty<*>, value: B) {
 			if (value != current) {
 				spec.accessor(current) dec source
 				spec.accessor(value) inc source
@@ -122,26 +121,29 @@ internal fun <A, B, R : B> dependencyProperty(
 	}
 }
 
-internal fun <A, B, R : B> dependencyNullableProperty(
+internal fun <A, B> A.dependencyProperty(
 		spec: TargetSpecification<A, B>,
-		source: A,
-		initial: R? = null): ReadWriteProperty<Any, R?> {
+		initial: B): ReadWriteProperty<Any, B> = dependencyProxyProperty(spec, this, initial)
+
+internal fun <A, B> A.dependencyNullableProperty(
+		spec: TargetSpecification<A, B>,
+		initial: B? = null): ReadWriteProperty<Any, B?> {
 
 	if (initial != null)
-		spec.accessor(initial) inc source
+		spec.accessor(initial) inc this
 
-	return object : ReadWriteProperty<Any, R?> {
+	return object : ReadWriteProperty<Any, B?> {
 		private var current = initial
 
-		override fun getValue(thisRef: Any, property: KProperty<*>): R? = current
+		override fun getValue(thisRef: Any, property: KProperty<*>): B? = current
 
-		override fun setValue(thisRef: Any, property: KProperty<*>, value: R?) {
+		override fun setValue(thisRef: Any, property: KProperty<*>, value: B?) {
 			val c = current
 			if (value != c) {
 				if (c != null)
-					spec.accessor(c) dec source
+					spec.accessor(c) dec this
 				if (value != null)
-					spec.accessor(value) inc source
+					spec.accessor(value) inc this
 				current = value
 			}
 		}
