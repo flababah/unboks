@@ -146,9 +146,8 @@ class IrReturn internal constructor(block: Block, value: Def?)
 
 	override val successors get() = emptySet<BasicBlock>()
 
-	override val defs: Collection<Def> get() {
-		val v = value
-		return if (v != null) setOf(v) else emptySet()
+	override val defs: Collection<Def> get() = value.let {
+		if (it != null) setOf(it) else emptySet()
 	}
 
 	val value: Def? by dependencyNullableProperty(defUses, value)
