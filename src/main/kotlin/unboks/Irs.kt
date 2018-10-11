@@ -36,23 +36,22 @@ enum class Cmp(val repr: String) { // TODO Figure something out...
 	override fun toString() = repr
 }
 
-sealed class Ir(val block: Block) : Removable() {
+sealed class Ir(val block: Block) : DependencySource() {
 
 	val flow get() = block.flow
 
-	override fun traverseChildren(): Sequence<Removable> = emptySequence()
+	override fun traverseChildren(): Sequence<DependencySource> = emptySequence()
 
-	override fun doRemove() {
+	override fun detachFromParent() {
 		block.detachIr(this)
-		TODO("fix dependencies")
 	}
 
-	override fun checkRemove(batch: Set<Removable>, addObjection: (Objection) -> Unit) {
+	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
 		if (this !is Def)
 			return
 		for (use in uses) {
 			// At the moment all Uses are also Entities, but check anyway...
-			if (use !is Removable || use !in batch)
+			if (use !is DependencySource || use !in batch)
 				addObjection(Objection.DefHasUseDependency(this, use))
 		}
 	}

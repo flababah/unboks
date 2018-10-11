@@ -2,7 +2,15 @@ package unboks.internal
 
 import unboks.*
 
-internal class TargetSpecification<out A, in B>(val accessor: (B) -> RefCounts<A>)
+/**
+ * Is implemented by any property or collection that can point to a dependency target.
+ */
+internal interface DependencyType {
+
+	fun clear()
+}
+
+internal class TargetSpecification<A, B>(val accessor: (B) -> RefCounts<A>)
 
 
 internal val blockInputs = TargetSpecification<Block, BasicBlock> { it.inputs }

@@ -7,7 +7,7 @@ internal enum class ObservableEvent {
 
 internal sealed class ObservableCollection<Del : MutableCollection<E>, E>(
 		protected val delegate: Del,
-		protected val observer: (ObservableEvent, E) -> Unit): MutableCollection<E> by delegate {
+		protected val observer: (ObservableEvent, E) -> Unit): MutableCollection<E> by delegate, DependencyType {
 
 	override fun add(element: E): Boolean = delegate
 			.add(element)
@@ -57,6 +57,10 @@ internal sealed class ObservableCollection<Del : MutableCollection<E>, E>(
 			executor()
 		return this
 	}
+
+	override fun equals(other: Any?) = delegate == other
+	override fun hashCode() = delegate.hashCode()
+	override fun toString() = delegate.toString()
 }
 
 internal class ObservableSet<E> private constructor(

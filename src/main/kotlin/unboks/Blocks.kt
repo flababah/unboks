@@ -6,7 +6,7 @@ import unboks.internal.dependencyList
 import unboks.internal.handlerUses
 import unboks.invocation.Invocation
 
-sealed class Block(val flow: FlowGraph) : Removable(), IrFactory, Nameable {
+sealed class Block(val flow: FlowGraph) : DependencySource(), IrFactory, Nameable {
 	private val _opcodes = mutableListOf<Ir>()
 	val opcodes: List<Ir> get() = _opcodes
 
@@ -48,11 +48,10 @@ sealed class Block(val flow: FlowGraph) : Removable(), IrFactory, Nameable {
 
 	internal fun detachIr(ir: Ir) = _opcodes.remove(ir)
 
-	override fun traverseChildren(): Sequence<Removable> = _opcodes.asSequence()
+	override fun traverseChildren(): Sequence<DependencySource> = _opcodes.asSequence()
 
-	override fun doRemove() {
+	override fun detachFromParent() {
 		flow.detachBlock(this)
-		TODO("fix dependencies")
 	}
 }
 
@@ -99,7 +98,7 @@ class BasicBlock internal constructor(flow: FlowGraph) : Block(flow) {
 					else throw IllegalArgumentException("Cannot unset root")
 		}
 
-	override fun checkRemove(batch: Set<Removable>, addObjection: (Objection) -> Unit) {
+	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
 		inputs.forEach { addObjection(Objection.BlockHasInput(this, it)) }
 		phiReferences.forEach { addObjection(Objection.BlockHasPhiReference(this, it)) }
 
@@ -127,13 +126,13 @@ class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Blo
 		override val uses: RefCounts<Use> = RefCountsImpl()
 	}
 
-	override fun checkRemove(batch: Set<Removable>, addObjection: (Objection) -> Unit) {
+	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
 		inputs.forEach { addObjection(Objection.HandlerIsUsed(this, it)) }
 		phiReferences.forEach { addObjection(Objection.BlockHasPhiReference(this, it)) }
 
 		for (use in exception.uses) {
 			// At the moment all Uses are also Entities, but check anyway...
-			if (use !is Removable || use !in batch)
+			if (use !is DependencySource || use !in batch)
 				addObjection(Objection.DefHasUseDependency(exception, use))
 		}
 	}

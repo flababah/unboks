@@ -8,7 +8,7 @@ class ParseException(msg: String) : RuntimeException(msg)
 class RemoveException(val objections: Set<Objection>) : RuntimeException("Cannot remove due to objections")
 
 /**
- * @see Removable.remove
+ * @see DependencySource.remove
  */
 sealed class Objection(val reason: String) {
 

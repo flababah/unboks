@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class RemovableTest {
+class DependencySourceTest {
 
 	@Test
 	fun testDeleteRootThrows() {

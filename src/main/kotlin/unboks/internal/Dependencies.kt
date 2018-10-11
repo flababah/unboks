@@ -1,5 +1,6 @@
 package unboks.internal
 
+import unboks.DependencySource
 import unboks.RefCounts
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
@@ -43,17 +44,17 @@ internal class RefCountsImpl<T> private constructor(
 private infix fun <T> RefCounts<T>.inc(ref: T) = (this as RefCountsImpl<T>).inc(ref)
 private infix fun <T> RefCounts<T>.dec(ref: T) = (this as RefCountsImpl<T>).dec(ref)
 
-internal fun <A, B> A.dependencySet(spec: TargetSpecification<A, B>): Set<B> {
+internal fun <R : DependencySource, B> R.dependencySet(spec: TargetSpecification<R, B>): Set<B> {
 	TODO()
 }
 
 /**
  * Creates a composite dependency set of a pair of specifications.
  */
-internal fun <A, B1, B2> A.dependencySet(
-		spec1: TargetSpecification<A, B1>,
-		spec2: TargetSpecification<A, B2>)
-: MutableSet<Pair<B1, B2>> = ObservableSet { event, (elm1, elm2) ->
+internal fun <R : DependencySource, B1, B2> R.dependencySet(
+		spec1: TargetSpecification<in R, B1>,
+		spec2: TargetSpecification<in R, B2>)
+: MutableSet<Pair<B1, B2>> = register(ObservableSet { event, (elm1, elm2) ->
 	when (event) {
 		ObservableEvent.ADD -> {
 			spec1.accessor(elm1) inc this
@@ -64,14 +65,15 @@ internal fun <A, B1, B2> A.dependencySet(
 			spec2.accessor(elm2) dec this
 		}
 	}
-}
+})
 
-internal fun <A, B> A.dependencyList(
-		spec: TargetSpecification<A, B>)
+internal fun <R : DependencySource, B> R.dependencyList(
+		spec: TargetSpecification<in R, B>)
 : MutableList<B> = dependencyList(spec) { it }
 
 /**
- * Creates a dependency list where the target is embedded in some wrapper type.
+ * Creates a dependency list where the target is embedded in some (immutable) wrapper type.
+ * Immutability is needed to guarantee that add/remove events are property generated.
  *
  * ### Example:
  * ```
@@ -81,16 +83,16 @@ internal fun <A, B> A.dependencyList(
  * }
  * ```
  */
-internal fun <A, B, X> A.dependencyList(
-		spec: TargetSpecification<A, B>,
+internal fun <R : DependencySource, B, X> R.dependencyList(
+		spec: TargetSpecification<in R, B>,
 		extractor: (X) -> B)
-: MutableList<X> = ObservableList { event, someElm ->
+: MutableList<X> = register(ObservableList { event, someElm ->
 	val elm = extractor(someElm)
 	when (event) {
 		ObservableEvent.ADD -> spec.accessor(elm) inc this
 		ObservableEvent.DEL -> spec.accessor(elm) dec this
 	}
-}
+})
 
 //internal fun <A, B> A.dependencyProperty(
 //		spec: TargetSpecification<A, B>,
@@ -100,52 +102,65 @@ internal fun <A, B, X> A.dependencyList(
 //}
 // TODO Lav version uden "source" hvis source == this... kan sparer et field.
 
-internal fun <A, B> dependencyProxyProperty(
-		spec: TargetSpecification<A, B>,
+internal interface DependencyProperty<T> : ReadWriteProperty<Any, T>, DependencyType
+
+internal fun <R : DependencySource, A : Any, B> R.dependencyProxyProperty(
+		spec: TargetSpecification<in A, B>,
 		source: A,
-		initial: B): ReadWriteProperty<Any, B> {
-	spec.accessor(initial) inc source
+		initial: B)
+: DependencyProperty<B> = register(InternalDependencyProperty(spec, source, initial) {
+	it ?: throw IllegalStateException("Trying to read cleared dependency property")
+})
 
-	return object : ReadWriteProperty<Any, B> {
-		private var current = initial
+internal fun <R : DependencySource, B> R.dependencyProperty(
+		spec: TargetSpecification<in R, B>,
+		initial: B)
+: DependencyProperty<B> = dependencyProxyProperty(spec, this, initial)
 
-		override fun getValue(thisRef: Any, property: KProperty<*>): B = current
+internal fun <R : DependencySource, B> R.dependencyNullableProperty(
+		spec: TargetSpecification<in R, B>,
+		initial: B? = null)
+: DependencyProperty<B?> = register(InternalDependencyProperty<R, B, B?>(spec, this, initial) { it })
 
-		override fun setValue(thisRef: Any, property: KProperty<*>, value: B) {
-			if (value != current) {
-				spec.accessor(current) dec source
-				spec.accessor(value) inc source
-				current = value
-			}
+/**
+ * A bit abusy towards the type system to support nullable and non-nullable targets
+ * in the same class. [B_prop] is a potentially nullable version of [B]. [fetcher]
+ * is needed to bridge the relationship between [B] and [B_prop]. For nullable types
+ * it should just be the identity. Non-nullable types should throw if target is null.
+ */
+private class InternalDependencyProperty<A : Any, B, B_prop : B?>(
+		spec: TargetSpecification<in A, B>,
+		private val source: A,
+		initial: B_prop,
+		private val fetcher: (B?) -> B_prop)
+: DependencyProperty<B_prop> {
+
+	private val accessor = spec.accessor
+	private var target: B? = initial
+
+	init {
+		if (initial != null)
+			accessor(initial) inc source
+	}
+
+	override fun getValue(thisRef: Any, property: KProperty<*>): B_prop = fetcher(target)
+
+	override fun setValue(thisRef: Any, property: KProperty<*>, value: B_prop) {
+		val t = target
+		if (t != value) {
+			if (t != null)
+				accessor(t) dec source
+			if (value != null)
+				accessor(value) inc source
+			target = value
 		}
 	}
-}
 
-internal fun <A, B> A.dependencyProperty(
-		spec: TargetSpecification<A, B>,
-		initial: B): ReadWriteProperty<Any, B> = dependencyProxyProperty(spec, this, initial)
-
-internal fun <A, B> A.dependencyNullableProperty(
-		spec: TargetSpecification<A, B>,
-		initial: B? = null): ReadWriteProperty<Any, B?> {
-
-	if (initial != null)
-		spec.accessor(initial) inc this
-
-	return object : ReadWriteProperty<Any, B?> {
-		private var current = initial
-
-		override fun getValue(thisRef: Any, property: KProperty<*>): B? = current
-
-		override fun setValue(thisRef: Any, property: KProperty<*>, value: B?) {
-			val c = current
-			if (value != c) {
-				if (c != null)
-					spec.accessor(c) dec this
-				if (value != null)
-					spec.accessor(value) inc this
-				current = value
-			}
+	override fun clear() {
+		val t = target
+		if (t != null) {
+			accessor(t) dec source
+			target = null
 		}
 	}
 }
