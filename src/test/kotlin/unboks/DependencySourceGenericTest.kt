@@ -14,13 +14,9 @@ import kotlin.test.assertTrue
 class DependencySourceGenericTest {
 
 	private class TestNode : DependencySource() {
-		var removed = false
-
 		override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) { }
 		override fun traverseChildren(): Sequence<DependencySource> = emptySequence()
-		override fun detachFromParent() {
-			removed = true
-		}
+		override fun detachFromParent() { }
 
 		val propInputs = RefCountsImpl<TestNode>()
 		val listInputs = RefCountsImpl<TestNode>()
@@ -42,12 +38,12 @@ class DependencySourceGenericTest {
 		a.property = b
 		assertEquals(emptySet<TestNode>(), a.propInputs)
 		assertEquals(setOf(a, b), b.propInputs)
-		assertFalse(a.removed)
-		assertFalse(b.removed)
+		assertFalse(a.detached)
+		assertFalse(b.detached)
 
 		a.remove()
-		assertTrue(a.removed)
-		assertFalse(b.removed)
+		assertTrue(a.detached)
+		assertFalse(b.detached)
 		assertEquals(emptySet<TestNode>(), a.propInputs)
 		assertEquals(setOf(b), b.propInputs)
 	}
@@ -66,12 +62,12 @@ class DependencySourceGenericTest {
 		a.list += c
 		assertEquals(listOf(b, c), a.list)
 		assertEquals(setOf(a), c.listInputs)
-		assertFalse(a.removed)
+		assertFalse(a.detached)
 
 		a.remove()
 		assertEquals(emptySet<TestNode>(), b.listInputs)
 		assertEquals(emptySet<TestNode>(), c.listInputs)
-		assertTrue(a.removed)
+		assertTrue(a.detached)
 	}
 
 	private companion object {
