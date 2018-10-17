@@ -5,12 +5,14 @@ import unboks.internal.AutoNameDelegate
 import unboks.internal.AutoNameType
 import unboks.internal.NameRegistry
 import unboks.internal.RefCountsImpl
+import unboks.pass.Pass
+import unboks.pass.PassType
 import java.lang.IllegalStateException
 
 /**
  * Entry point into the API.
  */
-class FlowGraph(vararg parameterTypes: Thing) : ConstantStore() {
+class FlowGraph(vararg parameterTypes: Thing) : ConstantStore(), PassType {
 	private val _blocks = mutableSetOf<Block>()
 	val blocks: Set<Block> get() = _blocks
 
@@ -64,6 +66,14 @@ class FlowGraph(vararg parameterTypes: Thing) : ConstantStore() {
 
 	fun newHandlerBlock(type: Reference? = null): HandlerBlock =
 			HandlerBlock(this, type).apply { _blocks += this }
+
+	/**
+	 * Execute a pass on this flow.
+	 */
+	fun <R> execute(pass: Pass<R>): Pass<R> = pass.execute {
+		it.visit(this)
+		_blocks.forEach { block -> block.execute(it)}
+	}
 
 	/**
 	 * Compile the CFG for the method and emit it into an ASM [MethodVisitor].

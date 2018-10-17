@@ -5,8 +5,10 @@ import unboks.internal.RefCountsImpl
 import unboks.internal.dependencyList
 import unboks.internal.handlerUses
 import unboks.invocation.Invocation
+import unboks.pass.Pass
+import unboks.pass.PassType
 
-sealed class Block(val flow: FlowGraph) : DependencySource(), IrFactory, Nameable {
+sealed class Block(val flow: FlowGraph) : DependencySource(), IrFactory, Nameable, PassType {
 	private val _opcodes = mutableListOf<Ir>()
 	val opcodes: List<Ir> get() = _opcodes
 
@@ -52,6 +54,11 @@ sealed class Block(val flow: FlowGraph) : DependencySource(), IrFactory, Nameabl
 
 	override fun detachFromParent() {
 		flow.detachBlock(this)
+	}
+
+	internal fun execute(visitor: Pass<*>.InitialVisitor) {
+		visitor.visit(this)
+		_opcodes.forEach { visitor.visit(it) }
 	}
 }
 

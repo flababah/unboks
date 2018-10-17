@@ -2,6 +2,7 @@ package unboks
 
 import unboks.internal.*
 import unboks.invocation.Invocation
+import unboks.pass.PassType
 
 ///**
 // * Represent a comparison that can either use one or two operands.
@@ -36,7 +37,7 @@ enum class Cmp(val repr: String) { // TODO Figure something out...
 	override fun toString() = repr
 }
 
-sealed class Ir(val block: Block) : DependencySource() {
+sealed class Ir(val block: Block) : DependencySource(), PassType {
 
 	val flow get() = block.flow
 
