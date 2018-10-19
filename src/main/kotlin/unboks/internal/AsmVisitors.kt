@@ -8,6 +8,7 @@ import unboks.*
 import unboks.invocation.InvIntrinsic
 import unboks.invocation.InvMethod
 import unboks.invocation.Invocation
+import unboks.pass.createPhiPruningPass
 
 // TODO Add exceptions to block...
 
@@ -262,7 +263,8 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 		if (visitedBlocks.size != info.fromBlock.size)
 			throw ParseException("Dead code") // TODO Just delete unused blocks.
 
-		// TODO Run weeding...
+		graph.execute(createPhiPruningPass())
+		// TODO Compact names.
 	}
 
 	//

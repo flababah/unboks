@@ -2,6 +2,11 @@ package unboks.pass
 
 import kotlin.reflect.KClass
 
+/**
+ * Limitation notes:
+ * - Don't remove an item this is not the one currently being visited -- Might have backlogged a deleted item
+ */
+// TODO Should we store values and backlog in the Pass itself?
 class Pass<R>(private val initBlock: Builder<R>.() -> Unit) {
 	private val context = Context(this)
 	private val values = mutableMapOf<PassType, R>()
@@ -17,9 +22,9 @@ class Pass<R>(private val initBlock: Builder<R>.() -> Unit) {
 
 	@Dsl
 	class Builder<R> internal constructor() {
-		internal val visitors = mutableListOf<Pair<KClass<out PassType>, Context.(PassType) -> R?>>()
+		internal val visitors = mutableListOf<Pair<KClass<out PassType>, PassType.(Context) -> R?>>()
 
-		inline fun <reified T : PassType> visit(noinline block: Context.(T) -> R?) =
+		inline fun <reified T : PassType> visit(noinline block: T.(Context) -> R?) =
 				visit(T::class, block)
 
 		/**
@@ -28,8 +33,8 @@ class Pass<R>(private val initBlock: Builder<R>.() -> Unit) {
 		 * in [Builder] directly.
 		 */
 		@Suppress("UNCHECKED_CAST") // Checked in visitItem.
-		fun <T : PassType> visit(type: KClass<T>, block: Context.(T) -> R?) {
-			visitors += type to block as Context.(PassType) -> R?
+		fun <T : PassType> visit(type: KClass<T>, block: T.(Context) -> R?) {
+			visitors += type to block as PassType.(Context) -> R?
 		}
 	}
 
@@ -47,7 +52,7 @@ class Pass<R>(private val initBlock: Builder<R>.() -> Unit) {
 	private fun visitItem(builder: Builder<R>, item: PassType) {
 		for ((type, handler) in builder.visitors) {
 			if (type.java.isAssignableFrom(item.javaClass))
-				context.handler(item)?.let { values[item] = it }
+				item.handler(context)?.let { values[item] = it }
 		}
 	}
 

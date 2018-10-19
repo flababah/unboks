@@ -72,7 +72,7 @@ class FlowGraph(vararg parameterTypes: Thing) : ConstantStore(), PassType {
 	 */
 	fun <R> execute(pass: Pass<R>): Pass<R> = pass.execute {
 		it.visit(this)
-		_blocks.forEach { block -> block.execute(it)}
+		_blocks.toTypedArray().forEach { block -> block.execute(it)}
 	}
 
 	/**
