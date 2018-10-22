@@ -69,6 +69,8 @@ sealed class Constant<out T : Any>(val value: T, override val type: Thing,
 	override fun equals(other: Any?) = other is Constant<*> && other.value == value
 
 	override fun hashCode() = value.hashCode()
+
+	override fun toString() = name
 }
 
 /**

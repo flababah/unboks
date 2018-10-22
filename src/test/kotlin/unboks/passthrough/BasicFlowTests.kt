@@ -40,4 +40,29 @@ class BasicFlowTests {
 	fun add(a: Int, b: Int): Int = a + b
 
 	fun choice(a: Int, b: Int, which: Boolean): Int = if (which) a else b
+
+	fun swapProblem(_x: Int, _y: Int, c: Int): Int {
+		var x = _x
+		var y = _y
+		for (i in (0 .. c)) {
+			val tmp = x
+			x = y
+			y = tmp
+		}
+		return x;
+	}
+
+	fun lostCopyProblem(c: Int): Int {
+		var x = 0
+		for (i in (0 .. c))
+			x = i
+		return x
+	}
+
+	fun preserveCopyInEmptyBlock(_a: Int, b: Int): Int { // We except 3 blocks here.
+		var a = _a
+		if (b == 4)
+			a = 123
+		return a
+	}
 }

@@ -65,10 +65,17 @@ sealed class IrTerminal(block: Block) : Ir(block) {
 private fun createUseTuple(use: Use): String = use.defs.map { it.name }.joinToString(
 	prefix = "(", separator = ", ", postfix = ")")
 
+private inline fun doIf(condition: Boolean, block: () -> Unit) = condition.apply {
+	if (this)
+		block()
+}
+
 class IrCmp1 internal constructor(block: Block, var cmp: Cmp, yes: BasicBlock, no: BasicBlock, op: Def)
 		: IrTerminal(block), Use {
 
 	override val defs: List<Def> get() = listOf(op)
+
+	override fun redirectDefs(current: Def, new: Def) = doIf(op == current) { op = new }
 
 	override val successors get() = setOf(yes, no)
 
@@ -84,6 +91,12 @@ class IrCmp2 internal constructor(block: Block, var cmp: Cmp, yes: BasicBlock, n
 		: IrTerminal(block), Use {
 
 	override val defs: List<Def> get() = listOf(op1, op2)
+
+	override fun redirectDefs(current: Def, new: Def): Boolean {
+		val changed1 = doIf(op1 == current) { op1 = new }
+		val changed2 = doIf(op2 == current) { op2 = new }
+		return changed1 || changed2 // Can't inline because of short-circuiting.
+	}
 
 	override val successors get() = setOf(yes, no)
 
@@ -118,6 +131,18 @@ class IrInvoke internal constructor(block: Block, val spec: Invocation, argument
 		addAll(arguments)
 	}
 
+	override fun redirectDefs(current: Def, new: Def): Boolean {
+		var changed = false
+		defs.replaceAll {
+			if (current == it) {
+				changed = true
+				new
+			}
+			it
+		}
+		return changed
+	}
+
 	override fun toString() = "$name = ${spec.representation}${createUseTuple(this)}"
 }
 
@@ -127,6 +152,19 @@ class IrPhi internal constructor(block: Block, private val explicitType: Thing)
 	override var name by flow.autoName(AutoNameType.PHI, this)
 
 	override val defs: Collection<Def> get() = phiDefs.map { it.first }
+
+	/**
+	 * Replaces any occurrence of [current] with [new]. The paired block (assignedIn)
+	 * stays the same.
+	 */
+	override fun redirectDefs(current: Def, new: Def): Boolean {
+		val currentBlocks = mutableListOf<Block>() // Cannot have duplicates.
+		val changed = phiDefs.removeIf {
+			doIf(it.first == current) { currentBlocks += it.second }
+		}
+		currentBlocks.forEach { phiDefs += new to it }
+		return changed
+	}
 
 	override val uses: RefCounts<Use> = RefCountsImpl()
 	override val type: Thing get() = when {
@@ -151,7 +189,10 @@ class IrReturn internal constructor(block: Block, value: Def?)
 		if (it != null) setOf(it) else emptySet()
 	}
 
-	val value: Def? by dependencyNullableProperty(defUses, value)
+	override fun redirectDefs(current: Def, new: Def) =
+			doIf(value == current) { value = new }
+
+	var value: Def? by dependencyNullableProperty(defUses, value)
 
 	override fun toString() = value.let {
 		if (it == null) "RETURN" else "RETURN ${it.name}"
@@ -165,22 +206,29 @@ class IrSwitch internal constructor(block: Block, key: Def, default: BasicBlock)
 
 	override val defs: Collection<Def> get() = setOf(key)
 
+	override fun redirectDefs(current: Def, new: Def) =
+			doIf(key == current) { key = new }
+
 	var default: BasicBlock by dependencyProxyProperty(blockInputs, block, default)
 
-	val key: Def by dependencyProperty(defUses, key)
+	var key: Def by dependencyProperty(defUses, key)
 
 	// TODO map.
 
 	override fun toString() = "SWITCH"
 }
 
-
-class IrThrow internal constructor(block: Block, val exception: Def)
+class IrThrow internal constructor(block: Block, exception: Def)
 		: IrTerminal(block), Use {
+
+	var exception: Def by dependencyProperty(defUses, exception)
 
 	override val successors get() = emptySet<BasicBlock>()
 
 	override val defs: Collection<Def> get() = setOf(exception)
+
+	override fun redirectDefs(current: Def, new: Def) =
+			doIf(exception == current) { exception = new }
 
 	override fun toString() = "THROW ${exception.name}"
 }

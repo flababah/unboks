@@ -411,8 +411,14 @@ private class FlowGraphBlockVisitor(
 		TODO()
 	}
 
-	override fun visitIntInsn(opcode: Int, operand: Int) =
-			TODO()
+	override fun visitIntInsn(opcode: Int, operand: Int) {
+		when (opcode) {
+			BIPUSH,
+			SIPUSH -> stack.push(constants.constant(operand))
+
+			else -> TODO()
+		}
+	}
 
 	override fun visitVarInsn(opcode: Int, index: Int) {
 		when (opcode) {
