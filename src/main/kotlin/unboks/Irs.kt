@@ -137,8 +137,9 @@ class IrInvoke internal constructor(block: Block, val spec: Invocation, argument
 			if (current == it) {
 				changed = true
 				new
+			} else {
+				it
 			}
-			it
 		}
 		return changed
 	}

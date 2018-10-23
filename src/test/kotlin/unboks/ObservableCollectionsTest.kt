@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import unboks.internal.ObservableEvent
+import unboks.internal.ObservableList
 import unboks.internal.ObservableSet
 import kotlin.test.assertEquals
 
@@ -31,6 +32,20 @@ private class ObservableCollectionsTest {
 			assertEquals(expected, actual)
 
 			// TODO assert ingen letovers
+		}
+	}
+
+	@Nested
+	inner class ListTest {
+
+		@Test
+		fun testIteratorSet() {
+			val list = ObservableList<String> { event, elm ->
+
+			}
+			list.add("test")
+			list.replaceAll { if (it == "test") "yes" else "no" }
+			assertEquals(listOf("yes"), list)
 		}
 	}
 }
