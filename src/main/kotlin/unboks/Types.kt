@@ -73,11 +73,11 @@ object VOID : SomeReference() {
 }
 
 object OBJECT : SomeReference() {
-	override val asDescriptor = throw IllegalStateException("Not an exact reference")
+	override val asDescriptor get() = throw IllegalStateException("Not an exact reference")
 	override val width = 1
 }
 
 
 internal object TOP : Primitive(1, "~TOP~", '!') {
-	override val asDescriptor = throw IllegalStateException("No desc for top")
+	override val asDescriptor get() = throw IllegalStateException("No desc for top")
 }
