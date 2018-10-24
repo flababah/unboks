@@ -5,6 +5,8 @@ import kotlin.reflect.KClass
 sealed class Thing {
 	abstract val width: Int
 
+	abstract val asDescriptor: String
+
 	companion object {
 		fun fromDescriptor(desc: String): Thing = when {
 			desc.startsWith("L") && desc.endsWith(";") -> Reference(desc.substring(1, desc.length - 1))
@@ -37,6 +39,7 @@ sealed class Thing {
 sealed class SomeReference : Thing()
 
 class Reference(val internal: String) : SomeReference() {
+	override val asDescriptor get() = "L$internal;"
 	override val width get() = 1
 
 	constructor(type: KClass<*>) : this(type.java.name.replace(".", "/"))
@@ -48,29 +51,33 @@ class Reference(val internal: String) : SomeReference() {
 	override fun toString(): String = internal.split("/").last()
 }
 
-sealed class Primitive(override val width: Int, private val repr: String) : Thing() {
-
+sealed class Primitive(override val width: Int, private val repr: String, desc: Char) : Thing() {
+	override val asDescriptor = "$desc"
 	override fun toString(): String = repr
 }
 
-sealed class INT_TYPE(repr: String) : Primitive(1, repr)
+sealed class IntType(repr: String, desc: Char) : Primitive(1, repr, desc)
 
-object BOOLEAN : INT_TYPE("boolean")
-object BYTE : INT_TYPE("byte")
-object CHAR : INT_TYPE("char")
-object SHORT : INT_TYPE("short")
-object INT : INT_TYPE("int")
+object BOOLEAN : IntType("boolean", 'Z')
+object BYTE : IntType("byte", 'B')
+object CHAR : IntType("char", 'C')
+object SHORT : IntType("short", 'S')
+object INT : IntType("int", 'I')
 
-object LONG : Primitive(2, "long")
-object FLOAT : Primitive(1, "float")
-object DOUBLE : Primitive(2, "double")
+object LONG : Primitive(2, "long", 'J')
+object FLOAT : Primitive(1, "float", 'F')
+object DOUBLE : Primitive(2, "double", 'D')
 object VOID : SomeReference() {
+	override val asDescriptor = "V"
 	override val width get() = throw UnsupportedOperationException("Hmm void doesn't have a width... hmmmmm")
 }
 
 object OBJECT : SomeReference() {
+	override val asDescriptor = throw IllegalStateException("Not an exact reference")
 	override val width = 1
 }
 
 
-object TOP : Primitive(1, "~TOP~")
+internal object TOP : Primitive(1, "~TOP~", '!') {
+	override val asDescriptor = throw IllegalStateException("No desc for top")
+}

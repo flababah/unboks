@@ -348,7 +348,7 @@ private class FlowGraphBlockVisitor(
 			ICONST_4,
 			ICONST_5 -> stack.push(constants.constant(opcode - ICONST_0))
 
-			IRETURN -> appender.newReturn(stack.pop<INT_TYPE>())
+			IRETURN -> appender.newReturn(stack.pop<IntType>())
 			LRETURN -> appender.newReturn(stack.pop<LONG>())
 			FRETURN -> appender.newReturn(stack.pop<FLOAT>())
 			DRETURN -> appender.newReturn(stack.pop<DOUBLE>())
@@ -424,13 +424,13 @@ private class FlowGraphBlockVisitor(
 		when (opcode) {
 			LLOAD -> stack.push(locals.get<LONG>(index))
 			DLOAD -> stack.push(locals.get<DOUBLE>(index))
-			ILOAD -> stack.push(locals.get<INT_TYPE>(index))
+			ILOAD -> stack.push(locals.get<IntType>(index))
 			FLOAD -> stack.push(locals.get<FLOAT>(index))
 			ALOAD -> stack.push(locals.get<SomeReference>(index))
 
 			LSTORE -> locals[index] = stack.pop<LONG>()
 			DSTORE -> locals[index] = stack.pop<DOUBLE>()
-			ISTORE -> locals[index] = stack.pop<INT_TYPE>()
+			ISTORE -> locals[index] = stack.pop<IntType>()
 			FSTORE -> locals[index] = stack.pop<FLOAT>()
 			ASTORE -> locals[index] = stack.pop<SomeReference>()
 
@@ -465,7 +465,7 @@ private class FlowGraphBlockVisitor(
 	override fun visitIincInsn(varId: Int, increment: Int) {
 		// IINC doesn't exist in our internal representation. Lower it into IADD.
 		locals[varId] = appender.newInvoke(InvIntrinsic.IADD,
-				locals.get<INT>(varId), // TODO This needs to be INT_TYPE, right?
+				locals.get<INT>(varId), // TODO This needs to be IntType, right?
 				constants.constant(increment))
 	}
 
