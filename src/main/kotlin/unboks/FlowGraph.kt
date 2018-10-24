@@ -32,8 +32,9 @@ class FlowGraph(vararg parameterTypes: Thing) : ConstantStore(), PassType {
 	private val nameBasicBlock   = NameRegistry(AutoNameType.BASIC_BLOCK.prefix)
 	private val nameHandlerBlock = NameRegistry(AutoNameType.HANDLER_BLOCK.prefix)
 
-	val parameters: List<Def> = parameterTypes.map {
-		object : Def {
+	val parameters: List<Parameter> = parameterTypes.map {
+		object : Parameter {
+			override val flow get() = this@FlowGraph
 			override var name by autoName(AutoNameType.PARAMETER, this)
 
 			override val type = it
@@ -72,6 +73,7 @@ class FlowGraph(vararg parameterTypes: Thing) : ConstantStore(), PassType {
 	 */
 	fun <R> execute(pass: Pass<R>): Pass<R> = pass.execute {
 		it.visit(this)
+		parameters.forEach { p -> it.visit(p) } // Not possible to mutate for now, so no need for copy.
 		_blocks.toTypedArray().forEach { block -> block.execute(it)}
 	}
 
