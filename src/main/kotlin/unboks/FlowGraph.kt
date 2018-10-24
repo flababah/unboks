@@ -1,13 +1,9 @@
 package unboks
 
 import org.objectweb.asm.MethodVisitor
-import unboks.internal.AutoNameDelegate
-import unboks.internal.AutoNameType
-import unboks.internal.NameRegistry
-import unboks.internal.RefCountsImpl
+import unboks.internal.*
 import unboks.pass.Pass
 import unboks.pass.PassType
-import java.lang.IllegalStateException
 
 /**
  * Entry point into the API.
@@ -82,6 +78,7 @@ class FlowGraph(vararg parameterTypes: Thing) : ConstantStore(), PassType {
 	 *
 	 * Blabla starts with [MethodVisitor.visitCode], and ends with [MethodVisitor.visitEnd].
 	 */
-	fun generate(receiver: MethodVisitor) {
+	fun generate(receiver: MethodVisitor, returnType: Thing) {
+		codeGenerate(this, receiver, returnType)
 	}
 }

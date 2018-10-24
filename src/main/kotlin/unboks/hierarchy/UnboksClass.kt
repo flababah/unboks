@@ -1,5 +1,7 @@
 package unboks.hierarchy
 
+import org.objectweb.asm.ClassWriter
+import org.objectweb.asm.Opcodes
 import unboks.Reference
 import unboks.Thing
 
@@ -21,4 +23,15 @@ class UnboksClass internal constructor(private val ctx: UnboksContext, val name:
 
 	fun newMethod(name: String, returnType: Thing, vararg parameterTypes: Thing): UnboksMethod =
 		UnboksMethod(this, name, returnType, *parameterTypes).apply { _methods += this }
+
+	fun generateBytecode(): ByteArray = ClassWriter(ClassWriter.COMPUTE_FRAMES).run {
+		val interfaceNames = interfaces.map { it.internal }.toTypedArray()
+		visit(Opcodes.V1_8, access, name.internal, null, superType.internal, interfaceNames)
+
+		_fields.forEach { it.write(this) }
+		_methods.forEach { it.write(this) }
+
+		visitEnd()
+		return toByteArray()
+	}
 }

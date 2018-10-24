@@ -1,18 +1,21 @@
 package unboks.hierarchy
 
-class UnboksField internal constructor(private val ctx: UnboksContext, val name: String) {
+import org.objectweb.asm.ClassVisitor
+import unboks.Thing
+
+class UnboksField internal constructor(private val ctx: UnboksContext, val name: String, val type: Thing) {
 	var access = 0
 
 	var initial: Any? = null
 		set(value) {
 			field = when (value) {
-				is java.lang.Integer, // TODO Does it convert to kotlin types?
-				is java.lang.Float,
-				is java.lang.Long,
-				is java.lang.Double,
-				is java.lang.String,
-				null -> value
+				is Int, is Float, is Long, is Double, is String, null -> value
 				else -> throw IllegalArgumentException("Not a valid type: $value")
 			}
 		}
+
+	internal fun write(visitor: ClassVisitor) = visitor.apply {
+		visitField(access, name, type.asDescriptor, null, initial)
+		visitEnd()
+	}
 }
