@@ -1,5 +1,6 @@
 package unboks.pass
 
+import unboks.Block
 import unboks.IrPhi
 
 fun createPhiPruningPass() = Pass<Unit> {
@@ -48,5 +49,15 @@ fun createPhiPruningPass() = Pass<Unit> {
 			ctx.backlog(uses.filterIsInstance<IrPhi>())
 			ctx.backlog(this) // Might be able to short-circuit now.
 		}
+	}
+}
+
+fun createConsistencyCheckPass() = Pass<Unit> {
+
+	fun fail(reason: String): Nothing = throw IllegalStateException(reason)
+
+	visit<Block> { _ ->
+		if (opcodes.takeWhile { it is IrPhi } != opcodes.filterIsInstance<IrPhi>())
+			fail("Block $this does not have all phi nodes at the beginning")
 	}
 }
