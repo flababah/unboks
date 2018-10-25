@@ -1,10 +1,13 @@
 package unboks.pass
 
+import unboks.Block
+import unboks.DependencySource
+import unboks.FlowGraph
 import kotlin.reflect.KClass
 
 /**
- * Limitation notes:
- * - Don't remove an item this is not the one currently being visited -- Might have backlogged a deleted item
+ * @see FlowGraph.execute
+ * @see Block.execute
  */
 // TODO Should we store values and backlog in the Pass itself?
 class Pass<R>(private val initBlock: Builder<R>.() -> Unit) {
@@ -50,6 +53,9 @@ class Pass<R>(private val initBlock: Builder<R>.() -> Unit) {
 	}
 
 	private fun visitItem(builder: Builder<R>, item: PassType) {
+		if (item is DependencySource && item.detached)
+			return
+
 		for ((type, handler) in builder.visitors) {
 			if (type.java.isAssignableFrom(item.javaClass))
 				item.handler(context)?.let { values[item] = it }

@@ -17,6 +17,9 @@ abstract class DependencySource internal constructor() {
 	// TODO Check that no detached DS is used in some DependencyType.
 	// - how does that work wtih collections.addAll ?
 	// - what about proxy DependencyProperty where?
+	/**
+	 * Once detached a [DependencySource] can never become attached again.
+	 */
 	val detached: Boolean get() = _detached
 
 	/**

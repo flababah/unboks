@@ -56,9 +56,16 @@ sealed class Block(val flow: FlowGraph) : DependencySource(), IrFactory, Nameabl
 		flow.detachBlock(this)
 	}
 
-	internal fun execute(visitor: Pass<*>.InitialVisitor) {
+	internal fun executeInitial(visitor: Pass<*>.InitialVisitor) {
 		visitor.visit(this)
 		_opcodes.toTypedArray().forEach { visitor.visit(it) }
+	}
+
+	/**
+	 * Execute a pass on this block.
+	 */
+	fun <R> execute(pass: Pass<R>): Pass<R> = pass.execute {
+		executeInitial(it)
 	}
 }
 
