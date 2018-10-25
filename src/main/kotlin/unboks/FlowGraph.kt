@@ -4,6 +4,7 @@ import org.objectweb.asm.MethodVisitor
 import unboks.internal.*
 import unboks.pass.Pass
 import unboks.pass.PassType
+import unboks.pass.createConsistencyCheckPass
 
 /**
  * Entry point into the API.
@@ -79,6 +80,7 @@ class FlowGraph(vararg parameterTypes: Thing) : ConstantStore(), PassType {
 	 * Blabla starts with [MethodVisitor.visitCode], and ends with [MethodVisitor.visitEnd].
 	 */
 	fun generate(receiver: MethodVisitor, returnType: Thing) {
+		execute(createConsistencyCheckPass())
 		codeGenerate(this, receiver, returnType)
 	}
 }

@@ -265,7 +265,6 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 			throw ParseException("Dead code") // TODO Just delete unused blocks.
 
 		graph.execute(createPhiPruningPass())
-		graph.execute(createConsistencyCheckPass())
 		// TODO Compact names.
 	}
 
