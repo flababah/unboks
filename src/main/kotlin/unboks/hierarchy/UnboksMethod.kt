@@ -4,7 +4,6 @@ import org.objectweb.asm.ClassVisitor
 import unboks.FlowGraph
 import unboks.Reference
 import unboks.Thing
-import unboks.internal.codeGenerate
 
 class UnboksMethod internal constructor(val type: UnboksClass, val name: String, val returnType: Thing, vararg parameterTypes: Thing) {
 	var access = 0
@@ -22,6 +21,6 @@ class UnboksMethod internal constructor(val type: UnboksClass, val name: String,
 		val exceptions = throws.map { it.internal }.toTypedArray()
 
 		val mv = visitor.visitMethod(access, name, desc, null, exceptions)
-		codeGenerate(flow, mv, returnType)
+		flow.generate(mv, returnType)
 	}
 }
