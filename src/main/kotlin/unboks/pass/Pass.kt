@@ -72,7 +72,7 @@ class Pass<R>(private val initBlock: Builder<R>.() -> Unit) {
 		fun visit(item: PassType) = visitItem(builder, item)
 	}
 
-	internal fun execute(visitor: (InitialVisitor) -> Unit): Pass<R> = apply {
+	internal fun execute(visitor: (InitialVisitor) -> Unit) = apply {
 		val builder = Builder<R>()
 
 		// Setup visit handlers, and more importantly run the block which might
