@@ -122,7 +122,7 @@ class IrGoto internal constructor(block: Block, target: BasicBlock)
 class IrInvoke internal constructor(block: Block, val spec: Invocation, arguments: List<Def>)
 		: Ir(block), Def, Use {
 
-	override var name by flow.autoName(AutoNameType.INVOCATION, this)
+	override var name by flow.registerAutoName(this, "inv")
 
 	override val uses: RefCounts<Use> = RefCountsImpl()
 	override val type get() = spec.returnType
@@ -150,7 +150,7 @@ class IrInvoke internal constructor(block: Block, val spec: Invocation, argument
 class IrPhi internal constructor(block: Block, private val explicitType: Thing)
 		: Ir(block), Def, Use {
 
-	override var name by flow.autoName(AutoNameType.PHI, this)
+	override var name by flow.registerAutoName(this, "phi")
 
 	override val defs: Collection<Def> get() = phiDefs.map { it.first }
 

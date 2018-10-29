@@ -5,6 +5,7 @@ import unboks.internal.*
 import unboks.pass.Pass
 import unboks.pass.PassType
 import unboks.pass.createConsistencyCheckPass
+import kotlin.properties.ReadWriteProperty
 
 /**
  * Entry point into the API.
@@ -22,17 +23,12 @@ class FlowGraph(vararg parameterTypes: Thing) : ConstantStore(), PassType {
 			_root = value
 		}
 
-	private val nameParameters   = NameRegistry(AutoNameType.PARAMETER.prefix)
-	private val nameException    = NameRegistry(AutoNameType.EXCEPTION.prefix)
-	private val namePhi          = NameRegistry(AutoNameType.PHI.prefix)
-	private val nameInvocation   = NameRegistry(AutoNameType.INVOCATION.prefix)
-	private val nameBasicBlock   = NameRegistry(AutoNameType.BASIC_BLOCK.prefix)
-	private val nameHandlerBlock = NameRegistry(AutoNameType.HANDLER_BLOCK.prefix)
+	private val nameRegistry = NameRegistry()
 
 	val parameters: List<Parameter> = parameterTypes.map {
 		object : Parameter {
 			override val flow get() = this@FlowGraph
-			override var name by autoName(AutoNameType.PARAMETER, this)
+			override var name by registerAutoName(this, "p")
 
 			override val type = it
 			override val uses: RefCounts<Use> = RefCountsImpl()
@@ -41,18 +37,11 @@ class FlowGraph(vararg parameterTypes: Thing) : ConstantStore(), PassType {
 		}
 	}
 
-	internal fun <R : Nameable> autoName(type: AutoNameType, key: R): AutoNameDelegate<R> {
-		val registry = when (type) {
-			AutoNameType.PARAMETER     -> nameParameters
-			AutoNameType.EXCEPTION     -> nameException
-			AutoNameType.PHI           -> namePhi
-			AutoNameType.INVOCATION    -> nameInvocation
-			AutoNameType.BASIC_BLOCK   -> nameBasicBlock
-			AutoNameType.HANDLER_BLOCK -> nameHandlerBlock
-		}
-		registry.register(key)
-		return AutoNameDelegate(registry)
-	}
+	internal fun registerAutoName(key: Nameable, prefix: String): ReadWriteProperty<Nameable, String> =
+			nameRegistry.register(key, prefix)
+
+	internal fun unregisterAutoName(key: Nameable) =
+			nameRegistry.unregister(key)
 
 	internal fun detachBlock(block: Block) = _blocks.remove(block)
 

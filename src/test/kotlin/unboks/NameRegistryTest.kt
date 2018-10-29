@@ -8,82 +8,37 @@ import kotlin.test.assertEquals
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class NameRegistryTest {
 
-	private class Key : Nameable {
-		override var name: String = "test"
-	}
-	
-	@Test
-	fun testSimpleAssignAndPrune() {
-		val reg = NameRegistry("p")
-		val o0 = Key()
-		val o1 = Key()
-		val o2 = Key()
-
-		reg.register(o0)
-		reg.register(o1)
-		reg.register(o2)
-		assertEquals("p0", reg.get(o0))
-		assertEquals("p1", reg.get(o1))
-		assertEquals("p2", reg.get(o2))
-
-		reg.forget(o0)
-		reg.register(o0)
-
-		assertEquals("p3", reg.get(o0))
-		assertEquals("p1", reg.get(o1))
-		assertEquals("p2", reg.get(o2))
-
-		reg.prune()
-
-		assertEquals("p0", reg.get(o1))
-		assertEquals("p1", reg.get(o2))
+	private class TestNameable(registry: NameRegistry, default: String) : Nameable {
+		override var name by registry.register(this, default)
 	}
 
 	@Test
-	fun testPreferredName() {
-		val reg = NameRegistry("p")
-		val o0 = Key()
-		val o1 = Key()
-		val a0 = Key()
-		val a1 = Key()
+	fun testRegisterAndPrune() {
+		val reg = NameRegistry()
+		val a0 = TestNameable(reg, "a")
+		val a1 = TestNameable(reg, "a")
 
-		reg.register(o0)
-		reg.register(a0)
-		reg.register(a1, "a")
+		assertEquals("a0", a0.name)
+		assertEquals("a1", a1.name)
 
-		assertEquals("p0", reg.get(o0))
-		assertEquals("p1", reg.get(a0))
-		assertEquals("a", reg.get(a1))
-
-		reg.register(a0, "a")
-		reg.register(o1)
-
-		assertEquals("a1", reg.get(a0))
-		assertEquals("p2", reg.get(o1))
+		a0.name = "b"
+		assertEquals("b0", a0.name)
+		assertEquals("a1", a1.name)
 
 		reg.prune()
-
-		assertEquals("p0", reg.get(o0))
-		assertEquals("p1", reg.get(o1))
-		assertEquals("a", reg.get(a1))
-		assertEquals("a1", reg.get(a0))
+		assertEquals("a0", a1.name)
 	}
 
 	@Test
-	fun testRevertToGeneric() {
-		val reg = NameRegistry("p")
-		val o = Key()
+	fun testDefault() {
+		val reg = NameRegistry()
+		val x = TestNameable(reg, "a")
 
-		reg.register(o)
-		assertEquals("p0", reg.get(o))
-		reg.register(o, "a")
-		assertEquals("a", reg.get(o))
-		reg.register(o)
-		assertEquals("p1", reg.get(o))
-		reg.register(o, "a")
-		assertEquals("a1", reg.get(o))
+		x.name = "x"
+		assertEquals("x0", x.name)
 
 		reg.prune()
-		assertEquals("a", reg.get(o))
+		x.name = ""
+		assertEquals("a0", x.name)
 	}
 }

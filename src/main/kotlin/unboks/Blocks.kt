@@ -1,6 +1,5 @@
 package unboks
 
-import unboks.internal.AutoNameType
 import unboks.internal.RefCountsImpl
 import unboks.internal.dependencyList
 import unboks.internal.handlerUses
@@ -102,7 +101,7 @@ infix fun HandlerBlock.handles(type: Reference?) = ExceptionEntry(this, type)
 //}
 
 class BasicBlock internal constructor(flow: FlowGraph) : Block(flow) {
-	override var name by flow.autoName(AutoNameType.BASIC_BLOCK, this)
+	override var name by flow.registerAutoName(this, "B")
 
 	override var root
 		get() = flow.root === this
@@ -122,7 +121,7 @@ class BasicBlock internal constructor(flow: FlowGraph) : Block(flow) {
 }
 
 class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Block(flow) {
-	override var name by flow.autoName(AutoNameType.HANDLER_BLOCK, this)
+	override var name by flow.registerAutoName(this, "H")
 
 	/**
 	 * Defaults to the highest possible exception type, [java.lang.Throwable].
@@ -134,7 +133,7 @@ class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Blo
 	 * the stack when an exception is caught.
 	 */
 	val exception = object : Def {
-		override var name by flow.autoName(AutoNameType.EXCEPTION, this)
+		override var name by flow.registerAutoName(this, "e") // TODO Unregister on remove.
 
 		override val type get() = this@HandlerBlock.type
 		override val uses: RefCounts<Use> = RefCountsImpl()
