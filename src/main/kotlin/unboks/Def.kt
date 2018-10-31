@@ -1,6 +1,8 @@
 package unboks
 
-interface Def : Nameable {
+import unboks.pass.PassType
+
+interface Def : Nameable, PassType {
 
 	val type: Thing
 

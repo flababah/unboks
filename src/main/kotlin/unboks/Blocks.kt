@@ -120,33 +120,28 @@ class BasicBlock internal constructor(flow: FlowGraph) : Block(flow) {
 	}
 }
 
-class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Block(flow) {
+/**
+ * This type being a [Def] represents the throwable instance that is normally on top of
+ * the stack when an exception is caught.
+ */
+class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Block(flow), Def {
 	override var name by flow.registerAutoName(this, "H")
 
 	/**
 	 * Defaults to the highest possible exception type, [java.lang.Throwable].
 	 */
-	val type: Reference = type ?: Reference(java.lang.Throwable::class)
+	override val type: Reference = type ?: Reference(java.lang.Throwable::class)
 
-	/**
-	 * This [Def] represents the throwable instance that is normally on top of
-	 * the stack when an exception is caught.
-	 */
-	val exception = object : Def {
-		override var name by flow.registerAutoName(this, "e") // TODO Unregister on remove.
-
-		override val type get() = this@HandlerBlock.type
-		override val uses: RefCounts<Use> = RefCountsImpl()
-	}
+	override val uses: RefCounts<Use> = RefCountsImpl()
 
 	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
 		inputs.forEach { addObjection(Objection.HandlerIsUsed(this, it)) }
 		phiReferences.forEach { addObjection(Objection.BlockHasPhiReference(this, it)) }
 
-		for (use in exception.uses) {
+		for (use in uses) {
 			// At the moment all Uses are also Entities, but check anyway...
 			if (use !is DependencySource || use !in batch)
-				addObjection(Objection.DefHasUseDependency(exception, use))
+				addObjection(Objection.DefHasUseDependency(this, use))
 		}
 	}
 }

@@ -209,12 +209,12 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 
 			if (visitedBlocks.add(block)) { // Has not been visited before.
 				val initialLocals = predLocals.map { backing.newPhi(it.type) } // Locals first in phi list.
-				val initialStack = when(backing) {
+				val initialStack: List<Def> = when(backing) {
 					is BasicBlock -> predStack.map { backing.newPhi(it.type) }
 
 					// When an exception handler is invoked after an exception was caught, the
 					// exception magically appears as the only stack entry.
-					is HandlerBlock -> { listOf(backing.exception) }
+					is HandlerBlock -> { listOf(backing) }
 				}
 
 				val localsState = LocalsMap(initialLocals, initialLocals.size)

@@ -59,6 +59,7 @@ class FlowGraph(vararg parameterTypes: Thing) : ConstantStore(), PassType {
 	 */
 	fun <R> execute(pass: Pass<R>): Pass<R> = pass.execute {
 		it.visit(this)
+		// TODO Visit constants.
 		parameters.forEach { p -> it.visit(p) } // Not possible to mutate for now, so no need for copy.
 		_blocks.toTypedArray().forEach { block -> block.executeInitial(it) }
 	}
