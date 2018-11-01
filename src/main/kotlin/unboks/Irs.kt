@@ -275,4 +275,5 @@ class IrCopy internal constructor(block: Block, original: Def): Ir(block), Def, 
 
 	override val type get() = original.type
 
+	override fun toString() = "copy(${original.name})"
 }
