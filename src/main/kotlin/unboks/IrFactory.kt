@@ -25,4 +25,8 @@ interface IrFactory {
 	fun newSwitch(key: Def, default: BasicBlock): IrSwitch
 
 	fun newThrow(exception: Def): IrThrow
+
+	fun newConstant(value: Int): IrIntConst
+
+	fun newConstant(value: String): IrStringConst
 }

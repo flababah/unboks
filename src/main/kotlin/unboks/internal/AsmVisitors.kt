@@ -221,7 +221,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 				val stackState = StackMap(initialStack)
 
 				// Replay deferred operations on the block visitor.
-				val mv = FlowGraphBlockVisitor(localsState, stackState, backing, block.successor, graph) {
+				val mv = FlowGraphBlockVisitor(localsState, stackState, backing, block.successor) {
 					val resolved = info.fromLabel[it] ?: throw ParseException("Unknown label: $it")
 					resolved.backing as BasicBlock // TODO Better check if not ok...
 				}
@@ -328,7 +328,6 @@ private class FlowGraphBlockVisitor(
 		private val stack: StackMap,
 		private val appender: IrFactory,
 		private val successor: AsmBackingBlock?,
-		private val constants: ConstantStore,
 		private val resolver: (Label) -> BasicBlock) : MethodVisitor(ASM6) {
 
 	private fun appendInvocation(spec: Invocation) {
@@ -347,7 +346,7 @@ private class FlowGraphBlockVisitor(
 			ICONST_2,
 			ICONST_3,
 			ICONST_4,
-			ICONST_5 -> stack.push(constants.constant(opcode - ICONST_0))
+			ICONST_5 -> stack.push(appender.newConstant(opcode - ICONST_0))
 
 			IRETURN -> appender.newReturn(stack.pop<IntType>())
 			LRETURN -> appender.newReturn(stack.pop<LONG>())
@@ -415,7 +414,7 @@ private class FlowGraphBlockVisitor(
 	override fun visitIntInsn(opcode: Int, operand: Int) {
 		when (opcode) {
 			BIPUSH,
-			SIPUSH -> stack.push(constants.constant(operand))
+			SIPUSH -> stack.push(appender.newConstant(operand))
 
 			else -> TODO()
 		}
@@ -467,7 +466,7 @@ private class FlowGraphBlockVisitor(
 		// IINC doesn't exist in our internal representation. Lower it into IADD.
 		locals[varId] = appender.newInvoke(InvIntrinsic.IADD,
 				locals.get<INT>(varId), // TODO This needs to be IntType, right?
-				constants.constant(increment))
+				appender.newConstant(increment))
 	}
 
 	override fun visitMultiANewArrayInsn(descriptor: String?, numDimensions: Int) =
@@ -656,6 +655,7 @@ private class LocalsMap(initials: Iterable<Def>, maxLocals: Int) : Iterable<Def>
 				set(_) { }
 
 			override val type get() = unboks.TOP
+			override val container get() = throw IllegalStateException()
 			override val uses get() = throw IllegalStateException()
 		}
 	}

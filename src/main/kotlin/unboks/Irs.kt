@@ -121,6 +121,7 @@ class IrGoto internal constructor(block: Block, target: BasicBlock)
 
 class IrInvoke internal constructor(block: Block, val spec: Invocation, arguments: List<Def>)
 		: Ir(block), Def, Use {
+	override val container get() = block
 
 	override var name by flow.registerAutoName(this, "inv")
 
@@ -149,6 +150,8 @@ class IrInvoke internal constructor(block: Block, val spec: Invocation, argument
 
 class IrPhi internal constructor(block: Block, private val explicitType: Thing)
 		: Ir(block), Def, Use {
+
+	override val container get() = block
 
 	override var name by flow.registerAutoName(this, "phi")
 
@@ -233,3 +236,28 @@ class IrThrow internal constructor(block: Block, exception: Def)
 
 	override fun toString() = "THROW ${exception.name}"
 }
+
+sealed class IrConst<out T : Any>(
+		block: Block,
+		val value: T,
+		override val type: Thing,
+		private val prefix: String = "",
+		private val suffix: String = "")
+: Ir(block), Def {
+
+	override val container get() = block
+
+	override var name: String
+		get() = "$prefix$value$suffix"
+		set(_) { }
+
+	override val uses: RefCounts<Use> = RefCountsImpl()
+
+	override fun toString() = name
+}
+
+class IrIntConst internal constructor(block: Block, value: Int)
+	: IrConst<Int>(block, value, INT)
+
+class IrStringConst internal constructor(block: Block, value: String)
+	: IrConst<String>(block, value, Reference(String::class), prefix = "\"", suffix = "\"")

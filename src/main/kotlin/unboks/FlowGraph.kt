@@ -10,7 +10,7 @@ import kotlin.properties.ReadWriteProperty
 /**
  * Entry point into the API.
  */
-class FlowGraph(vararg parameterTypes: Thing) : ConstantStore(), PassType {
+class FlowGraph(vararg parameterTypes: Thing) : PassType {
 	private val _blocks = mutableSetOf<Block>()
 	val blocks: Set<Block> get() = _blocks
 
@@ -27,6 +27,7 @@ class FlowGraph(vararg parameterTypes: Thing) : ConstantStore(), PassType {
 
 	val parameters: List<Parameter> = parameterTypes.map {
 		object : Parameter {
+			override val container get() = root
 			override val flow get() = this@FlowGraph
 			override var name by registerAutoName(this, "p")
 

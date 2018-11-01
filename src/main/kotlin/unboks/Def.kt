@@ -4,6 +4,8 @@ import unboks.pass.PassType
 
 interface Def : Nameable, PassType {
 
+	val container: Block
+
 	val type: Thing
 
 	/**

@@ -43,6 +43,10 @@ sealed class Block(val flow: FlowGraph) : DependencySource(), IrFactory, Nameabl
 
 	override fun newThrow(exception: Def): IrThrow = append(IrThrow(this, exception))
 
+	override fun newConstant(value: Int) = append(IrIntConst(this, value))
+
+	override fun newConstant(value: String) = append(IrStringConst(this, value))
+
 	private fun <T: Ir> append(ir: T): T = ir.apply { _opcodes += this }
 
 	override fun toString(): String = name + if (root) " [ROOT]"  else ""
@@ -125,6 +129,7 @@ class BasicBlock internal constructor(flow: FlowGraph) : Block(flow) {
  * the stack when an exception is caught.
  */
 class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Block(flow), Def {
+	override val container get() = this
 	override var name by flow.registerAutoName(this, "H")
 
 	/**
