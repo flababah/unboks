@@ -5,14 +5,14 @@ import unboks.IrPhi
 
 fun createPhiPruningPass() = Pass<Unit> {
 
-//	// Remove unused phi nodes. Backlogs phi defs since they might
-//	// also have become unused as a result.
-//	visit<IrPhi> { ctx ->
-//		if (uses.isEmpty()) {
-//			ctx.backlog(defs.filterIsInstance<IrPhi>())
-//			remove()
-//		}
-//	}
+	// Remove unused phi nodes. Backlogs phi defs since they might
+	// also have become unused as a result.
+	visit<IrPhi> { ctx ->
+		if (uses.isEmpty()) {
+			ctx.backlog(defs.filterIsInstance<IrPhi>())
+			remove()
+		}
+	}
 //
 //	// If a phi node has one def, we can short-circuit the
 //	// def and the uses and eliminate this phi.
@@ -41,6 +41,16 @@ fun createPhiPruningPass() = Pass<Unit> {
 //			remove()
 //		}
 //	}
+
+//	visit<IrPhi> { ctx ->
+//		if (defs.size == 1) {
+//			val source = defs.iterator().next()
+//
+//		}
+//	}
+//
+//	// TODO if phi.container == phi[0].container -> short-circuit
+//	// TODO else, lav copy.
 //
 //	// Prune a = phi(a, b)
 //	visit<IrPhi> { ctx ->

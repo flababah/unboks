@@ -247,13 +247,11 @@ sealed class IrConst<out T : Any>(
 
 	override val container get() = block
 
-	override var name: String
-		get() = "$prefix$value$suffix"
-		set(_) { }
+	override var name by flow.registerAutoName(this, "c")
 
 	override val uses: RefCounts<Use> = RefCountsImpl()
 
-	override fun toString() = name
+	override fun toString() = "$name = $prefix$value$suffix"
 }
 
 class IrIntConst internal constructor(block: Block, value: Int)
