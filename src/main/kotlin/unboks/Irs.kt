@@ -261,3 +261,18 @@ class IrIntConst internal constructor(block: Block, value: Int)
 
 class IrStringConst internal constructor(block: Block, value: String)
 	: IrConst<String>(block, value, Reference(String::class), prefix = "\"", suffix = "\"")
+
+class IrCopy internal constructor(block: Block, original: Def): Ir(block), Def, Use {
+	override fun redirectDefs(current: Def, new: Def) =
+			doIf(original == current) { original = new }
+
+	override val defs get() = setOf(original)
+	override var name by flow.registerAutoName(this, "c")
+	override val uses: RefCounts<Use> = RefCountsImpl()
+	override val container get() = block
+
+	var original: Def by dependencyProperty(defUses, original)
+
+	override val type get() = original.type
+
+}

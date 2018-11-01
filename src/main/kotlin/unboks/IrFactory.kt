@@ -29,4 +29,6 @@ interface IrFactory {
 	fun newConstant(value: Int): IrIntConst
 
 	fun newConstant(value: String): IrStringConst
+
+	fun newCopy(original: Def): IrCopy
 }

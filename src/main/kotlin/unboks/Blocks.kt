@@ -47,6 +47,8 @@ sealed class Block(val flow: FlowGraph) : DependencySource(), IrFactory, Nameabl
 
 	override fun newConstant(value: String) = append(IrStringConst(this, value))
 
+	override fun newCopy(original: Def) = append(IrCopy(this, original))
+
 	private fun <T: Ir> append(ir: T): T = ir.apply { _opcodes += this }
 
 	override fun toString(): String = name + if (root) " [ROOT]"  else ""
