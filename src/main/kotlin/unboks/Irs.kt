@@ -155,19 +155,19 @@ class IrPhi internal constructor(block: Block, private val explicitType: Thing)
 
 	override var name by flow.registerAutoName(this, "phi")
 
-	override val defs: Collection<Def> get() = phiDefs.map { it.first }
+	override val defs: MutableSet<Def> = dependencySet(defUses)
 
 	/**
 	 * Replaces any occurrence of [current] with [new]. The paired block (assignedIn)
 	 * stays the same.
 	 */
 	override fun redirectDefs(current: Def, new: Def): Boolean {
-		val currentBlocks = mutableListOf<Block>() // Cannot have duplicates.
-		val changed = phiDefs.removeIf {
-			doIf(it.first == current) { currentBlocks += it.second }
+		if (current in defs) {
+			defs.remove(current)
+			defs.add(new)
+			return true
 		}
-		currentBlocks.forEach { phiDefs += new to it }
-		return changed
+		return false
 	}
 
 	override val uses: RefCounts<Use> = RefCountsImpl()
@@ -177,9 +177,9 @@ class IrPhi internal constructor(block: Block, private val explicitType: Thing)
 		else -> TOP
 	}
 
-	val phiDefs: MutableSet<Pair<Def, Block>> = dependencySet(defUses, phiReferences)
-	// TODO rename når Def bliver fyldt ud.
-	// TODO Måske lav subtype af Def, der har block i sig?
+//	val phiDefs: MutableSet<Pair<Def, Block>> = dependencySet(defUses, phiReferences)
+//	// TODO rename når Def bliver fyldt ud.
+//	// TODO Måske lav subtype af Def, der har block i sig?
 
 	override fun toString() = "$name = PHI${createUseTuple(this)}"
 }

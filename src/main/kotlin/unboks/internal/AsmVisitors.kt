@@ -8,7 +8,6 @@ import unboks.*
 import unboks.invocation.InvIntrinsic
 import unboks.invocation.InvMethod
 import unboks.invocation.Invocation
-import unboks.pass.createConsistencyCheckPass
 import unboks.pass.createPhiPruningPass
 
 // TODO Add exceptions to block...
@@ -201,7 +200,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 		 * @param predLocals locals from the preceding edge or exception block
 		 * @param predStack stack from the preceding edge (empty for exception blocks)
 		 */
-		fun traverse(block: AsmBackingBlock, pred: AsmBackingBlock, predLocals: LocalsMap, predStack: StackMap) {
+		fun traverse(block: AsmBackingBlock, predLocals: LocalsMap, predStack: StackMap) {
 			val backing = block.backing
 
 			if (block is AsmBackingBlock.Handler)
@@ -234,13 +233,13 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 				// Traverse out edges.
 				for (next in terminal.successors) {
 					val nextBacking = info.fromBlock[next]!!
-					traverse(nextBacking, block, localsState, stackState)
+					traverse(nextBacking, localsState, stackState)
 				}
 
 				// Traverse exception handlers.
 				for (exception in backing.exceptions) {
 					val nextBacking = info.fromBlock[exception.handler]!!
-					traverse(nextBacking, block, localsState, StackMap(emptyList()))
+					traverse(nextBacking, localsState, StackMap(emptyList()))
 				}
 			}
 
@@ -248,8 +247,8 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 			val localPhis = backing.filter<IrPhi>().take(maxLocals).toList()
 			val stackPhis = backing.filter<IrPhi>().drop(maxLocals).toList()
 
-			predLocals.mergeInto(localPhis, pred.backing, backing is HandlerBlock)
-			predStack.mergeInto(stackPhis, pred.backing)
+			predLocals.mergeInto(localPhis, backing is HandlerBlock)
+			predStack.mergeInto(stackPhis)
 		}
 
 		val finalRoot = info.root ?: throw ParseException("No blocks in method")
@@ -259,7 +258,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 
 		// Bootstrap at the root block. Note inputs are defined in itself, ie. locals
 		// are "assigned" in root block.
-		traverse(finalRoot, finalRoot, startLocals, startStack)
+		traverse(finalRoot, startLocals, startStack)
 
 		if (visitedBlocks.size != info.fromBlock.size)
 			throw ParseException("Dead code") // TODO Just delete unused blocks.
@@ -570,11 +569,11 @@ private class StackMap(initials: Iterable<Def>) : Iterable<Def> {
 		}
 	}
 
-	fun mergeInto(phis: List<IrPhi>, definedIn: Block) {
+	fun mergeInto(phis: List<IrPhi>) {
 		if(stack.size != phis.size)
 			throw ParseException("Merge mismatch: ${stack.size} != ${phis.size}")
 
-		phis.zip(stack) { phi, def -> phi.phiDefs += def to definedIn }
+		phis.zip(stack) { phi, def -> phi.defs += def }
 	}
 
 	override fun iterator() = stack.iterator()
@@ -624,19 +623,19 @@ private class LocalsMap(initials: Iterable<Def>, maxLocals: Int) : Iterable<Def>
 	/**
 	 * [definedIn] must be the block the initial [IrPhi]s are defined in.
 	 */
-	fun mergeInto(phis: List<IrPhi>, definedIn: Block, withHistory: Boolean) {
+	fun mergeInto(phis: List<IrPhi>, withHistory: Boolean) {
 		if(current.size != phis.size)
 			throw ParseException("Merge mismatch: ${current.size} != ${phis.size}")
 
 		if (withHistory) {
 			phis.zip(history) { phi, hist ->
 				for (def in hist)
-					phi.phiDefs += def to definedIn
+					phi.defs += def
 			}
 		} else {
 			phis.zip(current) { phi, def ->
 				if (def !is Invalid)
-					phi.phiDefs += def to definedIn
+					phi.defs += def
 			}
 		}
 	}

@@ -15,7 +15,7 @@ sealed class Block(val flow: FlowGraph) : DependencySource(), IrFactory, Nameabl
 
 	val inputs: RefCounts<Block> = RefCountsImpl()
 
-	val phiReferences: RefCounts<IrPhi> = RefCountsImpl()
+//	val phiReferences: RefCounts<IrPhi> = RefCountsImpl()
 
 	val terminal: IrTerminal? get() = opcodes.lastOrNull() as? IrTerminal
 
@@ -117,7 +117,7 @@ class BasicBlock internal constructor(flow: FlowGraph) : Block(flow) {
 
 	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
 		inputs.forEach { addObjection(Objection.BlockHasInput(this, it)) }
-		phiReferences.forEach { addObjection(Objection.BlockHasPhiReference(this, it)) }
+//		phiReferences.forEach { addObjection(Objection.BlockHasPhiReference(this, it)) }
 
 		if (root)
 			addObjection(Objection.BlockIsRoot(this))
@@ -141,7 +141,7 @@ class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Blo
 
 	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
 		inputs.forEach { addObjection(Objection.HandlerIsUsed(this, it)) }
-		phiReferences.forEach { addObjection(Objection.BlockHasPhiReference(this, it)) }
+//		phiReferences.forEach { addObjection(Objection.BlockHasPhiReference(this, it)) }
 
 		for (use in uses) {
 			// At the moment all Uses are also Entities, but check anyway...

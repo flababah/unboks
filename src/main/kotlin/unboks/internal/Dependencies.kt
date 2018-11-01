@@ -44,9 +44,14 @@ internal class RefCountsImpl<T> private constructor(
 private infix fun <T> RefCounts<T>.inc(ref: T) = (this as RefCountsImpl<T>).inc(ref)
 private infix fun <T> RefCounts<T>.dec(ref: T) = (this as RefCountsImpl<T>).dec(ref)
 
-internal fun <R : DependencySource, B> R.dependencySet(spec: TargetSpecification<R, B>): Set<B> {
-	TODO()
-}
+internal fun <R : DependencySource, B> R.dependencySet(
+		spec: TargetSpecification<in R, B>)
+: MutableSet<B> = register(ObservableSet { event, elm ->
+	when (event) {
+		ObservableEvent.ADD -> spec.accessor(elm) inc this
+		ObservableEvent.DEL -> spec.accessor(elm) dec this
+	}
+})
 
 /**
  * Creates a composite dependency set of a pair of specifications.
