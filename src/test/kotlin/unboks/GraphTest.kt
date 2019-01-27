@@ -23,13 +23,13 @@ class GraphTest {
 		val graph = FlowGraph(INT, LONG)
 
 		val target = graph.newBasicBlock()
-		val goto = graph.root.newGoto(target)
+		val goto = graph.root.append().newGoto(target)
 
 		assertEquals(target, goto.target)
 		assertEquals(setOf(goto.block), target.inputs)
 
 		val b2 = graph.newBasicBlock()
-		val cmp = b2.newCmp(Cmp.EQ, target, target, graph.parameters[0])
+		val cmp = b2.append().newCmp(Cmp.EQ, target, target, graph.parameters[0])
 
 		assertEquals(target, cmp.yes)
 		assertEquals(target, cmp.no)

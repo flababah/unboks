@@ -28,7 +28,7 @@ class DependencySourceTest {
 		val source = graph.newBasicBlock()
 		val target = graph.newBasicBlock()
 
-		val goto = source.newGoto(target)
+		val goto = source.append().newGoto(target)
 		assertEquals(
 				setOf(Objection.BlockHasInput(target, source)),
 				target.remove(throws = false))
