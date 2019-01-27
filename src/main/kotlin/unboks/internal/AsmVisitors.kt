@@ -5,6 +5,7 @@ import org.objectweb.asm.Label
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes.*
 import unboks.*
+import unboks.invocation.InvField
 import unboks.invocation.InvIntrinsic
 import unboks.invocation.InvMethod
 import unboks.invocation.Invocation
@@ -189,7 +190,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 			if (successor == null || successor !is AsmBackingBlock.Basic)
 				throw ParseException("Illegal fallthrough")
 
-			return block.backing.newGoto(successor.backing)
+			return block.backing.append().newGoto(successor.backing)
 		}
 
 		/**
@@ -202,14 +203,15 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 		 */
 		fun traverse(block: AsmBackingBlock, predLocals: LocalsMap, predStack: StackMap) {
 			val backing = block.backing
+			val appender = backing.append()
 
 			if (block is AsmBackingBlock.Handler)
 				assert(!predStack.iterator().hasNext())
 
 			if (visitedBlocks.add(block)) { // Has not been visited before.
-				val initialLocals = predLocals.map { backing.newPhi(it.type) } // Locals first in phi list.
+				val initialLocals = predLocals.map { appender.newPhi(it.type) } // Locals first in phi list.
 				val initialStack: List<Def> = when(backing) {
-					is BasicBlock -> predStack.map { backing.newPhi(it.type) }
+					is BasicBlock -> predStack.map { appender.newPhi(it.type) }
 
 					// When an exception handler is invoked after an exception was caught, the
 					// exception magically appears as the only stack entry.
@@ -220,7 +222,8 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 				val stackState = StackMap(initialStack)
 
 				// Replay deferred operations on the block visitor.
-				val mv = FlowGraphBlockVisitor(localsState, stackState, backing, block.successor) {
+
+				val mv = FlowGraphBlockVisitor(localsState, stackState, appender, block.successor) {
 					val resolved = info.fromLabel[it] ?: throw ParseException("Unknown label: $it")
 					resolved.backing as BasicBlock // TODO Better check if not ok...
 				}
@@ -264,7 +267,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 			throw ParseException("Dead code") // TODO Just delete unused blocks.
 
 		graph.execute(createPhiPruningPass())
-		// TODO Compact names.
+		graph.compactNames()
 	}
 
 	//
@@ -441,8 +444,22 @@ private class FlowGraphBlockVisitor(
 	override fun visitTypeInsn(opcode: Int, type: String?) =
 			TODO()
 
-	override fun visitFieldInsn(opcode: Int, owner: String?, name: String?, descriptor: String?) =
-			TODO()
+	override fun visitFieldInsn(opcode: Int, owner: String, name: String, descriptor: String) { // Real quick and dirty.
+		val type = Thing.fromDescriptor(descriptor)
+		val ownerType = Reference(owner)
+		val params = when (opcode) {
+			GETFIELD -> listOf(ownerType)
+			PUTFIELD -> listOf(ownerType, type)
+			GETSTATIC -> listOf()
+			PUTSTATIC -> listOf(type)
+			else -> throw Error("unknown field opcode")
+		}
+		val ret = when (opcode) {
+			GETSTATIC, PUTSTATIC -> type
+			else -> VOID
+		}
+		appendInvocation(InvField(opcode, ownerType, name, ret, type, params))
+	}
 
 	override fun visitMethodInsn(opcode: Int, owner: String, name: String, desc: String, itf: Boolean) =
 			appendInvocation(when(opcode) {
@@ -458,8 +475,11 @@ private class FlowGraphBlockVisitor(
 	override fun visitInvokeDynamicInsn(name: String?, descriptor: String?, handle: Handle?, vararg bma: Any?) =
 			TODO()
 
-	override fun visitLdcInsn(value: Any?) =
-			TODO()
+	override fun visitLdcInsn(value: Any?) {
+		if (value !is String)
+			TODO("Other LDC types")
+		stack.push(appender.newConstant(value))
+	}
 
 	override fun visitIincInsn(varId: Int, increment: Int) {
 		// IINC doesn't exist in our internal representation. Lower it into IADD.

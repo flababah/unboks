@@ -2,33 +2,55 @@ package unboks
 
 import unboks.invocation.Invocation
 
-interface IrFactory {
-
-	fun newCmp(cmp: Cmp, yes: BasicBlock, no: BasicBlock, op: Def): IrCmp1
-
-	fun newCmp(cmp: Cmp, yes: BasicBlock, no: BasicBlock, op1: Def, op2: Def): IrCmp2
-
-	fun newGoto(target: BasicBlock): IrGoto
-
-	fun newInvoke(spec: Invocation, vararg arguments: Def): IrInvoke
-
-	fun newInvoke(spec: Invocation, arguments: List<Def>): IrInvoke
+class IrFactory internal constructor(private val block: Block, private val offset: Offset) {
 
 	/**
-	 * If [explicitType] is [TOP] use that as type, unless the phi has defs.
-	 * In that case delegate to one of the defs' types.
+	 * @see IrCmp1
 	 */
-	fun newPhi(explicitType: Thing = TOP): IrPhi
+	fun newCmp(cmp: Cmp, yes: BasicBlock, no: BasicBlock, op: Def): IrCmp1 =
+			register(IrCmp1(block, cmp, yes, no, op))
 
-	fun newReturn(value: Def? = null): IrReturn
+	fun newCmp(cmp: Cmp, yes: BasicBlock, no: BasicBlock, op1: Def, op2: Def): IrCmp2 =
+			register(IrCmp2(block, cmp, yes, no, op1, op2))
 
-	fun newSwitch(key: Def, default: BasicBlock): IrSwitch
+	fun newGoto(target: BasicBlock): IrGoto =
+			register(IrGoto(block, target))
 
-	fun newThrow(exception: Def): IrThrow
+	fun newInvoke(spec: Invocation, vararg arguments: Def): IrInvoke =
+			newInvoke(spec, arguments.asList())
 
-	fun newConstant(value: Int): IrIntConst
+	fun newInvoke(spec: Invocation, arguments: List<Def>): IrInvoke =
+			register(IrInvoke(block, spec, arguments))
 
-	fun newConstant(value: String): IrStringConst
+	fun newPhi(explicitType: Thing): IrPhi =
+			register(IrPhi(block, explicitType))
 
-	fun newCopy(original: Def): IrCopy
+	fun newReturn(value: Def? = null): IrReturn =
+			register(IrReturn(block, value))
+
+	fun newSwitch(key: Def, default: BasicBlock): IrSwitch =
+			register(IrSwitch(block, key, default))
+
+	fun newThrow(exception: Def): IrThrow =
+			register(IrThrow(block, exception))
+
+	fun newCopy(original: Def) =
+			register(IrCopy(block, original))
+
+	fun newConstant(value: Int) =
+			register(IrIntConst(block, value))
+
+	fun newConstant(value: String) =
+			register(IrStringConst(block, value))
+
+	internal sealed class Offset {
+		class Before(val at: Ir) : Offset()
+		class Replace(val at: Ir) : Offset()
+		class After(val at: Ir) : Offset()
+		object Append : Offset()
+	}
+
+	private fun <T: Ir> register(ir: T): T = ir.apply {
+		block.insertIr(offset, ir)
+	}
 }

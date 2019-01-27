@@ -11,5 +11,16 @@ interface Invocation {
 
 	val representation: String
 
+	/**
+	 * If an invocation is safe it may never throw exceptions. (However even
+	 * safe invocations may throw class resolution and linking errors. This is
+	 * a compromise, since LDC can also do that, and we don't want to extend
+	 * the scope of "unsafe" to outside invocations for now...
+	 *
+	 * Maybe make constants into invocations? Naa, constants as an Ir should
+	 * go away once we go back to (phi, defIn) pairs.)
+	 */
+	val safe: Boolean
+
 	fun visit(visitor: MethodVisitor)
 }

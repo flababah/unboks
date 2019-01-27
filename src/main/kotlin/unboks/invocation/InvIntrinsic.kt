@@ -4,24 +4,28 @@ import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
 import unboks.*
 
-enum class InvIntrinsic(override val returnType: Thing, vararg parameterTypes: Thing) : Invocation {
-	IALOAD(INT, OBJECT, INT),
-	LALOAD(LONG, OBJECT, INT),
-	FALOAD(FLOAT, OBJECT, INT),
-	DALOAD(DOUBLE, OBJECT, INT),
-	AALOAD(OBJECT, OBJECT, INT),
-	BALOAD(BOOLEAN, OBJECT, INT),
-	CALOAD(CHAR, OBJECT, INT),
-	SALOAD(SHORT, OBJECT, INT),
+enum class InvIntrinsic(
+		override val returnType: Thing,
+		vararg parameterTypes: Thing,
+		override val safe: Boolean = true
+) : Invocation {
+	IALOAD(INT, OBJECT, INT, safe = false),
+	LALOAD(LONG, OBJECT, INT, safe = false),
+	FALOAD(FLOAT, OBJECT, INT, safe = false),
+	DALOAD(DOUBLE, OBJECT, INT, safe = false),
+	AALOAD(OBJECT, OBJECT, INT, safe = false),
+	BALOAD(BOOLEAN, OBJECT, INT, safe = false),
+	CALOAD(CHAR, OBJECT, INT, safe = false),
+	SALOAD(SHORT, OBJECT, INT, safe = false),
 
-	IASTORE(VOID, OBJECT, INT, INT),
-	LASTORE(VOID, OBJECT, INT, LONG),
-	FASTORE(VOID, OBJECT, INT, FLOAT),
-	DASTORE(VOID, OBJECT, INT, DOUBLE),
-	AASTORE(VOID, OBJECT, INT, OBJECT),
-	BASTORE(VOID, OBJECT, INT, BOOLEAN),
-	CASTORE(VOID, OBJECT, INT, CHAR),
-	SASTORE(VOID, OBJECT, INT, SHORT),
+	IASTORE(VOID, OBJECT, INT, INT, safe = false),
+	LASTORE(VOID, OBJECT, INT, LONG, safe = false),
+	FASTORE(VOID, OBJECT, INT, FLOAT, safe = false),
+	DASTORE(VOID, OBJECT, INT, DOUBLE, safe = false),
+	AASTORE(VOID, OBJECT, INT, OBJECT, safe = false),
+	BASTORE(VOID, OBJECT, INT, BOOLEAN, safe = false),
+	CASTORE(VOID, OBJECT, INT, CHAR, safe = false),
+	SASTORE(VOID, OBJECT, INT, SHORT, safe = false),
 
 	IADD(INT, INT, INT),
 	LADD(LONG, LONG, LONG),
@@ -35,7 +39,11 @@ enum class InvIntrinsic(override val returnType: Thing, vararg parameterTypes: T
 	LMUL(LONG, LONG, LONG),
 //	int FMUL = 106; // -
 //	int DMUL = 107; // -
-	IDIV(INT, INT, INT),
+
+	/**
+	 * Throws [ArithmeticException] when the divisor is 0.
+	 */
+	IDIV(INT, INT, INT, safe = false),
 //	int LDIV = 109; // -
 //	int FDIV = 110; // -
 //	int DDIV = 111; // -
@@ -88,6 +96,46 @@ enum class InvIntrinsic(override val returnType: Thing, vararg parameterTypes: T
 //	int MONITOREXIT = 195; // -
 
 	;
+
+/*
+MAY THROW EXCEPTIONS:
+
+
+anewarray
+	linking, size < 0
+arraylength
+	a is null
+
+checkcast -- duuh
+
+getfield
+getstatic
+putfield
+putstatic
+idiv
+
+irem
+ldiv
+lrem
+monitorenter
+monitorexit
+newarray
+
+multianewarray
+new
+
+*aload
+	if array is null
+*astore
+	if array is null, oob, types
+
+invokeinterface
+spec
+static
+invdynamic
+virt
+
+	 */
 
 	private val opcode: Int = Opcodes::class.java.getField(name).getInt(null)
 	override val parameterTypes: List<Thing> = parameterTypes.toList()

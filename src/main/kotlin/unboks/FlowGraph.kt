@@ -74,4 +74,8 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 		execute(createConsistencyCheckPass())
 		codeGenerate(this, receiver, returnType)
 	}
+
+	fun compactNames() {
+		nameRegistry.prune()
+	}
 }

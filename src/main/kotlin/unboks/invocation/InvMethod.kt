@@ -12,6 +12,11 @@ sealed class InvMethod(
 		private val itf: Boolean,
 		private val opcode: Int) : Invocation {
 
+	/**
+	 * We don't know any better until we get interprocedural analysis.
+	 */
+	override val safe get() = false
+
 	private val signature = MethodSignature(desc)
 
 	override val parameterTypes get() = when (opcode) {

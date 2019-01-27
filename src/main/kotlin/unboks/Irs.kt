@@ -41,10 +41,16 @@ sealed class Ir(val block: Block) : DependencySource(), PassType {
 
 	val flow get() = block.flow
 
+	fun insertBefore() = IrFactory(block, IrFactory.Offset.Before(this))
+	fun replaceWith() = IrFactory(block, IrFactory.Offset.Replace(this))
+	fun insertAfter() = IrFactory(block, IrFactory.Offset.After(this))
+
 	override fun traverseChildren(): Sequence<DependencySource> = emptySequence()
 
 	override fun detachFromParent() {
 		block.detachIr(this)
+		if (this is Nameable)
+			flow.unregisterAutoName(this)
 	}
 
 	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
@@ -73,6 +79,8 @@ private inline fun doIf(condition: Boolean, block: () -> Unit) = condition.apply
 class IrCmp1 internal constructor(block: Block, var cmp: Cmp, yes: BasicBlock, no: BasicBlock, op: Def)
 		: IrTerminal(block), Use {
 
+	override val container get() = block
+
 	override val defs: List<Def> get() = listOf(op)
 
 	override fun redirectDefs(current: Def, new: Def) = doIf(op == current) { op = new }
@@ -89,6 +97,8 @@ class IrCmp1 internal constructor(block: Block, var cmp: Cmp, yes: BasicBlock, n
 
 class IrCmp2 internal constructor(block: Block, var cmp: Cmp, yes: BasicBlock, no: BasicBlock, op1: Def, op2: Def)
 		: IrTerminal(block), Use {
+
+	override val container get() = block
 
 	override val defs: List<Def> get() = listOf(op1, op2)
 
@@ -148,6 +158,29 @@ class IrInvoke internal constructor(block: Block, val spec: Invocation, argument
 	override fun toString() = "$name = ${spec.representation}${createUseTuple(this)}"
 }
 
+/**
+ * Phis must have one def for every predecessor. See below for handler blocks.
+ *
+ * Only defs from immediate predecessors can be used. It makes no sense to have
+ * the following blocks:
+ * A B
+ * |/
+ * C D
+ * |/
+ * X
+ *
+ * And "phi(in A, in B, in D) in X" since that could also be done as
+ *
+ * c = phi(in A, in B) in C
+ * phi(c, in D)
+ *
+ * The graph becomes a bit more bloated but it might lead to better register allocation
+ * and it's easier to reason about.
+ *
+ * TODO Handler blocks:
+ * The one def per block rule cannot apply. Maybe at least one def before any unsafe
+ * instruction?
+ */
 class IrPhi internal constructor(block: Block, private val explicitType: Thing)
 		: Ir(block), Def, Use {
 
@@ -187,6 +220,8 @@ class IrPhi internal constructor(block: Block, private val explicitType: Thing)
 class IrReturn internal constructor(block: Block, value: Def?)
 		: IrTerminal(block), Use {
 
+	override val container get() = block
+
 	override val successors get() = emptySet<BasicBlock>()
 
 	override val defs: Collection<Def> get() = value.let {
@@ -205,6 +240,8 @@ class IrReturn internal constructor(block: Block, value: Def?)
 
 class IrSwitch internal constructor(block: Block, key: Def, default: BasicBlock)
 		: IrTerminal(block), Use {
+
+	override val container get() = block
 
 	override val successors get() = setOf(default)
 
@@ -225,6 +262,8 @@ class IrSwitch internal constructor(block: Block, key: Def, default: BasicBlock)
 class IrThrow internal constructor(block: Block, exception: Def)
 		: IrTerminal(block), Use {
 
+	override val container get() = block
+
 	var exception: Def by dependencyProperty(defUses, exception)
 
 	override val successors get() = emptySet<BasicBlock>()
@@ -237,6 +276,7 @@ class IrThrow internal constructor(block: Block, exception: Def)
 	override fun toString() = "THROW ${exception.name}"
 }
 
+// TODO Go back to Constant not being an Ir. -- how to handle constants in phi defs?
 sealed class IrConst<out T : Any>(
 		block: Block,
 		val value: T,
@@ -247,7 +287,7 @@ sealed class IrConst<out T : Any>(
 
 	override val container get() = block
 
-	override var name by flow.registerAutoName(this, "c")
+	override var name by flow.registerAutoName(this, "const")
 
 	override val uses: RefCounts<Use> = RefCountsImpl()
 
@@ -265,7 +305,7 @@ class IrCopy internal constructor(block: Block, original: Def): Ir(block), Def, 
 			doIf(original == current) { original = new }
 
 	override val defs get() = setOf(original)
-	override var name by flow.registerAutoName(this, "c")
+	override var name by flow.registerAutoName(this, "copy")
 	override val uses: RefCounts<Use> = RefCountsImpl()
 	override val container get() = block
 
@@ -273,5 +313,5 @@ class IrCopy internal constructor(block: Block, original: Def): Ir(block), Def, 
 
 	override val type get() = original.type
 
-	override fun toString() = "copy(${original.name})"
+	override fun toString() = "$name = ${original.name}"
 }

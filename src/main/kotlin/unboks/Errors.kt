@@ -7,6 +7,10 @@ class ParseException(msg: String) : RuntimeException(msg)
 
 class RemoveException(val objections: Set<Objection>) : RuntimeException("Cannot remove due to objections")
 
+class IllegalTerminalStateException(msg: String) : RuntimeException(msg)
+
+class DetachedException(msg: String) : RuntimeException(msg)
+
 /**
  * @see DependencySource.remove
  */
@@ -14,7 +18,7 @@ sealed class Objection(val reason: String) {
 
 	class DefHasUseDependency(val def: Def, val use: Use) : Objection("${def.name} is used by $use")
 
-	class BlockHasPhiReference(val block: Block, val phi: IrPhi) : Objection("${block.name} is referenced by ${phi.name}")
+	//class BlockHasPhiReference(val block: Block, val phi: IrPhi) : Objection("${block.name} is referenced by ${phi.name}")
 
 	class BlockHasInput(val block: BasicBlock, val input: Block) : Objection("${block.name} is reachable from ${input.name}")
 

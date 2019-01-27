@@ -4,6 +4,7 @@ import org.objectweb.asm.ClassVisitor
 import unboks.FlowGraph
 import unboks.Reference
 import unboks.Thing
+import java.lang.reflect.Modifier
 
 class UnboksMethod internal constructor(val type: UnboksClass, val name: String, val returnType: Thing, vararg parameterTypes: Thing) {
 	var access = 0
@@ -14,7 +15,12 @@ class UnboksMethod internal constructor(val type: UnboksClass, val name: String,
 		prefix = "$name(", separator = ", ", postfix = ")")
 
 	internal fun write(visitor: ClassVisitor) {
-		val desc = flow.parameters.asSequence()
+		val realParams = if (Modifier.isStatic(access))
+			flow.parameters
+		else
+			flow.parameters.drop(1)
+
+		val desc = realParams.asSequence()
 				.map { it.type.asDescriptor }
 				.joinToString(prefix = "(", separator = "", postfix = ")${returnType.asDescriptor}")
 

@@ -3,11 +3,10 @@ package unboks
 import unboks.internal.RefCountsImpl
 import unboks.internal.dependencyList
 import unboks.internal.handlerUses
-import unboks.invocation.Invocation
 import unboks.pass.Pass
 import unboks.pass.PassType
 
-sealed class Block(val flow: FlowGraph) : DependencySource(), IrFactory, Nameable, PassType {
+sealed class Block(val flow: FlowGraph) : DependencySource(), Nameable, PassType {
 	private val _opcodes = mutableListOf<Ir>()
 	val opcodes: List<Ir> get() = _opcodes
 
@@ -23,34 +22,6 @@ sealed class Block(val flow: FlowGraph) : DependencySource(), IrFactory, Nameabl
 
 	inline fun <reified T : Ir> filter(): Sequence<T> = opcodes.asSequence().filterIsInstance<T>()
 
-	override fun newCmp(cmp: Cmp, yes: BasicBlock, no: BasicBlock, op: Def): IrCmp1 =
-			append(IrCmp1(this, cmp, yes, no, op))
-
-	override fun newCmp(cmp: Cmp, yes: BasicBlock, no: BasicBlock, op1: Def, op2: Def): IrCmp2 =
-			append(IrCmp2(this, cmp, yes, no, op1, op2))
-
-	override fun newGoto(target: BasicBlock): IrGoto = append(IrGoto(this, target))
-
-	override fun newInvoke(spec: Invocation, vararg arguments: Def): IrInvoke = newInvoke(spec, arguments.asList())
-
-	override fun newInvoke(spec: Invocation, arguments: List<Def>): IrInvoke = append(IrInvoke(this, spec, arguments))
-
-	override fun newPhi(explicitType: Thing): IrPhi = append(IrPhi(this, explicitType))
-
-	override fun newReturn(value: Def?): IrReturn = append(IrReturn(this, value))
-
-	override fun newSwitch(key: Def, default: BasicBlock): IrSwitch = append(IrSwitch(this, key, default))
-
-	override fun newThrow(exception: Def): IrThrow = append(IrThrow(this, exception))
-
-	override fun newConstant(value: Int) = append(IrIntConst(this, value))
-
-	override fun newConstant(value: String) = append(IrStringConst(this, value))
-
-	override fun newCopy(original: Def) = append(IrCopy(this, original))
-
-	private fun <T: Ir> append(ir: T): T = ir.apply { _opcodes += this }
-
 	override fun toString(): String = name + if (root) " [ROOT]"  else ""
 
 	internal fun detachIr(ir: Ir) = _opcodes.remove(ir)
@@ -59,6 +30,7 @@ sealed class Block(val flow: FlowGraph) : DependencySource(), IrFactory, Nameabl
 
 	override fun detachFromParent() {
 		flow.detachBlock(this)
+		flow.unregisterAutoName(this)
 	}
 
 	internal fun executeInitial(visitor: Pass<*>.InitialVisitor) {
@@ -72,39 +44,39 @@ sealed class Block(val flow: FlowGraph) : DependencySource(), IrFactory, Nameabl
 	fun <R> execute(pass: Pass<R>): Pass<R> = pass.execute {
 		executeInitial(it)
 	}
+
+	private fun checkedIndexOf(ir: Ir): Int {
+		val index = _opcodes.indexOf(ir)
+		if (index == -1)
+			throw DetachedException("Ir $ir is no longer attached")
+		return index
+	}
+
+	internal fun insertIr(offset: IrFactory.Offset, ir: Ir) {
+		when (offset) {
+			is IrFactory.Offset.Before ->_opcodes.add(checkedIndexOf(offset.at), ir)
+			is IrFactory.Offset.Replace -> {
+				val index = checkedIndexOf(offset.at)
+				offset.at.remove()
+				_opcodes.add(index, ir)
+			}
+			is IrFactory.Offset.After -> _opcodes.add(checkedIndexOf(offset.at) + 1, ir)
+			is IrFactory.Offset.Append -> _opcodes.add(ir)
+		}
+
+		// TODO Do this check properly before actually mutating the list.
+		if (_opcodes.filterIsInstance<IrTerminal>().size > 1)
+			throw IllegalTerminalStateException("More than one terminal")
+		if (terminal != null && _opcodes.last() !is IrTerminal)
+			throw IllegalTerminalStateException("Non-terminal last ir")
+	}
+
+	fun append() = IrFactory(this, IrFactory.Offset.Append)
 }
 
 data class ExceptionEntry(val handler: HandlerBlock, val type: Reference?)
 
 infix fun HandlerBlock.handles(type: Reference?) = ExceptionEntry(this, type)
-
-// TODO IrFactoryDelegate.
-
-//private class IrFactoryDelegate(private val block: Block, private val observer: (Ir) -> Unit) : IrFactory {
-//
-//	private fun <T: Ir> add(ir: T): T = ir.apply(observer)
-//
-//	override fun newCmp(cmp: Cmp, yes: BasicBlock, no: BasicBlock, op: Def): IrCmp1 =
-//			add(IrCmp1(block, cmp, yes, no, op))
-//
-//	override fun newCmp(cmp: Cmp, yes: BasicBlock, no: BasicBlock, op1: Def, op2: Def): IrCmp2 =
-//			add(IrCmp2(block, cmp, yes, no, op1, op2))
-//
-//	override fun newGoto(target: BasicBlock): IrGoto = add(IrGoto(block, target))
-//
-//	override fun newInvoke(spec: Invocation, vararg arguments: Def): IrInvoke = newInvoke(spec, arguments.asList())
-//
-//	override fun newInvoke(spec: Invocation, arguments: List<Def>): IrInvoke = add(IrInvoke(block, spec, arguments))
-//
-//	override fun newPhi(): IrPhi = add(IrPhi(block))
-//
-//	override fun newReturn(value: Def?): IrReturn = add(IrReturn(block, value))
-//
-//	override fun newSwitch(key: Def, default: BasicBlock): IrSwitch = add(IrSwitch(block, key, default))
-//
-//	override fun newThrow(exception: Def): IrThrow = add(IrThrow(block, exception))
-//
-//}
 
 class BasicBlock internal constructor(flow: FlowGraph) : Block(flow) {
 	override var name by flow.registerAutoName(this, "B")
