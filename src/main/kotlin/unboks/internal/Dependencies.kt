@@ -44,7 +44,17 @@ internal class RefCountsImpl<T> private constructor(
 private infix fun <T> RefCounts<T>.inc(ref: T) = (this as RefCountsImpl<T>).inc(ref)
 private infix fun <T> RefCounts<T>.dec(ref: T) = (this as RefCountsImpl<T>).dec(ref)
 
-internal fun <R : DependencySource, B> R.dependencySet(
+internal fun <R : DependencySource, A : Any, B> R.dependencyProxySet(
+		spec: TargetSpecification<in A, B>,
+		source: A)
+		: MutableSet<B> = register(ObservableSet { event, elm ->
+	when (event) {
+		ObservableEvent.ADD -> spec.accessor(elm) inc source
+		ObservableEvent.DEL -> spec.accessor(elm) dec source
+	}
+})
+
+internal fun <R : DependencySource, B> R.dependencySet( // TODO reuse version with source...
 		spec: TargetSpecification<in R, B>)
 : MutableSet<B> = register(ObservableSet { event, elm ->
 	when (event) {

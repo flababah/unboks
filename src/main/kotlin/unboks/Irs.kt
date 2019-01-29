@@ -243,7 +243,7 @@ class IrSwitch internal constructor(block: Block, key: Def, default: BasicBlock)
 
 	override val container get() = block
 
-	override val successors get() = setOf(default)
+	override val successors get() = cases + default
 
 	override val defs: Collection<Def> get() = setOf(key)
 
@@ -254,7 +254,13 @@ class IrSwitch internal constructor(block: Block, key: Def, default: BasicBlock)
 
 	var key: Def by dependencyProperty(defUses, key)
 
-	// TODO map.
+	/**
+	 * TODO This should be a Map<Int, BasicBlock> in order to be useful.
+	 * We need observable map for that...
+	 * For now, it's a set so we can use it for dominance testing (blocks with
+	 * arbitrary number of outputs.)
+	 */
+	val cases: MutableSet<BasicBlock> = dependencyProxySet(blockInputs, block)
 
 	override fun toString() = "SWITCH"
 }

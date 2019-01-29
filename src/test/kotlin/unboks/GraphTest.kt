@@ -57,4 +57,28 @@ class GraphTest {
 		b2.exceptions.clear()
 		assertEquals(emptySet<Block>(), handler.inputs as Set<*>)
 	}
+
+	@Test
+	fun testIrSwitchBlockDependency() {
+		val graph = FlowGraph()
+		val root = graph.newBasicBlock()
+		val a = graph.newBasicBlock()
+		val b = graph.newBasicBlock()
+
+		val key = root.append().newConstant(123)
+		val switch = root.append().newSwitch(key, a)
+		assertEquals(setOf(root), a.inputs as Set<Block>)
+
+		switch.cases += a
+		switch.cases += b
+		assertEquals(setOf(root), a.inputs as Set<Block>)
+		assertEquals(setOf(root), b.inputs as Set<Block>)
+		assertEquals(setOf(a, b), switch.successors)
+
+		switch.cases -= a
+		assertEquals(setOf(root), a.inputs as Set<Block>) // Still has default.
+
+		switch.remove()
+		assertEquals(emptySet(), a.inputs as Set<Block>)
+	}
 }
