@@ -13,9 +13,9 @@ internal interface DependencyType {
 internal class TargetSpecification<A, B>(val accessor: (B) -> RefCounts<A>)
 
 
-internal val blockInputs = TargetSpecification<Block, BasicBlock> { it.inputs }
+internal val blockInputs = TargetSpecification<Block, BasicBlock> { it.predecessors }
 
-internal val handlerUses = TargetSpecification<Block, HandlerBlock> { it.inputs }
+internal val handlerUses = TargetSpecification<Block, HandlerBlock> { it.predecessors }
 
 //internal val phiReferences = TargetSpecification<IrPhi, Block> { it.phiReferences }
 

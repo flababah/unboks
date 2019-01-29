@@ -26,15 +26,15 @@ class GraphTest {
 		val goto = graph.root.append().newGoto(target)
 
 		assertEquals(target, goto.target)
-		assertEquals(setOf(goto.block), target.inputs)
+		assertEquals(setOf(goto.block), target.predecessors)
 
 		val b2 = graph.newBasicBlock()
 		val cmp = b2.append().newCmp(Cmp.EQ, target, target, graph.parameters[0])
 
 		assertEquals(target, cmp.yes)
 		assertEquals(target, cmp.no)
-		assertEquals(setOf(goto.block, b2), target.inputs)
-		assertEquals(3, target.inputs.count)
+		assertEquals(setOf(goto.block, b2), target.predecessors)
+		assertEquals(3, target.predecessors.count)
 	}
 
 	@Test
@@ -49,13 +49,13 @@ class GraphTest {
 		b1.exceptions += handler handles re
 		b1.exceptions += handler handles npe
 		b2.exceptions += handler handles npe
-		assertEquals(setOf(b1, b2), handler.inputs as Set<*>)
+		assertEquals(setOf(b1, b2), handler.predecessors as Set<*>)
 
 		b1.exceptions.clear()
-		assertEquals(setOf(b2), handler.inputs as Set<*>)
+		assertEquals(setOf(b2), handler.predecessors as Set<*>)
 
 		b2.exceptions.clear()
-		assertEquals(emptySet<Block>(), handler.inputs as Set<*>)
+		assertEquals(emptySet<Block>(), handler.predecessors as Set<*>)
 	}
 
 	@Test
@@ -67,18 +67,18 @@ class GraphTest {
 
 		val key = root.append().newConstant(123)
 		val switch = root.append().newSwitch(key, a)
-		assertEquals(setOf(root), a.inputs as Set<Block>)
+		assertEquals(setOf(root), a.predecessors as Set<Block>)
 
 		switch.cases += a
 		switch.cases += b
-		assertEquals(setOf(root), a.inputs as Set<Block>)
-		assertEquals(setOf(root), b.inputs as Set<Block>)
+		assertEquals(setOf(root), a.predecessors as Set<Block>)
+		assertEquals(setOf(root), b.predecessors as Set<Block>)
 		assertEquals(setOf(a, b), switch.successors)
 
 		switch.cases -= a
-		assertEquals(setOf(root), a.inputs as Set<Block>) // Still has default.
+		assertEquals(setOf(root), a.predecessors as Set<Block>) // Still has default.
 
 		switch.remove()
-		assertEquals(emptySet(), a.inputs as Set<Block>)
+		assertEquals(emptySet(), a.predecessors as Set<Block>)
 	}
 }
