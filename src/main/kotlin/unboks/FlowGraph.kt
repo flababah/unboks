@@ -71,7 +71,7 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 	 * Blabla starts with [MethodVisitor.visitCode], and ends with [MethodVisitor.visitEnd].
 	 */
 	fun generate(receiver: MethodVisitor, returnType: Thing) {
-		execute(createConsistencyCheckPass())
+		execute(createConsistencyCheckPass(this))
 		codeGenerate(this, receiver, returnType)
 	}
 

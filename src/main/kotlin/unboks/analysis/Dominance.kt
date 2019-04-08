@@ -26,6 +26,19 @@ class Dominance(graph: FlowGraph) {
 		dominatorSets += graph.root to mutableSetOf()
 	}
 
+	/*
+		private fun dfs(n: Block, map: MutableMap<Block, Int> = mutableMapOf()): Map<Block, Int> { // TODO skal også have parent med, lav træ.
+		if (n !in map) {
+			map[n] = map.size
+			n.terminal?.apply {
+				for (successor in successors)
+					dfs(successor, map)
+			}
+		}
+		return map
+	}
+	 */
+
 	private fun dfs(n: Block, exclude: Block? = null, visited: MutableSet<Block> = mutableSetOf()): Set<Block> {
 		if (visited.add(n) && n != exclude) { // Make sure we mark as visited even if excluded.
 			val terminal = n.terminal

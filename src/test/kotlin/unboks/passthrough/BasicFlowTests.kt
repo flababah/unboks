@@ -2,8 +2,6 @@ package unboks.passthrough
 
 class BasicFlowTests {
 
-//	fun add(a: Int, b: Int): Int = a + b
-
 //	fun testException(a: Int): Int {
 //		var flags = 0
 //		try {
@@ -28,23 +26,24 @@ class BasicFlowTests {
 //		return flags;
 //	}
 
+	fun add(a: Int, b: Int): Int = a + b
+
 	fun multiply(a: Int, b: Int): Int { // TODO Handle negative.
 		var x = 0
-		for (i in (0 .. a)) {
-			x += 1 // TODO Fjern.
+		for (i in (0 until a)) {
+//			x += 1 // TODO Fjern.
 			x += b
 		}
 		return x
 	}
 
-	fun add(a: Int, b: Int): Int = a + b
-
 	fun choice(a: Int, b: Int, which: Boolean): Int = if (which) a else b
-
-	fun swapProblem(_x: Int, _y: Int, c: Int): Int {
+//
+	fun swapProblem(_x: Float, _y: Float, c: Int): Float {
 		var x = _x
 		var y = _y
 		for (i in (0 .. c)) {
+			println("LOOP!")
 			val tmp = x
 			x = y
 			y = tmp
@@ -59,7 +58,7 @@ class BasicFlowTests {
 		return x
 	}
 
-	fun preserveCopyInEmptyBlock(_a: Int, b: Int): Int { // We except 3 blocks here.
+	fun preserveCopyInEmptyBlock(_a: Int, b: Int): Int { // We expect 3 blocks here.
 		var a = _a
 		if (b == 4)
 			a = 123

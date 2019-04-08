@@ -41,6 +41,8 @@ sealed class Ir(val block: Block) : DependencySource(), PassType {
 
 	val flow get() = block.flow
 
+	val index: Int get() = block.opcodes.indexOf(this)
+
 	fun insertBefore() = IrFactory(block, IrFactory.Offset.Before(this))
 	fun replaceWith() = IrFactory(block, IrFactory.Offset.Replace(this))
 	fun insertAfter() = IrFactory(block, IrFactory.Offset.After(this))
