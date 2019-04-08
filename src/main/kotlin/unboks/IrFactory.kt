@@ -37,12 +37,6 @@ class IrFactory internal constructor(private val block: Block, private val offse
 	fun newCopy(original: Def) =
 			register(IrCopy(block, original))
 
-	fun newConstant(value: Int) =
-			register(IrIntConst(block, value))
-
-	fun newConstant(value: String) =
-			register(IrStringConst(block, value))
-
 	internal sealed class Offset {
 		class Before(val at: Ir) : Offset()
 		class Replace(val at: Ir) : Offset()

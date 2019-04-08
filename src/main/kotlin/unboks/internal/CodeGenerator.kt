@@ -56,7 +56,7 @@ private fun createWastefulSimpleRegisterMapping() = Pass<Int> {
 		allocSlot(type)
 	}
 
-	visit<IrConst<*>> {
+	visit<Constant<*>> { // TODO Make special handling for type in Constant...
 		allocSlot(type)
 	}
 
@@ -220,7 +220,7 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 					store(this)
 			}
 
-			visit<IrConst<*>> {
+			visit<Constant<*>> {
 				visitor.visitLdcInsn(value)
 				store(this)
 			}

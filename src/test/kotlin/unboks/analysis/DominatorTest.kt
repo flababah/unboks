@@ -103,7 +103,7 @@ class DominatorTest {
 
 	// https://tanujkhattar.wordpress.com/2016/01/11/dominator-tree-of-a-directed-graph/
 	private fun addEdges(source: BasicBlock, vararg targets: BasicBlock) {
-		val key = source.append().newConstant(0)
+		val key = source.flow.constant(0)
 		val switch = source.append().newSwitch(key, targets[0])
 
 		for (block in targets.drop(1))

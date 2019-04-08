@@ -284,30 +284,6 @@ class IrThrow internal constructor(block: Block, exception: Def)
 	override fun toString() = "THROW ${exception.name}"
 }
 
-// TODO Go back to Constant not being an Ir. -- how to handle constants in phi defs?
-sealed class IrConst<out T : Any>(
-		block: Block,
-		val value: T,
-		override val type: Thing,
-		private val prefix: String = "",
-		private val suffix: String = "")
-: Ir(block), Def {
-
-	override val container get() = block
-
-	override var name by flow.registerAutoName(this, "const")
-
-	override val uses: RefCounts<Use> = RefCountsImpl()
-
-	override fun toString() = "$name = $prefix$value$suffix"
-}
-
-class IrIntConst internal constructor(block: Block, value: Int)
-	: IrConst<Int>(block, value, INT)
-
-class IrStringConst internal constructor(block: Block, value: String)
-	: IrConst<String>(block, value, Reference(String::class), prefix = "\"", suffix = "\"")
-
 class IrCopy internal constructor(block: Block, original: Def): Ir(block), Def, Use {
 	override fun redirectDefs(current: Def, new: Def) =
 			doIf(original == current) { original = new }

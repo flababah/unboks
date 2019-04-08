@@ -223,7 +223,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 
 				// Replay deferred operations on the block visitor.
 
-				val mv = FlowGraphBlockVisitor(localsState, stackState, appender, block.successor) {
+				val mv = FlowGraphBlockVisitor(localsState, stackState, appender, block.successor, graph) {
 					val resolved = info.fromLabel[it] ?: throw ParseException("Unknown label: $it")
 					resolved.backing as BasicBlock // TODO Better check if not ok...
 				}
@@ -330,6 +330,7 @@ private class FlowGraphBlockVisitor(
 		private val stack: StackMap,
 		private val appender: IrFactory,
 		private val successor: AsmBackingBlock?,
+		private val constants: ConstantStore,
 		private val resolver: (Label) -> BasicBlock) : MethodVisitor(ASM6) {
 
 	private fun appendInvocation(spec: Invocation) {
@@ -348,7 +349,7 @@ private class FlowGraphBlockVisitor(
 			ICONST_2,
 			ICONST_3,
 			ICONST_4,
-			ICONST_5 -> stack.push(appender.newConstant(opcode - ICONST_0))
+			ICONST_5 -> stack.push(constants.constant(opcode - ICONST_0))
 
 			IRETURN -> appender.newReturn(stack.pop<IntType>())
 			LRETURN -> appender.newReturn(stack.pop<LONG>())
@@ -416,7 +417,7 @@ private class FlowGraphBlockVisitor(
 	override fun visitIntInsn(opcode: Int, operand: Int) {
 		when (opcode) {
 			BIPUSH,
-			SIPUSH -> stack.push(appender.newConstant(operand))
+			SIPUSH -> stack.push(constants.constant(operand))
 
 			else -> TODO()
 		}
@@ -478,14 +479,14 @@ private class FlowGraphBlockVisitor(
 	override fun visitLdcInsn(value: Any?) {
 		if (value !is String)
 			TODO("Other LDC types")
-		stack.push(appender.newConstant(value))
+		stack.push(constants.constant(value))
 	}
 
 	override fun visitIincInsn(varId: Int, increment: Int) {
 		// IINC doesn't exist in our internal representation. Lower it into IADD.
 		locals[varId] = appender.newInvoke(InvIntrinsic.IADD,
 				locals.get<INT>(varId), // TODO This needs to be IntType, right?
-				appender.newConstant(increment))
+				constants.constant(increment))
 	}
 
 	override fun visitMultiANewArrayInsn(descriptor: String?, numDimensions: Int) =

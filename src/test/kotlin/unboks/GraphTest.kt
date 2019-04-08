@@ -65,7 +65,7 @@ class GraphTest {
 		val a = graph.newBasicBlock()
 		val b = graph.newBasicBlock()
 
-		val key = root.append().newConstant(123)
+		val key = graph.constant(123)
 		val switch = root.append().newSwitch(key, a)
 		assertEquals(setOf(root), a.predecessors as Set<Block>)
 

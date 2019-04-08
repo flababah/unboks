@@ -10,7 +10,7 @@ import kotlin.properties.ReadWriteProperty
 /**
  * Entry point into the API.
  */
-class FlowGraph(vararg parameterTypes: Thing) : PassType {
+class FlowGraph(vararg parameterTypes: Thing) : ConstantStore(), PassType {
 	private val _blocks = mutableSetOf<Block>()
 	val blocks: Set<Block> get() = _blocks
 
@@ -60,7 +60,7 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 	 */
 	fun <R> execute(pass: Pass<R>): Pass<R> = pass.execute {
 		it.visit(this)
-		// TODO Visit constants.
+		constants.forEach { c -> it.visit(c) }
 		parameters.forEach { p -> it.visit(p) } // Not possible to mutate for now, so no need for copy.
 		_blocks.toTypedArray().forEach { block -> block.executeInitial(it) }
 	}
