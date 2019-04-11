@@ -83,16 +83,14 @@ class IrCmp1 internal constructor(block: Block, var cmp: Cmp, yes: BasicBlock, n
 
 	override val container get() = block
 
-	override val defs: List<Def> get() = listOf(op)
+	override val defs: DependencyArray<Def> = dependencyArray(defUses, op)
 
-	override fun redirectDefs(current: Def, new: Def) = doIf(op == current) { op = new }
-
-	override val successors get() = setOf(yes, no)
+	override val successors get() = setOf(yes, no) // TODO view? -- lav set of properties "PropertyBackedSet"
 
 	var yes: BasicBlock by dependencyProxyProperty(blockInputs, block, yes)
 	var no: BasicBlock by dependencyProxyProperty(blockInputs, block, no)
 
-	var op: Def by dependencyProperty(defUses, op)
+	var op: Def by defs.asProperty(0)
 
 	override fun toString() = "$cmp ${op.name} --> $yes else $no"
 }
@@ -102,21 +100,15 @@ class IrCmp2 internal constructor(block: Block, var cmp: Cmp, yes: BasicBlock, n
 
 	override val container get() = block
 
-	override val defs: List<Def> get() = listOf(op1, op2)
+	override val defs: DependencyArray<Def> = dependencyArray(defUses, op1, op2)
 
-	override fun redirectDefs(current: Def, new: Def): Boolean {
-		val changed1 = doIf(op1 == current) { op1 = new }
-		val changed2 = doIf(op2 == current) { op2 = new }
-		return changed1 || changed2 // Can't inline because of short-circuiting.
-	}
-
-	override val successors get() = setOf(yes, no)
+	override val successors get() = setOf(yes, no) // TODO same
 
 	var yes: BasicBlock by dependencyProxyProperty(blockInputs, block, yes)
 	var no: BasicBlock by dependencyProxyProperty(blockInputs, block, no)
 
-	var op1: Def by dependencyProperty(defUses, op1)
-	var op2: Def by dependencyProperty(defUses, op2)
+	var op1: Def by defs.asProperty(0)
+	var op2: Def by defs.asProperty(1)
 
 	override fun toString() = "${op1.name} $cmp ${op2.name} --> $yes else $no"
 }
@@ -140,22 +132,8 @@ class IrInvoke internal constructor(block: Block, val spec: Invocation, argument
 	override val uses: RefCounts<Use> = RefCountsImpl()
 	override val type get() = spec.returnType
 
-	override val defs: MutableList<Def> = dependencyList(defUses).apply {
-		addAll(arguments)
-	}
-
-	override fun redirectDefs(current: Def, new: Def): Boolean {
-		var changed = false
-		defs.replaceAll {
-			if (current == it) {
-				changed = true
-				new
-			} else {
-				it
-			}
-		}
-		return changed
-	}
+	// XXX Do we need variable size list here -- only if methods change signature?
+	override val defs: DependencyArray<Def> = dependencyArray(defUses, *arguments.toTypedArray())
 
 	override fun toString() = "$name = ${spec.representation}${createUseTuple(this)}"
 }
@@ -190,31 +168,14 @@ class IrPhi internal constructor(block: Block, private val explicitType: Thing)
 
 	override var name by flow.registerAutoName(this, "phi")
 
-	override val defs: MutableSet<Def> = dependencySet(defUses)
-
-	/**
-	 * Replaces any occurrence of [current] with [new]. The paired block (assignedIn)
-	 * stays the same.
-	 */
-	override fun redirectDefs(current: Def, new: Def): Boolean {
-		if (current in defs) {
-			defs.remove(current)
-			defs.add(new)
-			return true
-		}
-		return false
-	}
+	override val defs: DependencyMapValues<Block, Def> = dependencyMap(phiReferences, defUses)
 
 	override val uses: RefCounts<Use> = RefCountsImpl()
 	override val type: Thing get() = when {
 		explicitType != TOP -> explicitType
-		defs.isNotEmpty() -> defs.first().type
+		defs.iterator().hasNext() -> defs.first().type
 		else -> TOP
 	}
-
-//	val phiDefs: MutableSet<Pair<Def, Block>> = dependencySet(defUses, phiReferences)
-//	// TODO rename når Def bliver fyldt ud.
-//	// TODO Måske lav subtype af Def, der har block i sig?
 
 	override fun toString() = "$name = PHI${createUseTuple(this)}"
 }
@@ -226,14 +187,9 @@ class IrReturn internal constructor(block: Block, value: Def?)
 
 	override val successors get() = emptySet<BasicBlock>()
 
-	override val defs: Collection<Def> get() = value.let {
-		if (it != null) setOf(it) else emptySet()
-	}
+	override val defs: DependencyNullableSingleton<Def> = dependencyNullableProperty(defUses, value)
 
-	override fun redirectDefs(current: Def, new: Def) =
-			doIf(value == current) { value = new }
-
-	var value: Def? by dependencyNullableProperty(defUses, value)
+	var value: Def? by defs
 
 	override fun toString() = value.let {
 		if (it == null) "RETURN" else "RETURN ${it.name}"
@@ -245,24 +201,21 @@ class IrSwitch internal constructor(block: Block, key: Def, default: BasicBlock)
 
 	override val container get() = block
 
-	override val successors get() = cases + default
+	override val successors get() = /*cases +*/ emptySet<BasicBlock>() + default
 
-	override val defs: Collection<Def> get() = setOf(key)
-
-	override fun redirectDefs(current: Def, new: Def) =
-			doIf(key == current) { key = new }
+	override val defs: DependencySingleton<Def> = dependencyProperty(defUses, key)
 
 	var default: BasicBlock by dependencyProxyProperty(blockInputs, block, default)
 
-	var key: Def by dependencyProperty(defUses, key)
+	var key: Def by defs
 
 	/**
-	 * TODO This should be a Map<Int, BasicBlock> in order to be useful.
+	 * TODO This should be a Map<Int, BasicBlock> in order to be useful. TODO TODO
 	 * We need observable map for that...
 	 * For now, it's a set so we can use it for dominance testing (blocks with
 	 * arbitrary number of outputs.)
 	 */
-	val cases: MutableSet<BasicBlock> = dependencyProxySet(blockInputs, block)
+//	val cases: MutableSet<BasicBlock> = dependencyProxySet(blockInputs, block)
 
 	override fun toString() = "SWITCH"
 }
@@ -272,28 +225,23 @@ class IrThrow internal constructor(block: Block, exception: Def)
 
 	override val container get() = block
 
-	var exception: Def by dependencyProperty(defUses, exception)
+	override val defs: DependencySingleton<Def> = dependencyProperty(defUses, exception)
+
+	var exception: Def by defs
 
 	override val successors get() = emptySet<BasicBlock>()
-
-	override val defs: Collection<Def> get() = setOf(exception)
-
-	override fun redirectDefs(current: Def, new: Def) =
-			doIf(exception == current) { exception = new }
 
 	override fun toString() = "THROW ${exception.name}"
 }
 
 class IrCopy internal constructor(block: Block, original: Def): Ir(block), Def, Use {
-	override fun redirectDefs(current: Def, new: Def) =
-			doIf(original == current) { original = new }
+	override val defs: DependencySingleton<Def> = dependencyProperty(defUses, original)
 
-	override val defs get() = setOf(original)
 	override var name by flow.registerAutoName(this, "copy")
 	override val uses: RefCounts<Use> = RefCountsImpl()
 	override val container get() = block
 
-	var original: Def by dependencyProperty(defUses, original)
+	var original: Def by defs
 
 	override val type get() = original.type
 

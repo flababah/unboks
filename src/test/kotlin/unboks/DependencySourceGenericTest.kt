@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import unboks.internal.RefCountsImpl
 import unboks.internal.TargetSpecification
-import unboks.internal.dependencyList
+import unboks.internal.dependencyArray
 import unboks.internal.dependencyProperty
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -23,7 +23,7 @@ class DependencySourceGenericTest {
 
 		var property by dependencyProperty(propertySpec, this)
 
-		val list = dependencyList(listSpec)
+		val list = dependencyArray(listSpec)
 	}
 
 	@Test

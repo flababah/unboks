@@ -17,7 +17,7 @@ internal val blockInputs = TargetSpecification<Block, BasicBlock> { it.predecess
 
 internal val handlerUses = TargetSpecification<Block, HandlerBlock> { it.predecessors }
 
-//internal val phiReferences = TargetSpecification<IrPhi, Block> { it.phiReferences }
+internal val phiReferences = TargetSpecification<IrPhi, Block> { it.phiReferences }
 
 internal val defUses = TargetSpecification<Use, Def> { it.uses }
 

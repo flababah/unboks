@@ -25,9 +25,14 @@ abstract class DependencySource internal constructor() {
 	/**
 	 * Should only be called by dependency extension functions.
 	 */
+	@Deprecated("") // TODO Fjern torsdag.
 	internal fun <T : DependencyType> register(holder: T): T = holder.apply {
 		if (!dependencyTypes.add(holder))
 			throw IllegalStateException("Dependency holder already added")
+	}
+
+	internal fun register(cleaner: () -> Unit) {
+
 	}
 
 	protected abstract fun traverseChildren(): Sequence<DependencySource>

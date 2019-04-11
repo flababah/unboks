@@ -23,7 +23,5 @@ interface Use : PassType {
 
 	val container: Block
 
-	val defs: Collection<Def>
-
-	fun redirectDefs(current: Def, new: Def): Boolean
+	val defs: DependencyView<Def, *>
 }

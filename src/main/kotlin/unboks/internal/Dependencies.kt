@@ -1,7 +1,6 @@
 package unboks.internal
 
-import unboks.DependencySource
-import unboks.RefCounts
+import unboks.*
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
@@ -44,47 +43,24 @@ internal class RefCountsImpl<T> private constructor(
 private infix fun <T> RefCounts<T>.inc(ref: T) = (this as RefCountsImpl<T>).inc(ref)
 private infix fun <T> RefCounts<T>.dec(ref: T) = (this as RefCountsImpl<T>).dec(ref)
 
-internal fun <R : DependencySource, A : Any, B> R.dependencyProxySet(
-		spec: TargetSpecification<in A, B>,
-		source: A)
-		: MutableSet<B> = register(ObservableSet { event, elm ->
-	when (event) {
-		ObservableEvent.ADD -> spec.accessor(elm) inc source
-		ObservableEvent.DEL -> spec.accessor(elm) dec source
-	}
-})
 
-internal fun <R : DependencySource, B> R.dependencySet( // TODO reuse version with source...
-		spec: TargetSpecification<in R, B>)
-: MutableSet<B> = register(ObservableSet { event, elm ->
-	when (event) {
-		ObservableEvent.ADD -> spec.accessor(elm) inc this
-		ObservableEvent.DEL -> spec.accessor(elm) dec this
-	}
-})
+// +---------------------------------------------------------------------------
+// |  Arrays
+// +---------------------------------------------------------------------------
 
-/**
- * Creates a composite dependency set of a pair of specifications.
- */
-internal fun <R : DependencySource, B1, B2> R.dependencySet(
-		spec1: TargetSpecification<in R, B1>,
-		spec2: TargetSpecification<in R, B2>)
-: MutableSet<Pair<B1, B2>> = register(ObservableSet { event, (elm1, elm2) ->
-	when (event) {
-		ObservableEvent.ADD -> {
-			spec1.accessor(elm1) inc this
-			spec2.accessor(elm2) inc this
-		}
-		ObservableEvent.DEL -> {
-			spec1.accessor(elm1) dec this
-			spec2.accessor(elm2) dec this
-		}
+internal fun <R : DependencySource, B> R.dependencyArray(
+		spec: TargetSpecification<in R, B>,
+		vararg init: B
+): DependencyArray<B> = DependencyArray(this, *init) {
+	when (it) {
+		is MutationEvent.Add -> spec.accessor(it.item) inc this
+		is MutationEvent.Remove -> spec.accessor(it.item) dec this
 	}
-})
+}
 
-internal fun <R : DependencySource, B> R.dependencyList(
-		spec: TargetSpecification<in R, B>)
-: MutableList<B> = dependencyList(spec) { it }
+// +---------------------------------------------------------------------------
+// |  Lists
+// +---------------------------------------------------------------------------
 
 /**
  * Creates a dependency list where the target is embedded in some (immutable) wrapper type.
@@ -100,44 +76,90 @@ internal fun <R : DependencySource, B> R.dependencyList(
  */
 internal fun <R : DependencySource, B, X> R.dependencyList(
 		spec: TargetSpecification<in R, B>,
-		extractor: (X) -> B)
-: MutableList<X> = register(ObservableList { event, someElm ->
-	val elm = extractor(someElm)
-	when (event) {
-		ObservableEvent.ADD -> spec.accessor(elm) inc this
-		ObservableEvent.DEL -> spec.accessor(elm) dec this
+		extractor: (X) -> B
+): DependencyList<X> = DependencyList(this) {
+	val elm = extractor(it.item)
+	when (it) {
+		is MutationEvent.Add -> spec.accessor(elm) inc this
+		is MutationEvent.Remove -> spec.accessor(elm) dec this
 	}
-})
+}
 
-//internal fun <A, B> A.dependencyProperty(
-//		spec: TargetSpecification<A, B>,
-//		initial: B): ReadWriteProperty<A, B> {
-//
-//	return dependencyProperty(spec, this, initial) // XXX Make better at some point
-//}
-// TODO Lav version uden "source" hvis source == this... kan sparer et field.
-
-internal interface DependencyProperty<T> : ReadWriteProperty<Any, T>, DependencyType
-
-internal fun <R : DependencySource, A : Any, B> R.dependencyProxyProperty(
-		spec: TargetSpecification<in A, B>,
-		source: A,
-		initial: B)
-: DependencyProperty<B> = register(InternalDependencyProperty(spec, source, initial) {
-	it ?: throw IllegalStateException("Trying to read cleared dependency property")
-})
-
-internal fun <R : DependencySource, B> R.dependencyProperty(
-		spec: TargetSpecification<in R, B>,
-		initial: B)
-: DependencyProperty<B> = dependencyProxyProperty(spec, this, initial)
-
-internal fun <R : DependencySource, B> R.dependencyNullableProperty(
-		spec: TargetSpecification<in R, B>,
-		initial: B? = null)
-: DependencyProperty<B?> = register(InternalDependencyProperty<R, B, B?>(spec, this, initial) { it })
+// +---------------------------------------------------------------------------
+// |  Maps
+// +---------------------------------------------------------------------------
 
 /**
+ * Map, yo...
+ */
+internal fun <R : DependencySource, K, V> R.dependencyMap(
+		keySpec: TargetSpecification<in R, K>,
+		valueSpec: TargetSpecification<in R, V>
+): DependencyMapValues<K, V> = DependencyMapValues(this) {
+	val (key, value) = it.item
+	when (it) {
+		is MutationEvent.Add -> {
+			keySpec.accessor(key) inc this
+			valueSpec.accessor(value) inc this
+		}
+		is MutationEvent.Remove -> {
+			keySpec.accessor(key) dec this
+			valueSpec.accessor(value) dec this
+		}
+	}
+}
+
+// +---------------------------------------------------------------------------
+// |  Properties
+// +---------------------------------------------------------------------------
+
+internal fun <R : DependencySource, B : Any> R.dependencyNullableProperty(
+		spec: TargetSpecification<in R, B>,
+		initial: B? = null
+): DependencyNullableSingleton<B> = DependencyNullableSingleton(this, initial) {
+	when (it) {
+		is MutationEvent.Add -> spec.accessor(it.item) inc this
+		is MutationEvent.Remove -> spec.accessor(it.item) dec this
+	}
+}
+
+internal fun <R : DependencySource, B : Any> R.dependencyProperty(
+		spec: TargetSpecification<in R, B>,
+		initial: B
+): DependencySingleton<B> = DependencySingleton(this, initial) {
+	when (it) {
+		is MutationEvent.Add -> spec.accessor(it.item) inc this
+		is MutationEvent.Remove -> spec.accessor(it.item) dec this
+	}
+}
+
+internal fun <R : DependencySource, A : Any, B : Any> R.dependencyProxyProperty(
+		spec: TargetSpecification<in A, B>,
+		source: A,
+		initial: B
+): DependencySingleton<B> = DependencySingleton(this, initial) {
+	when (it) {
+		is MutationEvent.Add -> spec.accessor(it.item) inc source
+		is MutationEvent.Remove -> spec.accessor(it.item) dec source
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**
+ * TODO use this in crap in Views.
+ *
  * A bit abusy towards the type system to support nullable and non-nullable targets
  * in the same class. [B_prop] is a potentially nullable version of [B]. [fetcher]
  * is needed to bridge the relationship between [B] and [B_prop]. For nullable types
@@ -148,7 +170,7 @@ private class InternalDependencyProperty<A : Any, B, B_prop : B?>(
 		private val source: A,
 		initial: B_prop,
 		private val fetcher: (B?) -> B_prop)
-: DependencyProperty<B_prop> {
+: ReadWriteProperty<Any, B_prop> {
 
 	private val accessor = spec.accessor
 	private var target: B? = initial
@@ -171,11 +193,11 @@ private class InternalDependencyProperty<A : Any, B, B_prop : B?>(
 		}
 	}
 
-	override fun clear() {
-		val t = target
-		if (t != null) {
-			accessor(t) dec source
-			target = null
-		}
-	}
+//	override fun clear() {
+//		val t = target
+//		if (t != null) {
+//			accessor(t) dec source
+//			target = null
+//		}
+//	}
 }

@@ -17,11 +17,11 @@ sealed class Block(val flow: FlowGraph) : DependencySource(), Nameable, PassType
 	 */
 	val predecessors: RefCounts<Block> = RefCountsImpl()
 
-//	val phiReferences: RefCounts<IrPhi> = RefCountsImpl()
+	val phiReferences: RefCounts<IrPhi> = RefCountsImpl()
 
 	val terminal: IrTerminal? get() = opcodes.lastOrNull() as? IrTerminal
 
-	val exceptions: MutableList<ExceptionEntry> = dependencyList(handlerUses) { it.handler }
+	val exceptions: DependencyList<ExceptionEntry> = dependencyList(handlerUses) { it.handler }
 
 	inline fun <reified T : Ir> filter(): Sequence<T> = opcodes.asSequence().filterIsInstance<T>()
 
@@ -94,7 +94,7 @@ class BasicBlock internal constructor(flow: FlowGraph) : Block(flow) {
 
 	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
 		predecessors.forEach { addObjection(Objection.BlockHasInput(this, it)) }
-//		phiReferences.forEach { addObjection(Objection.BlockHasPhiReference(this, it)) }
+		phiReferences.forEach { addObjection(Objection.BlockHasPhiReference(this, it)) }
 
 		if (root)
 			addObjection(Objection.BlockIsRoot(this))
