@@ -19,6 +19,8 @@ interface DependencyView<V, C> : Iterable<V> {
 
 	val size: Int
 
+	fun isEmpty() = size == 0
+
 	/**
 	 * Solidify the view into an immutable instance.
 	 */
