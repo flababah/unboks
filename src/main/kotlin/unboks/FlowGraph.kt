@@ -10,9 +10,17 @@ import kotlin.properties.ReadWriteProperty
 /**
  * Entry point into the API.
  */
-class FlowGraph(vararg parameterTypes: Thing) : ConstantStore(), PassType {
+class FlowGraph(vararg parameterTypes: Thing) : PassType {
+	private val constantMap = mutableMapOf<Any, Constant<*>>() // TODO WeakReference
 	private val _blocks = mutableSetOf<Block>()
 	val blocks: Set<Block> get() = _blocks
+
+	/**
+	 * Gives the set of constants in use in the given [FlowGraph].
+	 */
+	val constants: Set<Constant<*>> get() = constantMap.values.asSequence()
+			.filter { it.uses.count > 0 }
+			.toSet()
 
 	private var _root: BasicBlock? = null
 	var root: BasicBlock
@@ -25,18 +33,7 @@ class FlowGraph(vararg parameterTypes: Thing) : ConstantStore(), PassType {
 
 	private val nameRegistry = NameRegistry()
 
-	val parameters: List<Parameter> = parameterTypes.map {
-		object : Parameter {
-			override val container get() = root
-			override val flow get() = this@FlowGraph
-			override var name by registerAutoName(this, "p")
-
-			override val type = it
-			override val uses: RefCounts<Use> = RefCountsImpl()
-
-			override fun toString(): String = "$type $name"
-		}
-	}
+	val parameters: List<Parameter> = parameterTypes.map { Parameter(this, it) }
 
 	internal fun registerAutoName(key: Nameable, prefix: String): ReadWriteProperty<Nameable, String> =
 			nameRegistry.register(key, prefix)
@@ -77,5 +74,19 @@ class FlowGraph(vararg parameterTypes: Thing) : ConstantStore(), PassType {
 
 	fun compactNames() {
 		nameRegistry.prune()
+	}
+
+	@Suppress("UNCHECKED_CAST")
+	private fun <C : Constant<*>> reuseConstant(const: C) = constantMap.computeIfAbsent(const.value) { const } as C
+
+	fun constant(value: Int): IntConst = reuseConstant(IntConst(this, value))
+	fun constant(value: Float): FloatConst = reuseConstant(FloatConst(this, value))
+	fun constant(value: String): StringConst = reuseConstant(StringConst(this, value))
+
+	fun constant(value: Any): Constant<*> = when (value) {
+		is Int    -> constant(value)
+		is Float  -> constant(value)
+		is String -> constant(value)
+		else -> throw IllegalArgumentException("Unsupported constant type: ${value::class}}")
 	}
 }

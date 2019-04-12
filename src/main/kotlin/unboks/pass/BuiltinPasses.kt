@@ -171,7 +171,8 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 			} else {
 				val defIndex = when (def) {
 					is Ir -> def.index
-					else -> -1 // HandlerBlock, Parameter.
+					is HandlerBlock, is Parameter, is Constant<*> -> -1
+					else -> throw Error("Unhandled Def type $def")
 				}
 				val useIr = this as Ir // All Uses are Irs.
 				if (defIndex >= useIr.index)

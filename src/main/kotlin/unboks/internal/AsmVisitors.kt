@@ -223,7 +223,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 
 				// Replay deferred operations on the block visitor.
 
-				val mv = FlowGraphBlockVisitor(localsState, stackState, appender, block.successor, graph) {
+				val mv = FlowGraphBlockVisitor(graph, appender, block.successor, localsState, stackState) {
 					val resolved = info.fromLabel[it] ?: throw ParseException("Unknown label: $it")
 					resolved.backing as BasicBlock // TODO Better check if not ok...
 				}
@@ -326,11 +326,11 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 }
 
 private class FlowGraphBlockVisitor(
-		private val locals: LocalsMap,
-		private val stack: StackMap,
+		private val graph: FlowGraph,
 		private val appender: IrFactory,
 		private val successor: AsmBackingBlock?,
-		private val constants: ConstantStore,
+		private val locals: LocalsMap,
+		private val stack: StackMap,
 		private val resolver: (Label) -> BasicBlock) : MethodVisitor(ASM6) {
 
 	private fun appendInvocation(spec: Invocation) {
@@ -349,7 +349,7 @@ private class FlowGraphBlockVisitor(
 			ICONST_2,
 			ICONST_3,
 			ICONST_4,
-			ICONST_5 -> stack.push(constants.constant(opcode - ICONST_0))
+			ICONST_5 -> stack.push(graph.constant(opcode - ICONST_0))
 
 			IRETURN -> appender.newReturn(stack.pop<IntType>())
 			LRETURN -> appender.newReturn(stack.pop<LONG>())
@@ -417,7 +417,7 @@ private class FlowGraphBlockVisitor(
 	override fun visitIntInsn(opcode: Int, operand: Int) {
 		when (opcode) {
 			BIPUSH,
-			SIPUSH -> stack.push(constants.constant(operand))
+			SIPUSH -> stack.push(graph.constant(operand))
 
 			else -> TODO()
 		}
@@ -479,14 +479,14 @@ private class FlowGraphBlockVisitor(
 	override fun visitLdcInsn(value: Any?) {
 		if (value !is String)
 			TODO("Other LDC types")
-		stack.push(constants.constant(value))
+		stack.push(graph.constant(value))
 	}
 
 	override fun visitIincInsn(varId: Int, increment: Int) {
 		// IINC doesn't exist in our internal representation. Lower it into IADD.
 		locals[varId] = appender.newInvoke(InvIntrinsic.IADD,
 				locals.get<INT>(varId), // TODO This needs to be IntType, right?
-				constants.constant(increment))
+				graph.constant(increment))
 	}
 
 	override fun visitMultiANewArrayInsn(descriptor: String?, numDimensions: Int) =
