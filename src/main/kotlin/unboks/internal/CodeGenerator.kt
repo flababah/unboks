@@ -128,7 +128,7 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 	for (block in blocks) {
 		visitor.visitLabel(block.startLabel())
 
-		if (block.exceptions.isNotEmpty())
+		if (block.exceptions.size > 0)
 			TODO("exceptions")
 
 		val phis = block.opcodes.filterIsInstance<IrPhi>()

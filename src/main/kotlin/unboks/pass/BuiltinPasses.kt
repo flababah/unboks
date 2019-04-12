@@ -4,74 +4,74 @@ import unboks.*
 import unboks.analysis.Dominance
 import unboks.internal.traverseGraph
 
-private fun Pass.Context.tryBacklog(thing: Any) {
-	if (thing is PassType)
-		backlog(thing)
-}
-
-private fun <T> removeUnusedGraph(node: T) where
-		T : DependencySource,
-		T : Def {
-	var abort = false
-	val traversedUsages = traverseGraph(node) { current, backlog ->
-		for (use in current.uses) {
-			if (use is IrPhi || use is IrCopy) {
-				backlog(use as T) // TODO Hmmm
-			} else {
-				abort = true
-				return@traverseGraph
-			}
-		}
-	}
-	if (!abort)
-		node.remove(traversedUsages)
-}
+//private fun Pass.Context.tryBacklog(thing: Any) {
+//	if (thing is PassType)
+//		backlog(thing)
+//}
+//
+//private fun <T> removeUnusedGraph(node: T) where
+//		T : DependencySource,
+//		T : Def {
+//	var abort = false
+//	val traversedUsages = traverseGraph(node) { current, backlog ->
+//		for (use in current.uses) {
+//			if (use is IrPhi || use is IrCopy) {
+//				backlog(use as T) // TODO Hmmm
+//			} else {
+//				abort = true
+//				return@traverseGraph
+//			}
+//		}
+//	}
+//	if (!abort)
+//		node.remove(traversedUsages)
+//}
 
 fun createPhiPruningPass() = Pass<Unit> {
 
-	/*
-	// Remove unused phi nodes. Backlogs phi defs since they might
-	// also have become unused as a result.
-	visit<IrPhi> { ctx ->
-		if (uses.isEmpty()) {
-			ctx.backlog(defs.filterIsInstance<IrPhi>())
-			remove()
-		}
-	}
-	*/
-
-	visit<IrPhi> {
-		removeUnusedGraph(this)
-	}
-
-	visit<IrCopy> {
-		removeUnusedGraph(this)
-	}
-
-
-	visit<IrPhi> { ctx ->
-		if (defs.size == 1) {
-			val source = defs.first()
-			val dependers = uses.toTypedArray()
-
-			val newSource = if (container != source.container) {
-				// No analysis about domination at the moment, so we must be conservative
-				// and use a copy here. This also only needed if uses contains a phi node.
-				// Optimize later.
-
-				// Lets hope this goes well.. All phis must be first in block.
-				insertAfter().newCopy(source)
-			} else {
-				source
-			}
-			for (depender in dependers) {
-				depender.redirectDefs(this, newSource)
-				ctx.tryBacklog(depender)
-			}
-			ctx.tryBacklog(source)
-			remove()
-		}
-	}
+//	/*
+//	// Remove unused phi nodes. Backlogs phi defs since they might
+//	// also have become unused as a result.
+//	visit<IrPhi> { ctx ->
+//		if (uses.isEmpty()) {
+//			ctx.backlog(defs.filterIsInstance<IrPhi>())
+//			remove()
+//		}
+//	}
+//	*/
+//
+//	visit<IrPhi> {
+//		removeUnusedGraph(this)
+//	}
+//
+//	visit<IrCopy> {
+//		removeUnusedGraph(this)
+//	}
+//
+//
+//	visit<IrPhi> { ctx ->
+//		if (defs.size == 1) {
+//			val source = defs.first()
+//			val dependers = uses.toTypedArray()
+//
+//			val newSource = if (container != source.container) {
+//				// No analysis about domination at the moment, so we must be conservative
+//				// and use a copy here. This also only needed if uses contains a phi node.
+//				// Optimize later.
+//
+//				// Lets hope this goes well.. All phis must be first in block.
+//				insertAfter().newCopy(source)
+//			} else {
+//				source
+//			}
+//			for (depender in dependers) {
+//				depender.redirectDefs(this, newSource)
+//				ctx.tryBacklog(depender)
+//			}
+//			ctx.tryBacklog(source)
+//			remove()
+//		}
+//	}
 //
 //	// If a phi node has one def, we can short-circuit the
 //	// def and the uses and eliminate this phi.
