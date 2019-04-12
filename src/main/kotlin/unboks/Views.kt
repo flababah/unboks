@@ -123,8 +123,10 @@ class DependencySingleton<V : Any> internal constructor(
 	var value: V
 		set(value) {
 			if (value != element) {
-				listener(MutationEvent.Remove(element))
-				listener(MutationEvent.Add(value))
+				if (element != SENTINEL)
+					listener(MutationEvent.Remove(element))
+				if (value != SENTINEL)
+					listener(MutationEvent.Add(value))
 				element = value
 			}
 		}
@@ -297,11 +299,14 @@ class DependencyMapValues<K, V> internal constructor(
 	operator fun get(key: K): V? = container[key]
 
 	operator fun set(key: K, value: V) {
-		TODO("Map.set -- both replace of key and value...")
+		container.put(key, value)?.apply {
+			listener(MutationEvent.Remove(key to this))
+		}
+		listener(MutationEvent.Add(key to value))
 	}
 
-	fun remove(key: K): V? {
-		TODO("Map.remove")
+	fun remove(key: K): V? = container.remove(key)?.apply {
+		listener(MutationEvent.Remove(key to this))
 	}
 }
 

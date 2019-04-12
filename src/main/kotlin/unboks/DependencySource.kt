@@ -1,7 +1,5 @@
 package unboks
 
-import unboks.internal.DependencyType
-
 /**
  * Base class for entities that can be removed from their parent.
  *
@@ -11,7 +9,7 @@ import unboks.internal.DependencyType
  */
 abstract class DependencySource internal constructor() {
 	// TODO Make this list and check for duplicate insert if asserts are enabled.
-	private val dependencyTypes = mutableSetOf<DependencyType>()
+	private val dependencyCleaners = mutableListOf<() -> Unit>()
 	private var _detached = false
 
 	// TODO Check that no detached DS is used in some DependencyType.
@@ -23,16 +21,10 @@ abstract class DependencySource internal constructor() {
 	val detached: Boolean get() = _detached
 
 	/**
-	 * Should only be called by dependency extension functions.
+	 * Should only be called by dependency views, and creating new instances.
 	 */
-	@Deprecated("") // TODO Fjern torsdag.
-	internal fun <T : DependencyType> register(holder: T): T = holder.apply {
-		if (!dependencyTypes.add(holder))
-			throw IllegalStateException("Dependency holder already added")
-	}
-
 	internal fun register(cleaner: () -> Unit) {
-
+		dependencyCleaners += cleaner
 	}
 
 	protected abstract fun traverseChildren(): Sequence<DependencySource>
@@ -71,7 +63,7 @@ abstract class DependencySource internal constructor() {
 				return objections
 		}
 		for (source in hierarchy) {
-			source.dependencyTypes.forEach { it.clear() }
+			source.dependencyCleaners.forEach { it() }
 			source.detachFromParent()
 			source._detached = true
 		}
