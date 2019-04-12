@@ -90,7 +90,7 @@ internal fun <R : DependencySource, B, X> R.dependencyList(
 // +---------------------------------------------------------------------------
 
 /**
- * Map, yo...
+ * A map where both keys and values have depedencies.
  */
 internal fun <R : DependencySource, K, V> R.dependencyMap(
 		keySpec: TargetSpecification<in R, K>,
@@ -106,6 +106,19 @@ internal fun <R : DependencySource, K, V> R.dependencyMap(
 			keySpec.accessor(key) dec this
 			valueSpec.accessor(value) dec this
 		}
+	}
+}
+
+/**
+ * A map where only the values and have depedencies.
+ */
+internal fun <R : DependencySource, A : Any, K, V> R.dependencyProxyMapValues(
+		valueSpec: TargetSpecification<in A, V>,
+		source: A
+): DependencyMapValues<K, V> = DependencyMapValues(this) {
+	when (it) {
+		is MutationEvent.Add -> valueSpec.accessor(it.item.second) inc source
+		is MutationEvent.Remove -> valueSpec.accessor(it.item.second) dec source
 	}
 }
 

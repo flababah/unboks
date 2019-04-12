@@ -106,7 +106,8 @@ class DominatorTest {
 		val key = source.flow.constant(0)
 		val switch = source.append().newSwitch(key, targets[0])
 
-		for (block in targets.drop(1))
-			switch.cases += block
+		targets.drop(1).forEachIndexed { i, block ->
+			switch.cases[i] = block
+		}
 	}
 }

@@ -46,9 +46,9 @@ class GraphTest {
 		val b1 = graph.newBasicBlock()
 		val b2 = graph.newBasicBlock()
 		val handler = graph.newHandlerBlock()
-		b1.exceptions += handler handles re
-		b1.exceptions += handler handles npe
-		b2.exceptions += handler handles npe
+		b1.exceptions.add(handler handles re)
+		b1.exceptions.add(handler handles npe)
+		b2.exceptions.add(handler handles npe)
 		assertEquals(setOf(b1, b2), handler.predecessors as Set<*>)
 
 		b1.exceptions.clear()
@@ -69,13 +69,13 @@ class GraphTest {
 		val switch = root.append().newSwitch(key, a)
 		assertEquals(setOf(root), a.predecessors as Set<Block>)
 
-		switch.cases += a
-		switch.cases += b
+		switch.cases[0] = a
+		switch.cases[1] = b
 		assertEquals(setOf(root), a.predecessors as Set<Block>)
 		assertEquals(setOf(root), b.predecessors as Set<Block>)
 		assertEquals(setOf(a, b), switch.successors)
 
-		switch.cases -= a
+		switch.cases.remove(0) // a
 		assertEquals(setOf(root), a.predecessors as Set<Block>) // Still has default.
 
 		switch.remove()

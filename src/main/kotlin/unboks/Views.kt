@@ -174,12 +174,14 @@ sealed class DependencyArrayLike<V> (
 	override val size get() = container.size
 
 	init {
-		source.register {
-			container.forEach { listener(MutationEvent.Remove(it)) }
-			container.clear()
-		}
+		source.register { clearContainer() }
 		container.addAll(init)
 		container.forEach { listener(MutationEvent.Add(it)) }
+	}
+
+	protected fun clearContainer() {
+		container.forEach { listener(MutationEvent.Remove(it)) }
+		container.clear()
 	}
 
 	override fun iterator() = container.iterator()
@@ -248,6 +250,8 @@ class DependencyList<V> internal constructor(
 		listener(MutationEvent.Add(item))
 		container += item
 	}
+
+	fun clear() = clearContainer()
 }
 
 /**
@@ -291,7 +295,11 @@ class DependencyMapValues<K, V> internal constructor(
 	operator fun get(key: K): V? = container[key]
 
 	operator fun set(key: K, value: V) {
-		TODO("Map.set")
+		TODO("Map.set -- both replace of key and value...")
+	}
+
+	fun remove(key: K): V? {
+		TODO("Map.remove")
 	}
 }
 
