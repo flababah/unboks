@@ -12,10 +12,9 @@ import kotlin.streams.asStream
 class PermutationExtension : TestTemplateInvocationContextProvider {
 
 	override fun supportsTestTemplate(context: ExtensionContext): Boolean {
-		val all = context.requiredTestMethod.parameters.all {
+		return context.requiredTestMethod.parameters.all {
 			it.isAnnotationPresent(Ints::class.java)
 		}
-		return all
 	}
 
 	override fun provideTestTemplateInvocationContexts(context: ExtensionContext): Stream<TestTemplateInvocationContext> {
