@@ -23,7 +23,6 @@ class PermutationExtension : TestTemplateInvocationContextProvider {
 		val universe = method.parameters
 				.map { it.getAnnotation(Ints::class.java).args.asList() }
 
-
 		return permutations(universe)
 				.map { InvocationContext(it, method.name) }
 				.asStream()
