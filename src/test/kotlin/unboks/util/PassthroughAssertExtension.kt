@@ -64,7 +64,7 @@ class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutio
 				method.invoke(passthrough.instance, *arguments.toTypedArray())
 
 			val passthroughTraces = traces.get()
-			assertEquals(originalTraces, passthroughTraces, "Expected original traces to match passthrough.")
+			assertEquals(originalTraces, passthroughTraces, "Expected original traces to match passthrough")
 
 		} catch (e: VerifyError) {
 			System.err.println("============ FAILED VERIFY ===========")
