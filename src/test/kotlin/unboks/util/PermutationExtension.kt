@@ -1,6 +1,7 @@
 package unboks.util
 
 import org.junit.jupiter.api.extension.*
+import org.junit.jupiter.api.extension.ExtensionContext.Namespace.*
 import unboks.internal.permutations
 import java.util.stream.Stream
 import kotlin.streams.asStream
@@ -23,7 +24,12 @@ class PermutationExtension : TestTemplateInvocationContextProvider {
 				.map { it.getAnnotation(Ints::class.java).args.asList() }
 
 		return permutations(universe)
-				.map { InvocationContext(it, method.name) }
+				.map {
+					// Yes, this is hacky. But it seems there is no way to get hold of the ExtensionRegistry
+					// instance or some other way to get the arguments out in the callbacks around invocation.
+					context.getStore(GLOBAL).put(PassthroughAssertExtension.Companion.ArgumentKey, it)
+					InvocationContext(it, method.name)
+				}
 				.asStream()
 	}
 

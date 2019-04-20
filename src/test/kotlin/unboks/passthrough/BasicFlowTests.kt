@@ -1,6 +1,21 @@
 package unboks.passthrough
 
+import org.junit.jupiter.api.extension.ExtendWith
+import unboks.util.Ints
+import unboks.util.PassthroughAssertExtension
+import unboks.util.PassthroughAssertExtension.Companion.trace
+import unboks.util.PermutationTest
+
+@ExtendWith(PassthroughAssertExtension::class)
 class BasicFlowTests {
+
+	@PermutationTest
+	fun testIAdd(
+			@Ints(2) a: Int,
+			@Ints(2, 3) b: Int
+	) {
+		trace(a + b)
+	}
 
 //	fun testException(a: Int): Int {
 //		var flags = 0
@@ -26,42 +41,47 @@ class BasicFlowTests {
 //		return flags;
 //	}
 
-	fun add(a: Int, b: Int): Int = a + b
-
-	fun multiply(a: Int, b: Int): Int { // TODO Handle negative.
-		var x = 0
-		for (i in (0 until a)) {
-//			x += 1 // TODO Fjern.
-			x += b
-		}
-		return x
+	/*
+	@Test
+	fun testReturn() {
+		compareTrace(2 + 3)
 	}
+	*/
 
-	fun choice(a: Int, b: Int, which: Boolean): Int = if (which) a else b
+//	fun multiply(a: Int, b: Int): Int { // TODO Handle negative.
+//		var x = 0
+//		for (i in (0 until a)) {
+////			x += 1 // TODO Fjern.
+//			x += b
+//		}
+//		return x
+//	}
 //
-	fun swapProblem(_x: Float, _y: Float, c: Int): Float {
-		var x = _x
-		var y = _y
-		for (i in (0 .. c)) {
-			println("LOOP!")
-			val tmp = x
-			x = y
-			y = tmp
-		}
-		return x;
-	}
-
-	fun lostCopyProblem(c: Int): Int {
-		var x = 0
-		for (i in (0 .. c))
-			x = i
-		return x
-	}
-
-	fun preserveCopyInEmptyBlock(_a: Int, b: Int): Int { // We expect 3 blocks here.
-		var a = _a
-		if (b == 4)
-			a = 123
-		return a
-	}
+//	fun choice(a: Int, b: Int, which: Boolean): Int = if (which) a else b
+////
+//	fun swapProblem(_x: Float, _y: Float, c: Int): Float {
+//		var x = _x
+//		var y = _y
+//		for (i in (0 .. c)) {
+//			println("LOOP!")
+//			val tmp = x
+//			x = y
+//			y = tmp
+//		}
+//		return x;
+//	}
+//
+//	fun lostCopyProblem(c: Int): Int {
+//		var x = 0
+//		for (i in (0 .. c))
+//			x = i
+//		return x
+//	}
+//
+//	fun preserveCopyInEmptyBlock(_a: Int, b: Int): Int { // We expect 3 blocks here.
+//		var a = _a
+//		if (b == 4)
+//			a = 123
+//		return a
+//	}
 }
