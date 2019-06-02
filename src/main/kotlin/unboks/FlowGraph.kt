@@ -1,7 +1,8 @@
 package unboks
 
 import org.objectweb.asm.MethodVisitor
-import unboks.internal.*
+import unboks.internal.NameRegistry
+import unboks.internal.codeGenerate
 import unboks.pass.Pass
 import unboks.pass.PassType
 import unboks.pass.createConsistencyCheckPass
@@ -88,5 +89,16 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 		is Float  -> constant(value)
 		is String -> constant(value)
 		else -> throw IllegalArgumentException("Unsupported constant type: ${value::class}}")
+	}
+
+	/**
+	 * Prints simple text representation of the flow.
+	 */
+	fun summary(out: Appendable = System.out) {
+		for (block in blocks) {
+			out.append("$block\n")
+			for (ir in block.opcodes)
+				out.append("- $ir\n")
+		}
 	}
 }

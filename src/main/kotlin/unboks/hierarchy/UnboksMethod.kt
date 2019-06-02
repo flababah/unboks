@@ -27,6 +27,10 @@ class UnboksMethod internal constructor(val type: UnboksClass, val name: String,
 		val exceptions = throws.map { it.internal }.toTypedArray()
 
 		val mv = visitor.visitMethod(access, name, desc, null, exceptions)
+		println("-------------------------")
+		println("Generating $name")
+		println("-------------------------")
+		flow.summary()
 		flow.generate(mv, returnType)
 	}
 }
