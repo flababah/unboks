@@ -25,10 +25,11 @@ class Pass<R>(private val initBlock: Builder<R>.() -> Unit) {
 
 	@Dsl
 	class Builder<R> internal constructor() {
-		internal val visitors = mutableListOf<Pair<KClass<out PassType>, PassType.(Context) -> R?>>()
+		internal val visitors = mutableListOf<Pair<KClass<out PassType>, Context.(PassType) -> R?>>()
 
-		inline fun <reified T : PassType> visit(noinline block: T.(Context) -> R?) =
-				visit(T::class, block)
+		inline fun <reified T : PassType> visit(noinline block: Context.(T) -> R?) {
+			visit(T::class, block)
+		}
 
 		/**
 		 * Mainly here as a helper for the other reified type [visit] method. The
@@ -36,8 +37,8 @@ class Pass<R>(private val initBlock: Builder<R>.() -> Unit) {
 		 * in [Builder] directly.
 		 */
 		@Suppress("UNCHECKED_CAST") // Checked in visitItem.
-		fun <T : PassType> visit(type: KClass<T>, block: T.(Context) -> R?) {
-			visitors += type to block as PassType.(Context) -> R?
+		fun <T : PassType> visit(type: KClass<T>, block: Context.(T) -> R?) {
+			visitors += type to block as Context.(PassType) -> R?
 		}
 	}
 
@@ -58,7 +59,7 @@ class Pass<R>(private val initBlock: Builder<R>.() -> Unit) {
 
 		for ((type, handler) in builder.visitors) {
 			if (type.java.isAssignableFrom(item.javaClass))
-				item.handler(context)?.let { values[item] = it }
+				context.handler(item)?.let { values[item] = it }
 		}
 	}
 

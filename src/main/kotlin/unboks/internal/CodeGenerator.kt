@@ -41,27 +41,27 @@ private fun createWastefulSimpleRegisterMapping() = Pass<Int> {
 
 	// Parameters are always stored in the first local slots.
 	visit<Parameter> {
-		allocSlot(type)
+		allocSlot(it.type)
 	}
 
 	// Only alloc a register for non-void and if we actually need the result.
 	visit<IrInvoke> {
-		if (type != VOID && uses.isNotEmpty())
-			allocSlot(type)
+		if (it.type != VOID && it.uses.isNotEmpty())
+			allocSlot(it.type)
 		else
 			null
 	}
 
 	visit<IrPhi> {
-		allocSlot(type)
+		allocSlot(it.type)
 	}
 
 	visit<Constant<*>> { // TODO Make special handling for type in Constant...
-		allocSlot(type)
+		allocSlot(it.type)
 	}
 
 	visit<IrCopy> {
-		allocSlot(type)
+		allocSlot(it.type)
 	}
 }
 
@@ -150,13 +150,13 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 
 			visit<HandlerBlock> {
 				TODO("exceptions")
-				store(this)
+				store(it)
 			}
 
 			visit<IrCmp1> {
-				load(op)
+				load(it.op)
 
-				val opcode = when (cmp) {
+				val opcode = when (it.cmp) {
 					Cmp.EQ -> IFEQ
 					Cmp.NE -> IFNE
 					Cmp.LT -> IFLT
@@ -166,34 +166,34 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 					Cmp.IS_NULL -> IFNULL
 					Cmp.NOT_NULL -> IFNONNULL
 				}
-				visitor.visitJumpInsn(opcode, yes.startLabel()) // We assume "no" to be fallthrough.
+				visitor.visitJumpInsn(opcode, it.yes.startLabel()) // We assume "no" to be fallthrough.
 			}
 
 			visit<IrCmp2> {
-				load(op1)
-				load(op2)
+				load(it.op1)
+				load(it.op2)
 
-				val reference = op1 is SomeReference
-				val opcode = when (cmp) {
+				val reference = it.op1 is SomeReference
+				val opcode = when (it.cmp) {
 					Cmp.EQ -> if (reference) IF_ACMPEQ else IF_ICMPEQ
 					Cmp.NE -> if (reference) IF_ACMPNE else IF_ICMPNE
 					Cmp.LT -> IF_ICMPLT
 					Cmp.GT -> IF_ICMPGT
 					Cmp.LE -> IF_ICMPLE
 					Cmp.GE -> IF_ICMPGE
-					else -> throw Error("$cmp not supported for Cmp2")
+					else -> throw Error("${it.cmp} not supported for Cmp2")
 				}
-				visitor.visitJumpInsn(opcode, yes.startLabel()) // We assume "no" to be fallthrough.
+				visitor.visitJumpInsn(opcode, it.yes.startLabel()) // We assume "no" to be fallthrough.
 			}
 
 			visit<IrGoto> {
-				visitor.visitJumpInsn(GOTO, target.startLabel())
+				visitor.visitJumpInsn(GOTO, it.target.startLabel())
 			}
 
 			visit<IrReturn> {
-				value?.let { load(it) }
+				it.value?.let { v -> load(v) }
 
-				visitor.visitInsn(when (value?.type) {
+				visitor.visitInsn(when (it.value?.type) {
 					null -> RETURN
 					is SomeReference -> ARETURN
 					unboks.FLOAT -> FRETURN
@@ -208,26 +208,26 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 			}
 
 			visit<IrThrow> {
-				load(exception)
+				load(it.exception)
 				visitor.visitInsn(ATHROW)
 			}
 
 			visit<IrInvoke> {
-				for (def in defs)
+				for (def in it.defs)
 					load(def)
-				spec.visit(visitor)
-				if (spec.returnType != VOID)
-					store(this)
+				it.spec.visit(visitor)
+				if (it.spec.returnType != VOID)
+					store(it)
 			}
 
 			visit<Constant<*>> {
-				visitor.visitLdcInsn(value)
-				store(this)
+				visitor.visitLdcInsn(it.value)
+				store(it)
 			}
 
 			visit<IrCopy> {
-				load(original)
-				store(this)
+				load(it.original)
+				store(it)
 			}
 		})
 	}

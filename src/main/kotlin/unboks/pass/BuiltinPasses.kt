@@ -41,8 +41,8 @@ fun createPhiPruningPass() = Pass<Unit> {
 	// doing that, make sure that the chain is effectively unused (ie. not used
 	// by non-phi uses).
 	visit<IrPhi> {
-		if (defs.isEmpty()) {
-			val chain = traverseGraph(this) { node, acc ->
+		if (it.defs.isEmpty()) {
+			val chain = traverseGraph(it) { node, acc ->
 				for (use in node.uses) {
 					if (use !is IrPhi) {
 						val msg = "Empty phi chain has real usage: $use uses $node (starts as $this)"
@@ -51,23 +51,23 @@ fun createPhiPruningPass() = Pass<Unit> {
 					acc(use)
 				}
 			}
-			remove(chain)
+			it.remove(chain)
 		}
 	}
 
 	// Short-circuit redundant phis for blocks with a single predecessor.
 	//
 	// Note: can leave the graph in an inconsistent state: p = PHI(p, x).
-	visit<IrPhi> { ctx ->
-		if (defs.size == 1) {
-			val source = defs.first()
-			ctx.backlog(source)
+	visit<IrPhi> {
+		if (it.defs.size == 1) {
+			val source = it.defs.first()
+			backlog(source)
 
-			for (use in uses) {
-				use.defs.replace(this, source)
-				ctx.backlog(use)
+			for (use in it.uses) {
+				use.defs.replace(it, source)
+				backlog(use)
 			}
-			remove()
+			it.remove()
 		}
 	}
 
@@ -75,11 +75,12 @@ fun createPhiPruningPass() = Pass<Unit> {
 	// have phi0 = PHI(phi0, x, y, ...). Remove phi0 from sources and hope
 	// we end in an consistent state at some point. The phi could be removed
 	// by the above visitor if we get to a point where phi0 = PHI(x).
-	visit<IrPhi> { ctx ->
-		if (this in defs) {
-			defs.remove(this)
+	visit<IrPhi> {
+		val defs = it.defs
+		if (it in defs) {
+			defs.remove(it)
 			if (defs.size <= 1)
-				ctx.backlog(this)
+				backlog(it)
 		}
 	}
 
@@ -185,13 +186,13 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 
 	fun fail(reason: String): Nothing = throw InconsistencyException(reason)
 
-	visit<Block> { _ ->
-		if (opcodes.takeWhile { it is IrPhi } != opcodes.filterIsInstance<IrPhi>())
+	visit<Block> {
+		if (it.opcodes.takeWhile { it is IrPhi } != it.opcodes.filterIsInstance<IrPhi>())
 			fail("Block $this does not have all phi nodes at the beginning")
 	}
 
 	visit<IrPhi> {
-		for (def in defs) {
+		for (def in it.defs) {
 
 			// TODO special case for root og parameters.
 
@@ -202,7 +203,7 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 				is Parameter -> null
 				else -> throw Error("Unhandled def type")
 			}
-			if (definedIn != null && definedIn == block) {
+			if (definedIn != null && definedIn == it.block) {
 				fail("Phi def $def for $this is defined in same block!")
 			}
 		}
@@ -216,8 +217,8 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 	 */
 	visit<IrPhi> {
 		var prevType: Thing? = null
-		for (predecessor in block.predecessors) {
-			val def = defs[predecessor] ?: fail("$this does not cover predecessor $predecessor")
+		for (predecessor in it.block.predecessors) {
+			val def = it.defs[predecessor] ?: fail("$this does not cover predecessor $predecessor")
 
 			when (prevType) {
 				null -> prevType = def.type
@@ -227,8 +228,8 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 					fail("Phi defs type mismatch: $prevType vs ${def.type}")
 			}
 		}
-		for ((assignedIn, def) in defs.entries) {
-			if (assignedIn !in block.predecessors) {
+		for ((assignedIn, def) in it.defs.entries) {
+			if (assignedIn !in it.block.predecessors) {
 				fail("$def (in $assignedIn) is not assigned in a predecessor")
 			}
 		}
@@ -238,10 +239,10 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 	 * Check that definitions dominate uses.
 	 */
 	visit<Use> {
-		for (def in defs) {
-			if (def.container != container) {
-				if (this !is IrPhi) {
-					if (!d.dom(def.container, container, strict = true))
+		for (def in it.defs) {
+			if (def.container != it.container) {
+				if (it !is IrPhi) {
+					if (!d.dom(def.container, it.container, strict = true))
 						fail("$def does not dominate $this")
 				}
 			} else {
@@ -250,7 +251,7 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 					is HandlerBlock, is Parameter, is Constant<*> -> -1
 					else -> throw Error("Unhandled Def type $def")
 				}
-				val useIr = this as Ir // All Uses are Irs.
+				val useIr = it as Ir // All Uses are Irs.
 				if (defIndex >= useIr.index)
 					fail("$def does not dominate $this")
 			}

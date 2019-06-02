@@ -27,18 +27,18 @@ class PassTest {
 		val pass = Pass<String> {
 
 			visit<Container> {
-				count += 10
+				it.count += 10
 				"container"
 			}
 
 			visit<Item> {
-				println("visit: $name")
-				count++
-				if (name == "c")
-					it.backlog(prev!!)
-				if (name == "b")
-					it.backlog(prev!!)
-				name + "!"
+				println("visit: ${it.name}")
+				it.count++
+				if (it.name == "c")
+					backlog(it.prev!!)
+				if (it.name == "b")
+					backlog(it.prev!!)
+				it.name + "!"
 			}
 		}
 
