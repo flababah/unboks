@@ -270,6 +270,10 @@ class DependencyMapValues<K, V> internal constructor(
 
 	override val size get() = container.size
 
+	val entries get() = container.entries
+			.asSequence()
+			.map { it.toPair() }
+
 	init {
 		source.register {
 			container.forEach { listener(MutationEvent.Remove(it.toPair())) }
@@ -305,9 +309,23 @@ class DependencyMapValues<K, V> internal constructor(
 		listener(MutationEvent.Add(key to value))
 	}
 
-	fun remove(key: K): V? = container.remove(key)?.apply {
-		listener(MutationEvent.Remove(key to this))
+	fun remove(value: V): Set<K> {
+		val keys = mutableSetOf<K>()
+		container.entries.removeIf {
+			if (it.value == value) {
+				listener(MutationEvent.Remove(it.toPair()))
+				keys += it.key
+				true
+			} else {
+				false
+			}
+		}
+		return keys
 	}
+
+//	fun remove(key: K): V? = container.remove(key)?.apply {
+//		listener(MutationEvent.Remove(key to this))
+//	}
 }
 
 internal sealed class MutationEvent<T>(val item: T) {

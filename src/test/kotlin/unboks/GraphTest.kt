@@ -75,7 +75,7 @@ class GraphTest {
 		assertEquals(setOf(root), b.predecessors as Set<Block>)
 		assertEquals(setOf(a, b), switch.successors)
 
-		switch.cases.remove(0) // a
+		assertEquals(setOf(0), switch.cases.remove(a))
 		assertEquals(setOf(root), a.predecessors as Set<Block>) // Still has default.
 
 		switch.remove()

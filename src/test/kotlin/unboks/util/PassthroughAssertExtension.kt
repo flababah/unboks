@@ -101,6 +101,7 @@ class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutio
 		 * the generated test class passthrough. This mainly exist because we're not allowed
 		 * to return anything from JUnit test methods.
 		 */
+		@JvmStatic
 		fun trace(value: Any?) {
 			val traceList = traces.get() ?: throw IllegalStateException("No test in progress.")
 			traceList += value
