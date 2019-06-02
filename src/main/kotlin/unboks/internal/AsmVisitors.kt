@@ -15,6 +15,17 @@ import unboks.pass.createPhiPruningPass
 
 /**
  * Builds a [FlowGraph] using the ASM library.
+ *
+ * Note that an empty root block is always inserted that jumps to the actual start block.
+ * The reason is that if the actual start block has inbound edges and we need to be a phi
+ * join, the potential parameters used in the phi join need to come from somewhere other
+ * than the block itself.
+ *
+ * Also, phi joins are inserted by default in each block for each local variable. This
+ * would violate consistency for the root block if we didn't have pseudo root block where
+ * parameters belong in (without any phi joins).
+ *
+ * If the actual root block only has one entrance the pseudo-root should be pruned in a pass later.
  */
 internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisitor? = null)
 		: MethodVisitor(ASM6, debug) {
@@ -149,7 +160,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 	private class SecondPass(graph: FlowGraph, firstPassBlocks: List<AsmBlock>) {
 		val fromLabel: Map<Label, AsmBackingBlock>
 		val fromBlock: Map<Block, AsmBackingBlock>
-		val root: AsmBackingBlock?
+		val root: AsmBackingBlock.Basic
 
 		init {
 			val fromLabel = mutableMapOf<Label, AsmBackingBlock>()
@@ -174,16 +185,30 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 			}
 			this.fromLabel = fromLabel
 			this.fromBlock = fromBlock
-			this.root = root
+			this.root = when (root) {
+				is AsmBackingBlock.Basic -> root
+
+				// For now we need to be able to jump to the real root from the pseudo root.
+				// We could handle it, but it's a weird case.
+				is AsmBackingBlock.Handler -> throw ParseException("Handler block is not allowed as root")
+				null -> throw IllegalStateException("Empty list of first pass blocks")
+			}
 		}
 	}
 
 	override fun visitEnd() {
 		super.visitEnd()
 
+		val pseudoRoot = graph.newBasicBlock()
+		val info = SecondPass(graph, createMergedBlocks())
+
+		pseudoRoot.append().newGoto(info.root.backing)
+
 		val visitedBlocks = mutableSetOf<AsmBackingBlock>()
 		val maxLocals = state.maxLocals ?: throw ParseException("visitMaxs not invoked")
-		val info = SecondPass(graph, createMergedBlocks())
+
+		val startLocals = LocalsMap(graph.parameters, maxLocals)
+		val startStack = StackMap(emptyList())
 
 		fun createFallthroughGoto(block: AsmBackingBlock): IrGoto {
 			val successor = block.successor
@@ -201,7 +226,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 		 * @param predLocals locals from the preceding edge or exception block
 		 * @param predStack stack from the preceding edge (empty for exception blocks)
 		 */
-		fun traverse(block: AsmBackingBlock, pred: AsmBackingBlock, predLocals: LocalsMap, predStack: StackMap) {
+		fun traverse(block: AsmBackingBlock, pred: Block, predLocals: LocalsMap, predStack: StackMap) {
 			val backing = block.backing
 			val appender = backing.append()
 
@@ -236,13 +261,13 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 				// Traverse out edges.
 				for (next in terminal.successors) {
 					val nextBacking = info.fromBlock[next]!!
-					traverse(nextBacking, block, localsState, stackState)
+					traverse(nextBacking, block.backing, localsState, stackState)
 				}
 
 				// Traverse exception handlers.
 				for (exception in backing.exceptions) {
 					val nextBacking = info.fromBlock[exception.handler]!!
-					traverse(nextBacking, block, localsState, StackMap(emptyList()))
+					traverse(nextBacking, block.backing, localsState, StackMap(emptyList()))
 				}
 			}
 
@@ -250,18 +275,11 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 			val localPhis = backing.filter<IrPhi>().take(maxLocals).toList()
 			val stackPhis = backing.filter<IrPhi>().drop(maxLocals).toList()
 
-			predLocals.mergeInto(localPhis, pred.backing, backing is HandlerBlock)
-			predStack.mergeInto(stackPhis, pred.backing)
+			predLocals.mergeInto(localPhis, pred, backing is HandlerBlock)
+			predStack.mergeInto(stackPhis, pred)
 		}
 
-		val finalRoot = info.root ?: throw ParseException("No blocks in method")
-
-		val startLocals = LocalsMap(graph.parameters, maxLocals)
-		val startStack = StackMap(emptyList())
-
-		// Bootstrap at the root block. Note inputs are defined in itself, ie. locals
-		// are "assigned" in root block.
-		traverse(finalRoot, finalRoot, startLocals, startStack)
+		traverse(info.root, pseudoRoot, startLocals, startStack)
 
 		if (visitedBlocks.size != info.fromBlock.size)
 			throw ParseException("Dead code") // TODO Just delete unused blocks.

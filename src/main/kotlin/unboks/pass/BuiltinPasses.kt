@@ -29,6 +29,63 @@ import unboks.internal.traverseGraph
 
 fun createPhiPruningPass() = Pass<Unit> {
 
+	// Remove phis without any sources.
+	//
+	// This should only be caused by the leftover phi joins from the parser.
+	// - Unused locals
+	// - The top part of dual slot types
+	// - After removing a recursive phi dependency leaving the phi with no sources
+	// We can't have a block without any predecessors that also needs a phi join...
+	//
+	// Note that we should remove the entire chain of phis in the flow. Before
+	// doing that, make sure that the chain is effectively unused (ie. not used
+	// by non-phi uses).
+	visit<IrPhi> {
+		if (defs.isEmpty()) {
+			val chain = traverseGraph(this) { node, acc ->
+				for (use in node.uses) {
+					if (use !is IrPhi) {
+						val msg = "Empty phi chain has real usage: $use uses $node (starts as $this)"
+						throw InconsistencyException(msg)
+					}
+					acc(use)
+				}
+			}
+			remove(chain)
+		}
+	}
+
+	// Short-circuit redundant phis for blocks with a single predecessor.
+	//
+	// Note: can leave the graph in an inconsistent state: p = PHI(p, x).
+	visit<IrPhi> { ctx ->
+		if (defs.size == 1) {
+			val source = defs.first()
+			ctx.backlog(source)
+
+			for (use in uses) {
+				use.defs.replace(this, source)
+				ctx.backlog(use)
+			}
+			remove()
+		}
+	}
+
+	// Because of the short-circuiting we can end up in a state where we
+	// have phi0 = PHI(phi0, x, y, ...). Remove phi0 from sources and hope
+	// we end in an consistent state at some point. The phi could be removed
+	// by the above visitor if we get to a point where phi0 = PHI(x).
+	visit<IrPhi> { ctx ->
+		if (this in defs) {
+			defs.remove(this)
+			if (defs.size <= 1)
+				ctx.backlog(this)
+		}
+	}
+
+
+
+
 //	/*
 //	// Remove unused phi nodes. Backlogs phi defs since they might
 //	// also have become unused as a result.
@@ -141,6 +198,7 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 			val definedIn = when (def) {
 				is Ir -> def.block
 				is HandlerBlock -> def
+				is Constant<*>,
 				is Parameter -> null
 				else -> throw Error("Unhandled def type")
 			}
@@ -151,14 +209,30 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 	}
 
 	/**
-	 *
+	 * - Check that all predecessors are used in this phi.
+	 * - ...and no more than that.
+	 * - Check that all types used in the phi matches -- reference types do not strictly need to match.
+	 * TODO exception handling.
 	 */
 	visit<IrPhi> {
+		var prevType: Thing? = null
+		for (predecessor in block.predecessors) {
+			val def = defs[predecessor] ?: fail("$this does not cover predecessor $predecessor")
 
+			when (prevType) {
+				null -> prevType = def.type
+				is Reference -> if (def.type !is Reference)
+					fail("Phi defs type mismatch: $prevType vs ${def.type}")
+				else -> if (def.type != prevType)
+					fail("Phi defs type mismatch: $prevType vs ${def.type}")
+			}
+		}
+		for ((assignedIn, def) in defs.entries) {
+			if (assignedIn !in block.predecessors) {
+				fail("$def (in $assignedIn) is not assigned in a predecessor")
+			}
+		}
 	}
-
-	// TODO Check alle phis kommer fra immediate predecessor
-	// -- og fra hver predecessor (handler exception)
 
 	/**
 	 * Check that definitions dominate uses.
@@ -166,8 +240,10 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 	visit<Use> {
 		for (def in defs) {
 			if (def.container != container) {
-				if (!d.dom(def.container, container, strict = true))
-					fail("$def does not dominate $this")
+				if (this !is IrPhi) {
+					if (!d.dom(def.container, container, strict = true))
+						fail("$def does not dominate $this")
+				}
 			} else {
 				val defIndex = when (def) {
 					is Ir -> def.index
