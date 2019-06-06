@@ -70,14 +70,6 @@ sealed class IrTerminal(block: Block) : Ir(block) {
 	abstract val successors: Set<BasicBlock>
 }
 
-private fun createUseTuple(use: Use): String = use.defs.map { it.name }.joinToString(
-	prefix = "(", separator = ", ", postfix = ")")
-
-private inline fun doIf(condition: Boolean, block: () -> Unit) = condition.apply {
-	if (this)
-		block()
-}
-
 class IrCmp1 internal constructor(block: Block, var cmp: Cmp, yes: BasicBlock, no: BasicBlock, op: Def)
 		: IrTerminal(block), Use {
 
@@ -135,7 +127,8 @@ class IrInvoke internal constructor(block: Block, val spec: Invocation, argument
 	// XXX Do we need variable size list here -- only if methods change signature?
 	override val defs: DependencyArray<Def> = dependencyArray(defUses, *arguments.toTypedArray())
 
-	override fun toString() = "$name = ${spec.representation}${createUseTuple(this)}"
+	override fun toString() = defs.joinToString(
+			prefix = "$name = ${spec.representation}(", separator = ", ", postfix = ")") { it.name }
 }
 
 /**
@@ -177,7 +170,8 @@ class IrPhi internal constructor(block: Block, private val explicitType: Thing)
 		else -> TOP
 	}
 
-	override fun toString() = "$name = PHI${createUseTuple(this)}"
+	override fun toString() = defs.entries.joinToString(
+			prefix = "$name = PHI(", separator = ", ", postfix = ")") { "${it.second.name} in ${it.first.name}" }
 }
 
 class IrReturn internal constructor(block: Block, value: Def?)
@@ -226,18 +220,4 @@ class IrThrow internal constructor(block: Block, exception: Def)
 	override val successors get() = emptySet<BasicBlock>()
 
 	override fun toString() = "THROW ${exception.name}"
-}
-
-class IrCopy internal constructor(block: Block, original: Def): Ir(block), Def, Use {
-	override val defs: DependencySingleton<Def> = dependencyProperty(defUses, original)
-
-	override var name by flow.registerAutoName(this, "copy")
-	override val uses: RefCounts<Use> = RefCountsImpl()
-	override val container get() = block
-
-	var original: Def by defs
-
-	override val type get() = original.type
-
-	override fun toString() = "$name = ${original.name}"
 }

@@ -41,9 +41,18 @@ class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutio
 				null
 			}
 		}
-		val bytecode = ctx.resolveClass(testInstance::class).generateBytecode()
-		val instance = Loader().load(bytecode).java.newInstance()
+		val unboksClass = ctx.resolveClass(testInstance::class)
+		val bytecode = unboksClass.generateBytecode()
+		val instance = createInstance(bytecode)
 		context.getStore(GLOBAL).put(PassthroughKey, Store(instance, bytecode))
+	}
+
+	private fun createInstance(bytecode: ByteArray): Any {
+		try {
+			return Loader().load(bytecode).java.newInstance()
+		} catch (e: VerifyError) {
+			printVerifyError(bytecode, e)
+		}
 	}
 
 	override fun beforeTestExecution(context: ExtensionContext) {
@@ -67,16 +76,20 @@ class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutio
 			assertEquals(originalTraces, passthroughTraces, "Expected original traces to match passthrough")
 
 		} catch (e: VerifyError) {
-			System.err.println("============ FAILED VERIFY ===========")
-			val cr = ClassReader(passthrough.bytecode);
-			val pw = PrintWriter(System.err);
-			CheckClassAdapter.verify(cr, true, pw);
-			System.err.print("============ END FAILED VERIFY ===========")
-			throw e
+			printVerifyError(passthrough.bytecode, e)
 
 		} finally {
 			traces.remove()
 		}
+	}
+
+	private fun printVerifyError(bytecode: ByteArray, e: VerifyError): Nothing {
+		System.err.println("============ FAILED VERIFY ===========")
+		val cr = ClassReader(bytecode);
+		val pw = PrintWriter(System.err);
+		CheckClassAdapter.verify(cr, true, pw);
+		System.err.print("============ END FAILED VERIFY ===========")
+		throw e
 	}
 
 	private fun initTraces() {

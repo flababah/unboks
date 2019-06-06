@@ -56,7 +56,7 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 	/**
 	 * Execute a pass on this flow.
 	 */
-	fun <R> execute(pass: Pass<R>): Pass<R> = pass.execute {
+	fun <R> execute(pass: Pass<R>): Pass<R> = pass.execute(this) {
 		it.visit(this)
 		constants.forEach { c -> it.visit(c) }
 		parameters.forEach { p -> it.visit(p) } // Not possible to mutate for now, so no need for copy.

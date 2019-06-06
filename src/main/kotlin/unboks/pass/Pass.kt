@@ -24,7 +24,7 @@ class Pass<R>(private val initBlock: Builder<R>.() -> Unit) {
 	annotation class Dsl
 
 	@Dsl
-	class Builder<R> internal constructor() {
+	class Builder<R> internal constructor(val graph: FlowGraph) {
 		internal val visitors = mutableListOf<Pair<KClass<out PassType>, Context.(PassType) -> R?>>()
 
 		inline fun <reified T : PassType> visit(noinline block: Context.(T) -> R?) {
@@ -73,8 +73,8 @@ class Pass<R>(private val initBlock: Builder<R>.() -> Unit) {
 		fun visit(item: PassType) = visitItem(builder, item)
 	}
 
-	internal fun execute(visitor: (InitialVisitor) -> Unit) = apply {
-		val builder = Builder<R>()
+	internal fun execute(graph: FlowGraph, visitor: (InitialVisitor) -> Unit) = apply {
+		val builder = Builder<R>(graph)
 
 		// Setup visit handlers, and more importantly run the block which might
 		// initialize variables and such. The list of handler could have been

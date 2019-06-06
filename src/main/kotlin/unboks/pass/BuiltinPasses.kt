@@ -56,14 +56,29 @@ fun createPhiPruningPass() = Pass<Unit> {
 	}
 
 	// Short-circuit redundant phis for blocks with a single predecessor.
+	// Additionally, short-circuit if all defs are the same.
 	//
 	// Note: can leave the graph in an inconsistent state: p = PHI(p, x).
+	//
+	// If p = PHI(x in B1, x in B2) then it's safe to say that x dominates p, right?
+	// This property should follow from the consistency check where each assignedIn
+	// block (B1, B2) should be dominated by x. Better check to be sure... (And because that
+	// check is not yet implemented in the consistency check.)
 	visit<IrPhi> {
-		if (it.defs.size == 1) {
-			val source = it.defs.first()
+		val defs = it.defs.entries
+				.map { p -> p.second }
+				.toSet()
+
+		if (defs.size == 1) {
+			val source = defs.first()
+			val d = Dominance(it.flow)
+
+			if (!d.dom(source.container, it.block, strict = true))
+				throw InconsistencyException("The source ($source) in short-circuit does not dominate phi ($it).")
+
 			backlog(source)
 
-			for (use in it.uses) {
+			for (use in it.uses.toList()) { // Avoid concurrent modification.
 				use.defs.replace(it, source)
 				backlog(use)
 			}
@@ -188,7 +203,23 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 
 	visit<Block> {
 		if (it.opcodes.takeWhile { it is IrPhi } != it.opcodes.filterIsInstance<IrPhi>())
-			fail("Block $this does not have all phi nodes at the beginning")
+			fail("Block $it does not have all phi nodes at the beginning")
+	}
+
+	visit<Block> {
+		if (it.terminal == null)
+			fail("Block $it does not have a terminal instruction")
+		// TODO What about Kotlin Nothing method calls?
+	}
+
+	visit<IrThrow> {
+		if (it.block.phiReferences.isNotEmpty())
+			fail("Block ${it.block} has phi dependencies even though its terminal is IrThrow")
+	}
+
+	visit<IrReturn> {
+		if (it.block.phiReferences.isNotEmpty())
+			fail("Block ${it.block} has phi dependencies even though its terminal is IrReturn")
 	}
 
 	visit<IrPhi> {
@@ -204,7 +235,7 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 				else -> throw Error("Unhandled def type")
 			}
 			if (definedIn != null && definedIn == it.block) {
-				fail("Phi def $def for $this is defined in same block!")
+				fail("Phi def $def for $it is defined in same block!")
 			}
 		}
 	}
@@ -218,7 +249,7 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 	visit<IrPhi> {
 		var prevType: Thing? = null
 		for (predecessor in it.block.predecessors) {
-			val def = it.defs[predecessor] ?: fail("$this does not cover predecessor $predecessor")
+			val def = it.defs[predecessor] ?: fail("$it does not cover predecessor $predecessor")
 
 			when (prevType) {
 				null -> prevType = def.type
@@ -235,6 +266,8 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 		}
 	}
 
+	// TODO for phis make sure that each def's assignedIn block is dominated by it's actual def-block.
+
 	/**
 	 * Check that definitions dominate uses.
 	 */
@@ -243,7 +276,7 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 			if (def.container != it.container) {
 				if (it !is IrPhi) {
 					if (!d.dom(def.container, it.container, strict = true))
-						fail("$def does not dominate $this")
+						fail("$def does not dominate $it")
 				}
 			} else {
 				val defIndex = when (def) {
@@ -253,7 +286,7 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 				}
 				val useIr = it as Ir // All Uses are Irs.
 				if (defIndex >= useIr.index)
-					fail("$def does not dominate $this")
+					fail("$def does not dominate $it")
 			}
 		}
 	}

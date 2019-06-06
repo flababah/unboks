@@ -44,7 +44,7 @@ sealed class Block(val flow: FlowGraph) : DependencySource(), Nameable, PassType
 	/**
 	 * Execute a pass on this block.
 	 */
-	fun <R> execute(pass: Pass<R>): Pass<R> = pass.execute {
+	fun <R> execute(pass: Pass<R>): Pass<R> = pass.execute(flow) {
 		executeInitial(it)
 	}
 

@@ -34,9 +34,6 @@ class IrFactory internal constructor(private val block: Block, private val offse
 	fun newThrow(exception: Def): IrThrow =
 			register(IrThrow(block, exception))
 
-	fun newCopy(original: Def) =
-			register(IrCopy(block, original))
-
 	internal sealed class Offset {
 		class Before(val at: Ir) : Offset()
 		class Replace(val at: Ir) : Offset()

@@ -12,7 +12,7 @@ class PassTest {
 	class Container(val list: List<Item>) : PassType {
 		var count = 0
 
-		fun <R> execute(pass: Pass<R>): Pass<R> = pass.execute {
+		fun <R> execute(pass: Pass<R>): Pass<R> = pass.execute(FlowGraph()) {
 			it.visit(this)
 			list.forEach { item -> it.visit(item) }
 		}
@@ -68,10 +68,10 @@ class PassTest {
 			count++
 		}
 
-		pass.execute { }
+		pass.execute(FlowGraph()) { }
 		assertEquals(1, count)
 
-		pass.execute { }
+		pass.execute(FlowGraph()) { }
 		assertEquals(2, count)
 	}
 }

@@ -35,6 +35,15 @@ class BasicFlowTests {
 		trace(counter)
 	}
 
+	@PermutationTest
+	fun testChoice(
+			@Ints(77) a: Int,
+			@Ints(88) b: Int,
+			@Ints(0, 1) which: Int) {
+		val res = if (which == 1) a else b
+		trace(res)
+	}
+
 //	fun testException(a: Int): Int {
 //		var flags = 0
 //		try {
@@ -75,7 +84,6 @@ class BasicFlowTests {
 //		return x
 //	}
 //
-//	fun choice(a: Int, b: Int, which: Boolean): Int = if (which) a else b
 ////
 //	fun swapProblem(_x: Float, _y: Float, c: Int): Float {
 //		var x = _x

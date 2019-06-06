@@ -30,18 +30,18 @@ TODO Generalt
 --- det samme for om block af (func(...)) er reachable fra deinitionen d
  */
 
-private var lastMax = 0 // Yeah, this is shit TODO some ifno from passes
-private fun createWastefulSimpleRegisterMapping() = Pass<Int> {
-	var slot = 0
+private class LocalMax(var count: Int = 0)
 
-	fun allocSlot(type: Thing) = slot.also {
-		slot += type.width
-		lastMax = slot
+private fun createWastefulSimpleRegisterMapping(max: LocalMax) = Pass<Int> {
+	max.count = graph.parameters.size
+
+	fun allocSlot(type: Thing) = max.count.also {
+		max.count += type.width
 	}
 
 	// Parameters are always stored in the first local slots.
 	visit<Parameter> {
-		allocSlot(it.type)
+		it.graph.parameters.indexOf(it)
 	}
 
 	// Only alloc a register for non-void and if we actually need the result.
@@ -55,16 +55,11 @@ private fun createWastefulSimpleRegisterMapping() = Pass<Int> {
 	visit<IrPhi> {
 		allocSlot(it.type)
 	}
-
-	visit<Constant<*>> { // TODO Make special handling for type in Constant...
-		allocSlot(it.type)
-	}
-
-	visit<IrCopy> {
-		allocSlot(it.type)
-	}
 }
 
+/**
+ * Creates a map for start/end labels for each block.
+ */
 private fun createLabelsForBlocks(blocks: List<Block>): Map<Block, Pair<Label, Label>> {
 	val labels = Array(blocks.size + 1) { Label() }
 	return (0 until blocks.size).associate {
@@ -75,7 +70,7 @@ private fun createLabelsForBlocks(blocks: List<Block>): Map<Block, Pair<Label, L
 }
 
 private fun load(def: Def, mapping: Pass<Int>, visitor: MethodVisitor) = when {
-	//def is IrConst<*>         -> visitor.visitLdcInsn(def.value) // No, det gør vi i opcodes hvor IrConst bliver nævnt
+	def is Constant<*>        -> visitor.visitLdcInsn(def.value)
 	def.type is SomeReference -> visitor.visitVarInsn(ALOAD, def.passValue(mapping))
 	def.type == unboks.FLOAT  -> visitor.visitVarInsn(FLOAD, def.passValue(mapping))
 	def.type == unboks.DOUBLE -> visitor.visitVarInsn(DLOAD, def.passValue(mapping))
@@ -83,22 +78,19 @@ private fun load(def: Def, mapping: Pass<Int>, visitor: MethodVisitor) = when {
 	else                      -> visitor.visitVarInsn(ILOAD, def.passValue(mapping))
 }
 
-fun storeOne(x: Def, mapping: Pass<Int>, visitor: MethodVisitor) = when (x.type) {
-	is SomeReference -> visitor.visitVarInsn(ASTORE, x.passValue(mapping))
-	unboks.FLOAT     -> visitor.visitVarInsn(FSTORE, x.passValue(mapping))
-	unboks.DOUBLE    -> visitor.visitVarInsn(DSTORE, x.passValue(mapping))
-	unboks.LONG      -> visitor.visitVarInsn(LSTORE, x.passValue(mapping))
-	else             -> visitor.visitVarInsn(ISTORE, x.passValue(mapping))
+private fun storeVarIfUsed(opcode: Int, x: Def, mapping: Pass<Int>, visitor: MethodVisitor) {
+	val slot = x.passValueSafe(mapping)
+	if (slot != null)
+		visitor.visitVarInsn(opcode, slot)
 }
 
-private fun store(def: Def, mapping: Pass<Int>, visitor: MethodVisitor) {
-
-	// Save the value in all the registers of phis that depend on it.
-	for (phiUse in def.uses.filterIsInstance<IrPhi>()) {
-		visitor.visitInsn(DUP)
-		storeOne(phiUse, mapping, visitor)
-	}
-	storeOne(def, mapping, visitor)
+private fun store(x: Def, mapping: Pass<Int>, visitor: MethodVisitor) = when (x.type) {
+	is Constant<*>   -> throw Error("Cannot store in constant.")
+	is SomeReference -> storeVarIfUsed(ASTORE, x, mapping, visitor)
+	unboks.FLOAT     -> storeVarIfUsed(FSTORE, x, mapping, visitor)
+	unboks.DOUBLE    -> storeVarIfUsed(DSTORE, x, mapping, visitor)
+	unboks.LONG      -> storeVarIfUsed(LSTORE, x, mapping, visitor)
+	else             -> storeVarIfUsed(ISTORE, x, mapping, visitor)
 }
 
 // TODO Exceptions: store "e"
@@ -106,7 +98,8 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 	// XXX We need a more robust way of linearizing the graph.
 	val blocks = graph.blocks.sortedBy { it.name }
 	val labels = createLabelsForBlocks(blocks)
-	val mapping = graph.execute(createWastefulSimpleRegisterMapping())
+	val max = LocalMax()
+	val mapping = graph.execute(createWastefulSimpleRegisterMapping(max))
 
 	fun load(def: Def) = load(def, mapping, visitor)
 	fun store(def: Def) = store(def, mapping, visitor)
@@ -115,36 +108,28 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 
 	// TODO 2019 - insert copies in each phi def? -- hmm med liste af phis i starten... og hvordan med co-dependen phis?
 
-	visitor.visitCode()
+	fun feedPhiDependers(block: Block) {
+		// The def that is assigned in this block from the phi's perspective.
+		val dependers = block.phiReferences.toList()
+		if (dependers.isNotEmpty()) {
+			visitor.visitInsn(NOP) // Just to indicate that we do phi stuff from here on.
 
-	// Make sure all parameters that are depended on are saved initially.
-	for (parameter in graph.parameters) {
-		for (phiUse in parameter.uses.filterIsInstance<IrPhi>()) {
-			load(parameter, mapping, visitor)
-			storeOne(phiUse, mapping, visitor)
+			// We have to load all defs on stack before saving to avoid overriding. Eg.:
+			// - x = phi(y, ...)
+			// - y = phi(x, ...)
+			// This is just a safe shotgun approach.
+			dependers.forEach { load(it.defs[block]!!) }
+			dependers.asReversed().forEach { store(it) }
 		}
 	}
+
+	visitor.visitCode()
 
 	for (block in blocks) {
 		visitor.visitLabel(block.startLabel())
 
 		if (block.exceptions.size > 0)
 			TODO("exceptions")
-
-		val phis = block.opcodes.filterIsInstance<IrPhi>()
-		// Handle phi nodes here rather than in pass. Assume that phis are
-		// located in the beginning of the block. Only needed for co-dependent
-		// phis in the same block, right? TODO need to consider if they are
-		// co-dependent and we load shit into dependers of phi blocks...
-		//
-		// Probably swap first and then only load for dependers that are in different
-		// blocks. We avoid order issue of swapping/loading-for-dependers. Hmm,
-		// simply swapping on stack might work......
-		if (phis.size > 1) {
-			phis.forEach { load(it) }
-			phis.asReversed().forEach { store(it) }
-			visitor.visitInsn(NOP) // Marker for end-phi swap stuff.
-		}
 
 		block.execute(Pass<Unit> {
 
@@ -154,8 +139,9 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 			}
 
 			visit<IrCmp1> {
-				load(it.op)
+				feedPhiDependers(block)
 
+				load(it.op)
 				val opcode = when (it.cmp) {
 					Cmp.EQ -> IFEQ
 					Cmp.NE -> IFNE
@@ -167,12 +153,15 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 					Cmp.NOT_NULL -> IFNONNULL
 				}
 				visitor.visitJumpInsn(opcode, it.yes.startLabel()) // We assume "no" to be fallthrough.
+				if (block.endLabel() != it.no.startLabel())
+					throw IllegalStateException("bad fallthrough")
 			}
 
 			visit<IrCmp2> {
+				feedPhiDependers(block)
+
 				load(it.op1)
 				load(it.op2)
-
 				val reference = it.op1 is SomeReference
 				val opcode = when (it.cmp) {
 					Cmp.EQ -> if (reference) IF_ACMPEQ else IF_ICMPEQ
@@ -184,26 +173,33 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 					else -> throw Error("${it.cmp} not supported for Cmp2")
 				}
 				visitor.visitJumpInsn(opcode, it.yes.startLabel()) // We assume "no" to be fallthrough.
+				if (block.endLabel() != it.no.startLabel())
+					throw IllegalStateException("bad fallthrough")
 			}
 
 			visit<IrGoto> {
+				feedPhiDependers(block)
 				visitor.visitJumpInsn(GOTO, it.target.startLabel())
 			}
 
 			visit<IrReturn> {
-				it.value?.let { v -> load(v) }
-
-				visitor.visitInsn(when (it.value?.type) {
-					null -> RETURN
-					is SomeReference -> ARETURN
-					unboks.FLOAT -> FRETURN
-					unboks.DOUBLE -> DRETURN
-					unboks.LONG -> LRETURN
-					else -> IRETURN
-				})
+				val ret = it.value
+				if (ret != null) {
+					load(ret)
+					visitor.visitInsn(when (returnType) { // TODO what does JVMS say about narrowing here?
+						is SomeReference -> ARETURN
+						unboks.FLOAT -> FRETURN
+						unboks.DOUBLE -> DRETURN
+						unboks.LONG -> LRETURN
+						else -> IRETURN
+					})
+				} else {
+					visitor.visitInsn(RETURN)
+				}
 			}
 
 			visit<IrSwitch> {
+				feedPhiDependers(block)
 				TODO()
 			}
 
@@ -219,19 +215,9 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 				if (it.spec.returnType != VOID)
 					store(it)
 			}
-
-			visit<Constant<*>> {
-				visitor.visitLdcInsn(it.value)
-				store(it)
-			}
-
-			visit<IrCopy> {
-				load(it.original)
-				store(it)
-			}
 		})
 	}
 
-	visitor.visitMaxs(15, lastMax)
+	visitor.visitMaxs(15, max.count)
 	visitor.visitEnd()
 }
