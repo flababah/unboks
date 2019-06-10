@@ -73,8 +73,6 @@ sealed class IrTerminal(block: Block) : Ir(block) {
 class IrCmp1 internal constructor(block: Block, var cmp: Cmp, yes: BasicBlock, no: BasicBlock, op: Def)
 		: IrTerminal(block), Use {
 
-	override val container get() = block
-
 	override val defs: DependencyArray<Def> = dependencyArray(defUses, op)
 
 	override val successors get() = setOf(yes, no) // TODO view? -- lav set of properties "PropertyBackedSet"
@@ -89,8 +87,6 @@ class IrCmp1 internal constructor(block: Block, var cmp: Cmp, yes: BasicBlock, n
 
 class IrCmp2 internal constructor(block: Block, var cmp: Cmp, yes: BasicBlock, no: BasicBlock, op1: Def, op2: Def)
 		: IrTerminal(block), Use {
-
-	override val container get() = block
 
 	override val defs: DependencyArray<Def> = dependencyArray(defUses, op1, op2)
 
@@ -117,7 +113,6 @@ class IrGoto internal constructor(block: Block, target: BasicBlock)
 
 class IrInvoke internal constructor(block: Block, val spec: Invocation, arguments: List<Def>)
 		: Ir(block), Def, Use {
-	override val container get() = block
 
 	override var name by flow.registerAutoName(this, "inv")
 
@@ -157,8 +152,6 @@ class IrInvoke internal constructor(block: Block, val spec: Invocation, argument
 class IrPhi internal constructor(block: Block, private val explicitType: Thing)
 		: Ir(block), Def, Use {
 
-	override val container get() = block
-
 	override var name by flow.registerAutoName(this, "phi")
 
 	override val defs: DependencyMapValues<Block, Def> = dependencyMap(phiReferences, defUses)
@@ -177,8 +170,6 @@ class IrPhi internal constructor(block: Block, private val explicitType: Thing)
 class IrReturn internal constructor(block: Block, value: Def?)
 		: IrTerminal(block), Use {
 
-	override val container get() = block
-
 	override val successors get() = emptySet<BasicBlock>()
 
 	override val defs: DependencyNullableSingleton<Def> = dependencyNullableProperty(defUses, value)
@@ -192,8 +183,6 @@ class IrReturn internal constructor(block: Block, value: Def?)
 
 class IrSwitch internal constructor(block: Block, key: Def, default: BasicBlock)
 		: IrTerminal(block), Use {
-
-	override val container get() = block
 
 	override val successors get() = cases.toMutableList().toSet() + default // TODO make a view of default and cases.
 
@@ -210,8 +199,6 @@ class IrSwitch internal constructor(block: Block, key: Def, default: BasicBlock)
 
 class IrThrow internal constructor(block: Block, exception: Def)
 		: IrTerminal(block), Use {
-
-	override val container get() = block
 
 	override val defs: DependencySingleton<Def> = dependencyProperty(defUses, exception)
 

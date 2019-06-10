@@ -73,7 +73,7 @@ fun createPhiPruningPass() = Pass<Unit> {
 			val source = defs.first()
 			val d = Dominance(it.flow)
 
-			if (!d.dom(source.container, it.block, strict = true))
+			if (!d.dom(source.block, it.block, strict = true))
 				throw InconsistencyException("The source ($source) in short-circuit does not dominate phi ($it).")
 
 			backlog(source)
@@ -275,15 +275,15 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 
 	fun checkDefDomUsePhis(phi: IrPhi) {
 		for ((assignedIn, def) in phi.defs.entries) {
-			if (!d.dom(def.container, assignedIn, strict = false))
-				fail("$def does not dominate phi (${phi.name}) assignedIn ${def.container}")
+			if (!d.dom(def.block, assignedIn, strict = false))
+				fail("$def does not dominate phi (${phi.name}) assignedIn ${def.block}")
 		}
 	}
 
 	fun checkDefDomUseNormal(use: Use) {
 		for (def in use.defs) {
-			if (def.container != use.container) {
-				if (!d.dom(def.container, use.container, strict = true))
+			if (def.block != use.block) {
+				if (!d.dom(def.block, use.block, strict = true))
 					fail("$def does not dominate $use")
 			} else {
 				val defIndex = when (def) {

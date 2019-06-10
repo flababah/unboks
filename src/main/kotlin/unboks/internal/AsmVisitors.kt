@@ -716,7 +716,7 @@ private class LocalsMap(initials: Iterable<Def>, maxLocals: Int) : Iterable<Def>
 				set(_) { }
 
 			override val type get() = unboks.TOP
-			override val container get() = throw IllegalStateException()
+			override val block get() = throw IllegalStateException()
 			override val uses get() = throw IllegalStateException()
 		}
 	}

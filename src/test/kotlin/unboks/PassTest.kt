@@ -28,7 +28,7 @@ class PassTest {
 
 			visit<Container> {
 				it.count += 10
-				"container"
+				"block"
 			}
 
 			visit<Item> {
@@ -48,7 +48,7 @@ class PassTest {
 		val container = Container(listOf(a, b, c))
 		container.execute(pass)
 
-		assertEquals("container", container.passValue(pass))
+		assertEquals("block", container.passValue(pass))
 		assertEquals(10, container.count)
 
 		assertEquals("a!", a.passValue(pass))

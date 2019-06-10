@@ -21,7 +21,7 @@ import unboks.pass.PassType
  */
 interface Use : PassType {
 
-	val container: Block
+	val block: Block
 
 	val defs: DependencyView<Def, *>
 }

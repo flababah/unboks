@@ -22,7 +22,7 @@ sealed class Constant<out T : Any>(
 
 	override fun toString() = name
 
-	override val container: Block get() = graph.root
+	override val block: Block get() = graph.root
 }
 
 /**

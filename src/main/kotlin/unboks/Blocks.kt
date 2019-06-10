@@ -106,7 +106,7 @@ class BasicBlock internal constructor(flow: FlowGraph) : Block(flow) {
  * the stack when an exception is caught.
  */
 class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Block(flow), Def {
-	override val container get() = this
+	override val block get() = this
 	override var name by flow.registerAutoName(this, "H")
 
 	/**
