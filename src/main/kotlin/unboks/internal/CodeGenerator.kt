@@ -200,7 +200,15 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 
 			visit<IrSwitch> {
 				feedPhiDependers(block)
-				TODO()
+
+				val cases = it.cases.entries
+						.sortedBy { it.first }
+						.toList()
+				val keys = IntArray(cases.size) { i -> cases[i].first }
+				val handlers = Array(cases.size) { i -> cases[i].second.startLabel() }
+
+				load(it.key)
+				visitor.visitLookupSwitchInsn(it.default.startLabel(), keys, handlers)
 			}
 
 			visit<IrThrow> {

@@ -5,10 +5,7 @@ import org.objectweb.asm.Label
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes.*
 import unboks.*
-import unboks.invocation.InvField
-import unboks.invocation.InvIntrinsic
-import unboks.invocation.InvMethod
-import unboks.invocation.Invocation
+import unboks.invocation.*
 import unboks.pass.createPhiPruningPass
 
 // TODO Add exceptions to block...
@@ -361,6 +358,8 @@ private class FlowGraphBlockVisitor(
 
 	override fun visitInsn(opcode: Int) {
 		when (opcode) {
+			ATHROW -> appender.newThrow(stack.pop<SomeReference>())
+
 			ICONST_M1,
 			ICONST_0,
 			ICONST_1,
@@ -368,6 +367,8 @@ private class FlowGraphBlockVisitor(
 			ICONST_3,
 			ICONST_4,
 			ICONST_5 -> stack.push(graph.constant(opcode - ICONST_0))
+
+			DUP -> stack.push(stack.peek())
 
 			IRETURN -> appender.newReturn(stack.pop<IntType>())
 			LRETURN -> appender.newReturn(stack.pop<LONG>())
@@ -380,7 +381,7 @@ private class FlowGraphBlockVisitor(
 			else -> {
 				val intrinsic = InvIntrinsic.fromJvmOpcode(opcode)
 				if (intrinsic == null) {
-					TODO()
+					TODO("todo $opcode")
 				}
 				appendInvocation(intrinsic)
 			}
@@ -425,7 +426,12 @@ private class FlowGraphBlockVisitor(
 	}
 
 	override fun visitTableSwitchInsn(min: Int, max: Int, dflt: Label, vararg labels: Label) {
-		TODO()
+		if (labels.size + min - 1 != max)
+			throw ParseException("Wrong number of labels (${labels.size}) for $min..$max")
+
+		val switch = appender.newSwitch(stack.pop<INT>(), resolver(dflt))
+		for ((i, label) in labels.withIndex())
+			switch.cases[min + i] = resolver(label)
 	}
 
 	override fun visitLookupSwitchInsn(dflt: Label, keys: IntArray, labels: Array<out Label>) {
@@ -460,8 +466,17 @@ private class FlowGraphBlockVisitor(
 		}
 	}
 
-	override fun visitTypeInsn(opcode: Int, type: String?) =
-			TODO()
+	override fun visitTypeInsn(opcode: Int, type: String) {
+		val ownerType = Reference(type)
+		val inv = when (opcode) {
+			NEW -> InvType.New(ownerType)
+			ANEWARRAY -> InvType.NewObjectArray(ownerType)
+			CHECKCAST -> InvType.Checkcast(ownerType)
+			INSTANCEOF -> InvType.Instanceof(ownerType)
+			else -> throw IllegalStateException("Illegal opcode: $opcode")
+		}
+		appendInvocation(inv)
+	}
 
 	override fun visitFieldInsn(opcode: Int, owner: String, name: String, descriptor: String) { // Real quick and dirty.
 		val type = Thing.fromDescriptor(descriptor)
@@ -613,6 +628,8 @@ private class StackMap(initials: Iterable<Def>) : Iterable<Def> {
 			copy
 		}
 	}
+
+	fun peek(reverseIndex: Int = 0) = stack[stack.size - reverseIndex - 1]
 
 	fun mergeInto(phis: List<IrPhi>, definedIn: Block) {
 		if(stack.size != phis.size)

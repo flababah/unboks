@@ -74,6 +74,7 @@ class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutio
 
 			val passthroughTraces = traces.get()
 			assertEquals(originalTraces, passthroughTraces, "Expected original traces to match passthrough")
+			println("Traces: $passthroughTraces")
 
 		} catch (e: VerifyError) {
 			printVerifyError(passthrough.bytecode, e)

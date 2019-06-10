@@ -26,6 +26,27 @@ class BasicFlowTests {
 		trace(a * b)
 	}
 
+	@PermutationTest
+	fun testArithSwitch(
+			@Ints(0, 1, 2, 3, 200) op: Int,
+			@Ints(-3, 10) a: Int,
+			@Ints(-2, 5, 6) b: Int
+	) {
+		val result = when (op) {
+			0 -> a + b
+			1 -> a - b
+			2 -> a * b
+			3 -> a / b
+			else -> op + 1000
+		}
+		trace(result)
+	}
+
+	/*@Test // TODO Expect exception in junit.
+	fun testThrow() {
+		throw NullPointerException("Yes, this should happen!")
+	}*/
+
 	@Test
 	fun testPseudoRoot() {
 		var counter = 0
@@ -68,46 +89,39 @@ class BasicFlowTests {
 //		return flags;
 //	}
 
-	/*
-	@Test
-	fun testReturn() {
-		compareTrace(2 + 3)
+	@PermutationTest
+	fun testMultiply(
+			@Ints(0, 5, 10) a: Int,
+			@Ints(-1, 0, 3) b: Int) { // TODO Handle negative.
+		var x = 0
+		for (i in (0 until a)) {
+			trace(x)
+			x += b
+		}
+		trace(x)
 	}
-	*/
 
-//	fun multiply(a: Int, b: Int): Int { // TODO Handle negative.
-//		var x = 0
-//		for (i in (0 until a)) {
-////			x += 1 // TODO Fjern.
-//			x += b
-//		}
-//		return x
-//	}
-//
-////
-//	fun swapProblem(_x: Float, _y: Float, c: Int): Float {
-//		var x = _x
-//		var y = _y
-//		for (i in (0 .. c)) {
-//			println("LOOP!")
-//			val tmp = x
-//			x = y
-//			y = tmp
-//		}
-//		return x;
-//	}
-//
-//	fun lostCopyProblem(c: Int): Int {
-//		var x = 0
-//		for (i in (0 .. c))
-//			x = i
-//		return x
-//	}
-//
-//	fun preserveCopyInEmptyBlock(_a: Int, b: Int): Int { // We expect 3 blocks here.
-//		var a = _a
-//		if (b == 4)
-//			a = 123
-//		return a
-//	}
+	@PermutationTest
+	fun testSwapProblem(
+		@Ints(77) _x: Int,
+		@Ints(88) _y: Int,
+		@Ints(0, 1, 2, 3) c: Int) {
+		var x = _x
+		var y = _y
+		for (i in (0 .. c)) {
+			trace("loop $i")
+			val tmp = x
+			x = y
+			y = tmp
+		}
+		trace(x)
+	}
+
+	@PermutationTest
+	fun testLostCopyProblem(@Ints(0, 1, 2, 3) c: Int) {
+		var x = 0
+		for (i in (0 .. c))
+			x = i
+		trace(x)
+	}
 }

@@ -222,6 +222,7 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 			fail("Block ${it.block} has phi dependencies even though its terminal is IrReturn")
 	}
 
+	/* TODO Old and irrelevant?
 	visit<IrPhi> {
 		for (def in it.defs) {
 
@@ -239,6 +240,7 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 			}
 		}
 	}
+	*/
 
 	/**
 	 * - Check that all predecessors are used in this phi.
@@ -266,28 +268,43 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 		}
 	}
 
-	// TODO for phis make sure that each def's assignedIn block is dominated by it's actual def-block.
 
-	/**
-	 * Check that definitions dominate uses.
-	 */
-	visit<Use> {
-		for (def in it.defs) {
-			if (def.container != it.container) {
-				if (it !is IrPhi) {
-					if (!d.dom(def.container, it.container, strict = true))
-						fail("$def does not dominate $it")
-				}
+	// TODO phis should be able to depend on themselves (provided that there are two other assignments -- one other makes no sense)
+
+	// TODO phis should be able to depend on others phis in same block (assigned in different)
+
+	fun checkDefDomUsePhis(phi: IrPhi) {
+		for ((assignedIn, def) in phi.defs.entries) {
+			if (!d.dom(def.container, assignedIn, strict = false))
+				fail("$def does not dominate phi (${phi.name}) assignedIn ${def.container}")
+		}
+	}
+
+	fun checkDefDomUseNormal(use: Use) {
+		for (def in use.defs) {
+			if (def.container != use.container) {
+				if (!d.dom(def.container, use.container, strict = true))
+					fail("$def does not dominate $use")
 			} else {
 				val defIndex = when (def) {
 					is Ir -> def.index
 					is HandlerBlock, is Parameter, is Constant<*> -> -1
 					else -> throw Error("Unhandled Def type $def")
 				}
-				val useIr = it as Ir // All Uses are Irs.
+				val useIr = use as Ir // All Uses are Irs.
 				if (defIndex >= useIr.index)
-					fail("$def does not dominate $it")
+					fail("$def does not dominate $use")
 			}
 		}
+	}
+
+	/**
+	 * Check that definitions dominate uses.
+	 */
+	visit<Use> {
+		if (it is IrPhi)
+			checkDefDomUsePhis(it)
+		else
+			checkDefDomUseNormal(it)
 	}
 }

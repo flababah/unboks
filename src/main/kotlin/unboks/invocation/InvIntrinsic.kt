@@ -31,7 +31,7 @@ enum class InvIntrinsic(
 	LADD(LONG, LONG, LONG),
 //	int FADD = 98; // -
 //	int DADD = 99; // -
-//	int ISUB = 100; // -
+	ISUB(INT, INT, INT),
 //	int LSUB = 101; // -
 //	int FSUB = 102; // -
 //	int DSUB = 103; // -
