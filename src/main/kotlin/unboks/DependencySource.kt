@@ -12,9 +12,6 @@ abstract class DependencySource internal constructor() {
 	private val dependencyCleaners = mutableListOf<() -> Unit>()
 	private var _detached = false
 
-	// TODO Check that no detached DS is used in some DependencyType.
-	// - how does that work wtih collections.addAll ?
-	// - what about proxy DependencyProperty where?
 	/**
 	 * Once detached a [DependencySource] can never become attached again.
 	 */

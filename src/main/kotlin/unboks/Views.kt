@@ -70,6 +70,8 @@ class DependencyNullableSingleton<V : Any> internal constructor(
 	var value: V?
 		set(value) {
 			if (value != element) {
+				checkAttached(value)
+
 				element?.apply {
 					listener(MutationEvent.Remove(this))
 				}
@@ -84,11 +86,12 @@ class DependencyNullableSingleton<V : Any> internal constructor(
 	override val size get() = if (value != null) 1 else 0
 
 	init {
+		element?.apply {
+			checkAttached(this)
+			listener(MutationEvent.Add(this))
+		}
 		source.register {
 			value = null
-		}
-		value?.apply {
-			listener(MutationEvent.Add(this))
 		}
 	}
 
@@ -123,6 +126,7 @@ class DependencySingleton<V : Any> internal constructor(
 	var value: V
 		set(value) {
 			if (value != element) {
+				checkAttached(value)
 				if (element != SENTINEL)
 					listener(MutationEvent.Remove(element))
 				if (value != SENTINEL)
@@ -139,10 +143,11 @@ class DependencySingleton<V : Any> internal constructor(
 	override val size get() = 1
 
 	init {
+		checkAttached(element)
+		listener(MutationEvent.Add(element))
 		source.register {
 			value = SENTINEL as V
 		}
-		listener(MutationEvent.Add(element))
 	}
 
 	override fun toImmutable(): V = value
@@ -178,9 +183,10 @@ sealed class DependencyArrayLike<V> (
 	override val size get() = container.size
 
 	init {
-		source.register { clearContainer() }
+		init.forEach { checkAttached(it) }
 		container.addAll(init)
 		container.forEach { listener(MutationEvent.Add(it)) }
+		source.register { clearContainer() }
 	}
 
 	protected fun clearContainer() {
@@ -193,6 +199,7 @@ sealed class DependencyArrayLike<V> (
 	override fun toImmutable() = container.toList()
 
 	override fun replace(old: V, new: V): Int {
+		checkAttached(new)
 		var count = 0
 		container.replaceAll {
 			if (it == old) {
@@ -214,6 +221,7 @@ sealed class DependencyArrayLike<V> (
 	}
 
 	operator fun set(index: Int, new: V): Boolean {
+		checkAttached(new)
 		val old = this[index]
 		return if (old != new) {
 			listener(MutationEvent.Remove(old))
@@ -251,6 +259,7 @@ class DependencyList<V> internal constructor(
 ) : DependencyArrayLike<V>(source, listener = listener) {
 
 	fun add(item: V) {
+		checkAttached(item)
 		listener(MutationEvent.Add(item))
 		container += item
 	}
@@ -286,6 +295,7 @@ class DependencyMapValues<K, V> internal constructor(
 	override fun toImmutable() = container.toMap()
 
 	override fun replace(old: V, new: V): Int {
+		checkAttached(new)
 		var count = 0
 		container.replaceAll { key, value ->
 			if (value == old) {
@@ -303,6 +313,8 @@ class DependencyMapValues<K, V> internal constructor(
 	operator fun get(key: K): V? = container[key]
 
 	operator fun set(key: K, value: V) {
+		checkAttached(key)
+		checkAttached(value)
 		container.put(key, value)?.apply {
 			listener(MutationEvent.Remove(key to this))
 		}
@@ -310,6 +322,7 @@ class DependencyMapValues<K, V> internal constructor(
 	}
 
 	fun remove(value: V): Set<K> {
+		checkAttached(value)
 		val keys = mutableSetOf<K>()
 		container.entries.removeIf {
 			if (it.value == value) {
@@ -326,6 +339,17 @@ class DependencyMapValues<K, V> internal constructor(
 //	fun remove(key: K): V? = container.remove(key)?.apply {
 //		listener(MutationEvent.Remove(key to this))
 //	}
+}
+
+/**
+ * Called for items that might get inserted into one of the views. Throws if the
+ * item is a [DependencySource] that is detached. No need to check read operations
+ * and old-item arguments, since we assume they are already in the structure and
+ * thus cannot be detached -- otherwise we have an inconsistency.
+ */
+private fun checkAttached(item: Any?) {
+	if (item is DependencySource && item.detached)
+		throw IllegalArgumentException("Not allowed on detached dependence source")
 }
 
 internal sealed class MutationEvent<T>(val item: T) {
