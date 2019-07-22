@@ -2,14 +2,6 @@ package unboks.internal
 
 import unboks.*
 
-/**
- * Is implemented by any property or collection that can point to a dependency target.
- */
-internal interface DependencyType {
-
-	fun clear()
-}
-
 internal class TargetSpecification<A, B>(val accessor: (B) -> RefCounts<A>)
 
 
@@ -20,6 +12,8 @@ internal val handlerUses = TargetSpecification<Block, HandlerBlock> { it.predece
 internal val phiReferences = TargetSpecification<IrPhi, Block> { it.phiReferences }
 
 internal val defUses = TargetSpecification<Use, Def> { it.uses }
+
+internal val mutableWrites = TargetSpecification<IrMutableWrite, IrMutable> { it.writes }
 
 // TODO Kan vi lave klasser?
 

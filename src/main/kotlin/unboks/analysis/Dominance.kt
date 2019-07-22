@@ -46,6 +46,8 @@ class Dominance(graph: FlowGraph) {
 				for (successor in terminal.successors)
 					dfs(successor, exclude, visited)
 			}
+			for (entry in n.exceptions)
+				dfs(entry.handler, exclude, visited)
 		}
 		return visited
 	}

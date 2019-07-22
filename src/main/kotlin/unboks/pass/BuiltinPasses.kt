@@ -42,16 +42,26 @@ fun createPhiPruningPass() = Pass<Unit> {
 	// by non-phi uses).
 	visit<IrPhi> {
 		if (it.defs.isEmpty()) {
-			val chain = traverseGraph(it) { node, acc ->
+			val chain = traverseGraph(it as Def) { node, acc ->
 				for (use in node.uses) {
-					if (use !is IrPhi) {
+					if (use is IrPhi) {
+						acc(use)
+					} else if (use is IrMutable) {
+						acc(use)
+					} else if (use is IrMutableWrite) {
+						acc(use.target)
+					} else {
 						val msg = "Empty phi chain has real usage: $use uses $node (starts as $this)"
 						throw InconsistencyException(msg)
 					}
-					acc(use)
+
 				}
 			}
-			it.remove(chain)
+			for (def in chain) {
+				if (def is IrMutable)
+					def.writes.forEach { it.remove() }
+			}
+			it.remove(chain as Set<DependencySource>) // TODO Fix this shit.
 		}
 	}
 
@@ -307,4 +317,8 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 		else
 			checkDefDomUseNormal(it)
 	}
+
+	// TODO Check that mut dominates its writes
+	// TOOD Check that any def (from another block) used in an exception handler,
+	// must be at a safe point.
 }

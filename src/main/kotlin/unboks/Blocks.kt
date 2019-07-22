@@ -25,7 +25,16 @@ sealed class Block(val flow: FlowGraph) : DependencySource(), Nameable, PassType
 
 	inline fun <reified T : Ir> filter(): Sequence<T> = opcodes.asSequence().filterIsInstance<T>()
 
-	override fun toString(): String = name + if (root) " [ROOT]"  else ""
+	override fun toString(): String {
+		val sb = StringBuilder(name)
+		if (root)
+			sb.append(" [ROOT]")
+		for ((handler, type) in exceptions) {
+			val repr = type?.internal ?: "*"
+			sb.append(" [$repr -> ${handler.name}]")
+		}
+		return sb.toString()
+	}
 
 	internal fun detachIr(ir: Ir) = _opcodes.remove(ir)
 
@@ -118,7 +127,7 @@ class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Blo
 
 	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
 		predecessors.forEach { addObjection(Objection.HandlerIsUsed(this, it)) }
-//		phiReferences.forEach { addObjection(Objection.BlockHasPhiReference(this, it)) }
+		phiReferences.forEach { addObjection(Objection.BlockHasPhiReference(this, it)) }
 
 		for (use in uses) {
 			// At the moment all Uses are also Entities, but check anyway...

@@ -208,3 +208,47 @@ class IrThrow internal constructor(block: Block, exception: Def)
 
 	override fun toString() = "THROW ${exception.name}"
 }
+
+/**
+ * The use part of this is only for the initial value. Each write is used by
+ * each of its [IrMutableWrite]s.
+ */
+class IrMutable internal constructor(block: Block, initial: Def)
+		: Ir(block), Def, Use {
+
+	override val defs: DependencySingleton<Def> = dependencyProperty(defUses, initial)
+
+	override var name by flow.registerAutoName(this, "mut")
+
+	override val uses: RefCounts<Use> = RefCountsImpl()
+
+	val writes: RefCounts<IrMutableWrite> = RefCountsImpl()
+
+	var initial: Def by defs
+
+	override val type get() = initial.type
+
+	override fun toString() = "MUT initial ${initial.name}" // TODO add writes.
+
+	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
+		super.checkRemove(batch, addObjection)
+
+		for (write in writes) {
+			if (write !in batch)
+				addObjection(Objection.MutableHasWrite(this, write))
+		}
+	}
+}
+
+/**
+ * Must all come after the [IrMutable] in the block.
+ */
+class IrMutableWrite internal constructor(block: Block, target: IrMutable, value: Def)
+	: Ir(block), Use {
+
+	override val defs: DependencySingleton<Def> = dependencyProperty(defUses, value)
+
+	var value: Def by defs
+
+	var target: IrMutable by dependencyProperty(mutableWrites, target)
+}

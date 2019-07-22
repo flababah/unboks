@@ -8,7 +8,19 @@ import unboks.*
 import unboks.invocation.*
 import unboks.pass.createPhiPruningPass
 
-// TODO Add exceptions to block...
+private class SlotIndexMap(parameters: Iterable<Def>) {
+	private val map: Map<Int, Int> = mutableMapOf<Int, Int>().apply {
+		var slot = 0
+		for ((index, parameter) in parameters.withIndex()) {
+			this[slot] = index
+			slot += parameter.type.width
+		}
+	}
+
+	fun tryResolve(slot: Int) = map[slot]
+
+	fun resolve(slot: Int) = tryResolve(slot) ?: throw InternalUnboksError("Bad slot index: $slot")
+}
 
 /**
  * Builds a [FlowGraph] using the ASM library.
@@ -27,9 +39,10 @@ import unboks.pass.createPhiPruningPass
 internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisitor? = null)
 		: MethodVisitor(ASM6, debug) {
 
+	private val slotIndex = SlotIndexMap(graph.parameters)
 	private lateinit var state: State
 
-	private fun defer(terminalOp: Boolean = false, deferred: DeferredOp) = withState {
+	private fun defer(terminalOp: Boolean = false, storeIndex: Int? = null, deferred: DeferredOp) = withState {
 		val debugMv = mv
 		if (debugMv != null)
 			deferred(debugMv)
@@ -38,10 +51,10 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 			is Expecting.FrameInfo -> throw ParseException("Expected frame info after handler label, not op")
 			is Expecting.Any -> {
 				if (blocks.isEmpty())
-					blocks += AsmBlock.Basic(setOf()) // Root block without a label prior.
+					blocks += AsmBlock.Basic(setOf(), exceptions.currentActives()) // Root block without a label prior.
 			}
 			is Expecting.NewBlock -> {
-				blocks += AsmBlock.Basic(it.labels)
+				blocks += AsmBlock.Basic(it.labels, exceptions.currentActives())
 			}
 		}
 		val last = blocks.last()
@@ -54,13 +67,15 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 
 		last.hasTerminal = terminalOp
 		last.operations += deferred
+		if (storeIndex != null)
+			last.storeIndices += storeIndex
 	}
 
 	private fun setState(expecting: Expecting) {
 		state.expecting = expecting
 	}
 
-	private fun markUsedLabel(vararg labels: Label) = labels.forEach { state.usedLabels += it }
+	private fun markTargetLabel(vararg labels: Label) = labels.forEach { state.targetLabels += it }
 
 	private inline fun <R> withState(block: State.(Expecting) -> R): R = block(state, state.expecting)
 
@@ -90,19 +105,18 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 		super.visitTryCatchBlock(start, end, handler, type)
 
 		state.exceptions.addEntry(start, end, handler, type?.let(::Reference))
-		markUsedLabel(start, end, handler)
+		markTargetLabel(handler)
 	}
 
 	override fun visitLocalVariable(name: String, desc: String?, sig: String?, start: Label?, end: Label?, index: Int) {
 		super.visitLocalVariable(name, desc, sig, start, end, index)
 
-		var i = 0
-		for (parameter in graph.parameters) {
-			if (i == index) {
-				parameter.name = name
-				return
-			}
-			i += parameter.type.width
+		// We don't care about exception name for now, but should ideally check this better...
+		// We could name the HandlerBlock in case of exception name?
+		val parameterIndex = slotIndex.tryResolve(index)
+		if (parameterIndex != null) {
+			val parameter = graph.parameters[parameterIndex]
+			parameter.name = name
 		}
 	}
 
@@ -120,7 +134,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 				else -> TODO("Some other frame info type, yo")
 			}
 			val exceptionType = Reference(stack!![0] as String) // Mmm, unsafe Java.
-			blocks += AsmBlock.Handler(it.labels, exceptionType)
+			blocks += AsmBlock.Handler(it.labels, exceptions.currentActives(), exceptionType)
 			setState(Expecting.Any)
 		}
 	}
@@ -129,19 +143,20 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 		fun AsmBlock.merge(with: AsmBlock.Basic): AsmBlock {
 			val unionLabels = labels + with.labels
 			val merged = when (this) {
-				is AsmBlock.Basic   -> AsmBlock.Basic(unionLabels)
-				is AsmBlock.Handler -> AsmBlock.Handler(unionLabels, type)
+				is AsmBlock.Basic   -> AsmBlock.Basic(unionLabels, exceptions)
+				is AsmBlock.Handler -> AsmBlock.Handler(unionLabels, exceptions, type)
 			}
-			merged.operations += operations
-			merged.operations += with.operations
+			merged.operations += operations + with.operations
+			merged.storeIndices += storeIndices + with.storeIndices
 			merged.hasTerminal = with.hasTerminal
 			return merged
 		}
 
 		return mergePairs(state.blocks) { previous, current ->
-			val currentUsed = current.labels.any { it in state.usedLabels }
+			val currentUsed = current.labels.any { it in state.targetLabels }
+			val sameExceptions = previous.exceptions == current.exceptions
 
-			if (!previous.hasTerminal && !currentUsed)
+			if (!previous.hasTerminal && !currentUsed && sameExceptions)
 				// It's OK to cast block to Basic because Handler blocks are created
 				// based on entries in the exception table, ie they are never unused.
 				previous.merge(current as AsmBlock.Basic)
@@ -164,11 +179,12 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 			val fromBlock = mutableMapOf<Block, AsmBackingBlock>()
 			var root: AsmBackingBlock? = null
 			var previous: AsmBackingBlock? = null
+			val exceptions = mutableListOf<Pair<Block, List<AsmExceptionEntry>>>()
 
 			for (block in firstPassBlocks) {
 				val backing = when (block) {
-					is AsmBlock.Basic -> AsmBackingBlock.Basic(graph.newBasicBlock(), block.operations)
-					is AsmBlock.Handler -> AsmBackingBlock.Handler(graph.newHandlerBlock(block.type), block.operations)
+					is AsmBlock.Basic -> AsmBackingBlock.Basic(graph.newBasicBlock(), block)
+					is AsmBlock.Handler -> AsmBackingBlock.Handler(graph.newHandlerBlock(block.type), block)
 				}
 				if (root == null)
 					root = backing
@@ -179,7 +195,23 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 
 				block.labels.forEach { fromLabel += it to backing }
 				fromBlock += backing.backing to backing
+
+				if (block.exceptions.isNotEmpty())
+					exceptions += backing.backing to block.exceptions
 			}
+
+			// Add exception table to the blocks (after we know all handler blocks have
+			// been instantiated.
+			for ((block, handlers) in exceptions) {
+				for ((handlerLabel, type) in handlers) {
+					val handler = fromLabel[handlerLabel]
+							as? AsmBackingBlock.Handler
+							?: throw InternalUnboksError("Excepted handler block")
+
+					block.exceptions.add(ExceptionEntry(handler.backing, type))
+				}
+			}
+
 			this.fromLabel = fromLabel
 			this.fromBlock = fromBlock
 			this.root = when (root) {
@@ -204,6 +236,8 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 		val visitedBlocks = mutableSetOf<AsmBackingBlock>()
 		val maxLocals = state.maxLocals ?: throw ParseException("visitMaxs not invoked")
 
+		// Since we always create a psuedo root bootstrapping block (without any exception handling)
+		// we also know that we don't need local mutations.
 		val startLocals = LocalsMap(graph.parameters, maxLocals)
 		val startStack = StackMap(emptyList())
 
@@ -240,11 +274,16 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 					is HandlerBlock -> { listOf(backing) }
 				}
 
-				val localsState = LocalsMap(initialLocals, initialLocals.size)
+				// We should create mutable representations for each local.
+				val mutables = if (backing.exceptions.isEmpty())
+					null
+				else
+					MutableLocals(initialLocals, block)
+
+				val localsState = LocalsMap(initialLocals, initialLocals.size, mutables)
 				val stackState = StackMap(initialStack)
 
 				// Replay deferred operations on the block visitor.
-
 				val mv = FlowGraphBlockVisitor(graph, appender, block.successor, localsState, stackState) {
 					val resolved = info.fromLabel[it] ?: throw ParseException("Unknown label: $it")
 					resolved.backing as BasicBlock // TODO Better check if not ok...
@@ -295,17 +334,17 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 
 	override fun visitJumpInsn(opcode: Int, label: Label) {
 		defer(terminalOp = true) { visitJumpInsn(opcode, label) }
-		markUsedLabel(label)
+		markTargetLabel(label)
 	}
 
 	override fun visitTableSwitchInsn(min: Int, max: Int, dflt: Label, vararg labels: Label) {
 		defer(terminalOp = true) { visitTableSwitchInsn(min, max, dflt, *labels) }
-		markUsedLabel(dflt, *labels)
+		markTargetLabel(dflt, *labels)
 	}
 
 	override fun visitLookupSwitchInsn(dflt: Label, keys: IntArray, labels: Array<out Label>) {
 		defer(terminalOp = true) { visitLookupSwitchInsn(dflt, keys, labels) }
-		markUsedLabel(dflt, *labels)
+		markTargetLabel(dflt, *labels)
 	}
 
 	//
@@ -316,7 +355,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 			defer { visitIntInsn(opcode, operand) }
 
 	override fun visitVarInsn(opcode: Int, index: Int) =
-			defer { visitVarInsn(opcode, index) }
+			defer(storeIndex = getStoreIndex(opcode, index)) { visitVarInsn(opcode, index) }
 
 	override fun visitTypeInsn(opcode: Int, type: String?) =
 			defer { visitTypeInsn(opcode, type) }
@@ -334,10 +373,15 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 			defer { visitLdcInsn(value) }
 
 	override fun visitIincInsn(varId: Int, increment: Int) =
-			defer { visitIincInsn(varId, increment) }
+			defer(storeIndex = varId) { visitIincInsn(varId, increment) }
 
 	override fun visitMultiANewArrayInsn(descriptor: String?, numDimensions: Int) =
 			defer { visitMultiANewArrayInsn(descriptor, numDimensions) }
+}
+
+private fun getStoreIndex(opcode: Int, index: Int) = when (opcode) {
+	ISTORE, LSTORE, FSTORE, DSTORE, ASTORE -> index
+	else -> null
 }
 
 private class FlowGraphBlockVisitor(
@@ -358,6 +402,8 @@ private class FlowGraphBlockVisitor(
 
 	override fun visitInsn(opcode: Int) {
 		when (opcode) {
+			NOP -> { }
+
 			ATHROW -> appender.newThrow(stack.pop<SomeReference>())
 
 			ICONST_M1,
@@ -532,9 +578,9 @@ private class State {
 
 	/**
 	 * Labels that are jumped to (either normal jump instructions or exception handlers)
-	 * and exception try/catch bounds.
+	 * but NOT used as markers for exception bounds.
 	 */
-	val usedLabels = mutableSetOf<Label>()
+	val targetLabels = mutableSetOf<Label>()
 
 	val exceptions = ExceptionBoundsMap()
 	val blocks = mutableListOf<AsmBlock>()
@@ -543,28 +589,33 @@ private class State {
 	var maxLocals: Int? = null // No lateinit for primitives.
 }
 
+private data class AsmExceptionEntry(val handler: Label, val type: Reference?)
+
 /**
  * Used in first stage where blocks are incrementally filled with operations.
  */
-private sealed class AsmBlock(val labels: Set<Label>) {
+private sealed class AsmBlock(val labels: Set<Label>, val exceptions: List<AsmExceptionEntry>) {
 	val operations = mutableListOf<DeferredOp>()
+	val storeIndices = mutableSetOf<Int>()
 	var hasTerminal = false
 
-	class Basic(labels: Set<Label>) : AsmBlock(labels)
+	class Basic(labels: Set<Label>, exceptions: List<AsmExceptionEntry>) : AsmBlock(labels, exceptions)
 
-	class Handler(labels: Set<Label>, val type: Reference?) : AsmBlock(labels)
+	class Handler(labels: Set<Label>, exceptions: List<AsmExceptionEntry>, val type: Reference?) : AsmBlock(labels, exceptions)
 }
 
 /**
  * Used after the first stage when the final reduced set of blocks is known.
  */
-private sealed class AsmBackingBlock(val operations: List<DeferredOp>) {
+private sealed class AsmBackingBlock(block: AsmBlock) {
+	val operations: List<DeferredOp> = block.operations
+	val storeIndices: Set<Int> = block.storeIndices
 	var successor: AsmBackingBlock? = null
 	abstract val backing: Block
 
-	class Basic(override val backing: BasicBlock, ops: List<DeferredOp>) : AsmBackingBlock(ops)
+	class Basic(override val backing: BasicBlock, block: AsmBlock) : AsmBackingBlock(block)
 
-	class Handler(override val backing: HandlerBlock, ops: List<DeferredOp>) : AsmBackingBlock(ops)
+	class Handler(override val backing: HandlerBlock, block: AsmBlock) : AsmBackingBlock(block)
 }
 
 private sealed class Expecting {
@@ -598,6 +649,13 @@ private class ExceptionBoundsMap {
 			it.active = true
 		if (it.end == label)
 			it.active = false
+	}
+
+	fun currentActives(): List<AsmExceptionEntry> {
+		return entries.asSequence()
+				.filter { it.active }
+				.map { AsmExceptionEntry(it.handler, it.type) }
+				.toList()
 	}
 }
 
@@ -635,10 +693,30 @@ private class StackMap(initials: Iterable<Def>) : Iterable<Def> {
 		if(stack.size != phis.size)
 			throw ParseException("Merge mismatch: ${stack.size} != ${phis.size}")
 
-		phis.zip(stack) { phi, def -> addPhiInput(phi, def, definedIn) }
+		zipIterators(phis.iterator(), stack.iterator()) { phi, def -> addPhiInput(phi, def, definedIn) }
 	}
 
 	override fun iterator() = stack.iterator()
+}
+
+// If there, asserts that mutations are allowed (for some index).
+private class MutableLocals(initials: List<Def>, block: AsmBackingBlock) {
+	private val appender = block.backing.append()
+	private val map: Map<Int, IrMutable> = mutableMapOf<Int, IrMutable>().apply {
+		val slotIndex = SlotIndexMap(initials)
+
+		for (storeIndex in block.storeIndices) {
+			val initialIndex = slotIndex.resolve(storeIndex)
+			this[initialIndex] = appender.newMutable(initials[initialIndex])
+		}
+	}
+
+	fun write(index: Int, def: Def) {
+		val mut = map[index] ?: throw InternalUnboksError("Unexpected mutation at index $index")
+		appender.newMutableWrite(mut, def)
+	}
+
+	operator fun get(index: Int): IrMutable? = map[index]
 }
 
 /**
@@ -646,16 +724,19 @@ private class StackMap(initials: Iterable<Def>) : Iterable<Def> {
  * every distinct value to go into a variable is remembered and merged in
  * [mergeInto].
  */
-private class LocalsMap(initials: Iterable<Def>, maxLocals: Int) : Iterable<Def> {
+private class LocalsMap(
+		initials: Iterable<Def>,
+		maxLocals: Int,
+		private val mutables: MutableLocals? = null
+) : Iterable<Def> {
 	private val current: Array<Def> = Array(maxLocals) { UNINIT }
-	private val history: Array<MutableSet<Def>> = Array(maxLocals) { mutableSetOf<Def>() }
 
 	init {
 		var index = 0;
 		for (def in initials) {
-			this[index] = def;
+			current[index] = def
 			if (def.type.width == 2)
-				this[index + 1] = WIDE // XXX Check bounds?
+				current[index + 1] = WIDE // XXX Check bounds?
 
 			index += def.type.width
 		}
@@ -679,26 +760,30 @@ private class LocalsMap(initials: Iterable<Def>, maxLocals: Int) : Iterable<Def>
 			// TODO Check that this fits with type width in history?
 		}
 		current[index] = def
-		history[index].add(def)
+		mutables?.write(index, def)
+	}
+
+	private fun iterateWithMutables(): Iterator<Def> {
+		val muts = mutables ?: throw InternalUnboksError("No mutable info for watched block")
+
+		return withIndex()
+				.asSequence()
+				.map { elm -> muts[elm.index] ?: elm.value }
+				.iterator()
 	}
 
 	/**
 	 * [definedIn] must be the block the initial [IrPhi]s are defined in.
 	 */
-	fun mergeInto(phis: List<IrPhi>, definedIn: Block, withHistory: Boolean) {
-		if(current.size != phis.size)
+	fun mergeInto(phis: List<IrPhi>, definedIn: Block, handlerTarget: Boolean) {
+		if (current.size != phis.size)
 			throw ParseException("Merge mismatch: ${current.size} != ${phis.size}")
 
-		if (withHistory) {
-			phis.zip(history) { phi, hist ->
-				for (def in hist)
-					addPhiInput(phi, def, definedIn)
-			}
-		} else {
-			phis.zip(current) { phi, def ->
-				if (def !is Invalid)
-					addPhiInput(phi, def, definedIn)
-			}
+		val iter = if (handlerTarget) iterateWithMutables() else iterator()
+
+		zipIterators(phis.iterator(), iter) { phi, def ->
+			if (def !is Invalid)
+				addPhiInput(phi, def, definedIn)
 		}
 	}
 

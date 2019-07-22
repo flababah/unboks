@@ -5,7 +5,9 @@ package unboks
  */
 class ParseException(msg: String) : RuntimeException(msg)
 
-class RemoveException(val objections: Set<Objection>) : RuntimeException("Cannot remove due to objections")
+class InternalUnboksError(msg: String) : RuntimeException(msg)
+
+class RemoveException(val objections: Set<Objection>) : RuntimeException("Cannot remove due to objections: $objections")
 
 class IllegalTerminalStateException(msg: String) : RuntimeException(msg)
 
@@ -25,6 +27,8 @@ sealed class Objection(val reason: String) {
 	class HandlerIsUsed(val block: HandlerBlock, val input: Block) : Objection("${block.name} handles exceptions in ${input.name}")
 
 	class BlockIsRoot(val block: BasicBlock) : Objection("${block.name} is root")
+
+	class MutableHasWrite(val mutable: IrMutable, val write: IrMutableWrite) : Objection("${mutable.name} has write ${write.value}")
 
 
 	// Making the specific objections data classes overrides the toString method.

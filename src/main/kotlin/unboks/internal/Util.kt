@@ -74,3 +74,14 @@ internal inline fun <reified T> permutations(universe: List<List<T>>): Sequence<
 	val asList = output.asList() // Flyweight view of array.
 	return seq.map { asList }
 }
+
+internal inline fun <A, B> zipIterators(a: Iterator<A>, b: Iterator<B>, f: (A, B) -> Unit) {
+	while (true) {
+		val cont = a.hasNext()
+		if (cont != b.hasNext())
+			throw IllegalArgumentException("Argument lengths mismatch")
+		if (!cont)
+			break
+		f(a.next(), b.next())
+	}
+}

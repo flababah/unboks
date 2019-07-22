@@ -55,6 +55,14 @@ private fun createWastefulSimpleRegisterMapping(max: LocalMax) = Pass<Int> {
 	visit<IrPhi> {
 		allocSlot(it.type)
 	}
+
+	visit<IrMutable> {
+		allocSlot(it.type)
+	}
+
+	visit<HandlerBlock> {
+		allocSlot(it.type)
+	}
 }
 
 /**
@@ -125,16 +133,20 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 
 	visitor.visitCode()
 
+	// Should ideally coalesce identical adjacent entries
+	for (block in blocks) {
+		for ((handler, type) in block.exceptions) {
+			val name = type?.internal
+			visitor.visitTryCatchBlock(block.startLabel(), block.endLabel(), handler.startLabel(), name)
+		}
+	}
+
 	for (block in blocks) {
 		visitor.visitLabel(block.startLabel())
-
-		if (block.exceptions.size > 0)
-			TODO("exceptions")
 
 		block.execute(Pass<Unit> {
 
 			visit<HandlerBlock> {
-				TODO("exceptions")
 				store(it)
 			}
 
@@ -222,6 +234,16 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 				it.spec.visit(visitor)
 				if (it.spec.returnType != VOID)
 					store(it)
+			}
+
+			visit<IrMutable> {
+				load(it.initial)
+				store(it)
+			}
+
+			visit<IrMutableWrite> {
+				load(it.value)
+				store(it.target)
 			}
 		})
 	}
