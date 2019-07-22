@@ -42,63 +42,61 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 	private val slotIndex = SlotIndexMap(graph.parameters)
 	private lateinit var state: State
 
-	private fun defer(terminalOp: Boolean = false, storeIndex: Int? = null, deferred: DeferredOp) = withState {
+	private fun defer(terminalOp: Boolean = false, storeIndex: Int? = null, deferred: DeferredOp) {
 		val debugMv = mv
 		if (debugMv != null)
 			deferred(debugMv)
 
-		when (it) {
-			is Expecting.FrameInfo -> throw ParseException("Expected frame info after handler label, not op")
-			is Expecting.Any -> {
-				if (blocks.isEmpty())
-					blocks += AsmBlock.Basic(setOf(), exceptions.currentActives()) // Root block without a label prior.
+		state.mutate {
+			when (it) {
+				is Expecting.FrameInfo -> throw ParseException("Expected frame info after handler label, not op")
+				is Expecting.Any -> {
+					if (blocks.isEmpty())
+						blocks += AsmBlock.Basic(setOf(), exceptions.currentActives()) // Root block without a label prior.
+				}
+				is Expecting.NewBlock -> {
+					blocks += AsmBlock.Basic(it.labels, exceptions.currentActives())
+				}
 			}
-			is Expecting.NewBlock -> {
-				blocks += AsmBlock.Basic(it.labels, exceptions.currentActives())
+			val last = blocks.last()
+			last.hasTerminal = terminalOp
+			last.operations += deferred
+			if (storeIndex != null)
+				last.storeIndices += storeIndex
+
+			when {
+				// No labels associated here, since this split was caused by encountering
+				// a terminal op, not by a visiting a label.
+				terminalOp -> Expecting.NewBlock(setOf())
+				it != Expecting.Any -> Expecting.Any
+				else -> it
 			}
 		}
-		val last = blocks.last()
-		if (terminalOp)
-			// No labels associated here, since this split was caused by encountering
-			// a terminal op, not by a visiting a label.
-			setState(Expecting.NewBlock(setOf()))
-		else if (it != Expecting.Any)
-			setState(Expecting.Any)
-
-		last.hasTerminal = terminalOp
-		last.operations += deferred
-		if (storeIndex != null)
-			last.storeIndices += storeIndex
-	}
-
-	private fun setState(expecting: Expecting) {
-		state.expecting = expecting
 	}
 
 	private fun markTargetLabel(vararg labels: Label) = labels.forEach { state.targetLabels += it }
-
-	private inline fun <R> withState(block: State.(Expecting) -> R): R = block(state, state.expecting)
 
 	override fun visitCode() {
 		super.visitCode()
 		state = State()
 	}
 
-	override fun visitLabel(label: Label) = withState {
+	override fun visitLabel(label: Label) {
 		super.visitLabel(label)
-
-		// In case multiple labels without anything of interest (line number markers) appeared
-		// before we need to make sure all those labels are registered for the resulting block.
-		val accumulatedLabels = when (it) {
-			is Expecting.FrameInfo -> throw ParseException("Expected frame info after handler label, not another label")
-			is Expecting.NewBlock -> it.labels + label
-			is Expecting.Any -> setOf(label)
+		state.mutate {
+			// In case multiple labels without anything of interest (line number markers) appeared
+			// before we need to make sure all those labels are registered for the resulting block.
+			val accumulatedLabels = when (it) {
+				is Expecting.FrameInfo -> throw ParseException("Expected frame info after handler label, not another label")
+				is Expecting.NewBlock -> it.labels + label
+				is Expecting.Any -> setOf(label)
+			}
+			exceptions.visitLabel(label)
+			if (exceptions.isHandlerLabel(label))
+				Expecting.FrameInfo(accumulatedLabels)
+			else
+				Expecting.NewBlock(accumulatedLabels)
 		}
-		exceptions.visitLabel(label)
-		setState(when (exceptions.isHandlerLabel(label)) {
-			true  -> Expecting.FrameInfo(accumulatedLabels)
-			false -> Expecting.NewBlock(accumulatedLabels)
-		})
 	}
 
 	override fun visitTryCatchBlock(start: Label, end: Label, handler: Label, type: String?) {
@@ -125,17 +123,20 @@ internal class FlowGraphVisitor(private val graph: FlowGraph, debug: MethodVisit
 		state.maxLocals = maxLocals
 	}
 
-	override fun visitFrame(type: Int, nLocal: Int, local: Array<out Any>?, nStack: Int, stack: Array<out Any>?) = withState {
+	override fun visitFrame(type: Int, nLocal: Int, local: Array<out Any>?, nStack: Int, stack: Array<out Any>?) {
 		super.visitFrame(type, nLocal, local, nStack, stack)
-
-		if (it is Expecting.FrameInfo) {
-			when (type) {
-				F_FULL, F_SAME1 -> assert(nStack == 1) { "Stack size at handler is not 1" }
-				else -> TODO("Some other frame info type, yo")
+		state.mutate {
+			if (it is Expecting.FrameInfo) {
+				when (type) {
+					F_FULL, F_SAME1 -> assert(nStack == 1) { "Stack size at handler is not 1" }
+					else -> TODO("Some other frame info type, yo")
+				}
+				val exceptionType = Reference(stack!![0] as String) // Mmm, unsafe Java.
+				blocks += AsmBlock.Handler(it.labels, exceptions.currentActives(), exceptionType)
+				Expecting.Any
+			} else {
+				it
 			}
-			val exceptionType = Reference(stack!![0] as String) // Mmm, unsafe Java.
-			blocks += AsmBlock.Handler(it.labels, exceptions.currentActives(), exceptionType)
-			setState(Expecting.Any)
 		}
 	}
 
@@ -585,8 +586,15 @@ private class State {
 	val exceptions = ExceptionBoundsMap()
 	val blocks = mutableListOf<AsmBlock>()
 
-	var expecting: Expecting = Expecting.NewBlock()
+	private var expecting: Expecting = Expecting.NewBlock()
 	var maxLocals: Int? = null // No lateinit for primitives.
+
+	fun mutate(f: State.(Expecting) -> Expecting) {
+		val current = expecting
+		val new = f(current)
+		if (new != current)
+			expecting = new
+	}
 }
 
 private data class AsmExceptionEntry(val handler: Label, val type: Reference?)
