@@ -48,7 +48,7 @@ private infix fun <T> RefCounts<T>.dec(ref: T) = (this as RefCountsImpl<T>).dec(
 // |  Arrays
 // +---------------------------------------------------------------------------
 
-internal fun <R : DependencySource, B> R.dependencyArray(
+internal fun <R : BaseDependencySource, B> R.dependencyArray(
 		spec: TargetSpecification<in R, B>,
 		vararg init: B
 ): DependencyArray<B> = DependencyArray(this, *init) {
@@ -74,7 +74,7 @@ internal fun <R : DependencySource, B> R.dependencyArray(
  * }
  * ```
  */
-internal fun <R : DependencySource, B, X> R.dependencyList(
+internal fun <R : BaseDependencySource, B, X> R.dependencyList(
 		spec: TargetSpecification<in R, B>,
 		extractor: (X) -> B
 ): DependencyList<X> = DependencyList(this) {
@@ -92,7 +92,7 @@ internal fun <R : DependencySource, B, X> R.dependencyList(
 /**
  * A map where both keys and values have depedencies.
  */
-internal fun <R : DependencySource, K, V> R.dependencyMap(
+internal fun <R : BaseDependencySource, K, V> R.dependencyMap(
 		keySpec: TargetSpecification<in R, K>,
 		valueSpec: TargetSpecification<in R, V>
 ): DependencyMapValues<K, V> = DependencyMapValues(this) {
@@ -112,7 +112,7 @@ internal fun <R : DependencySource, K, V> R.dependencyMap(
 /**
  * A map where only the values and have depedencies.
  */
-internal fun <R : DependencySource, A : Any, K, V> R.dependencyProxyMapValues(
+internal fun <R : BaseDependencySource, A : Any, K, V> R.dependencyProxyMapValues(
 		valueSpec: TargetSpecification<in A, V>,
 		source: A
 ): DependencyMapValues<K, V> = DependencyMapValues(this) {
@@ -126,7 +126,7 @@ internal fun <R : DependencySource, A : Any, K, V> R.dependencyProxyMapValues(
 // |  Properties
 // +---------------------------------------------------------------------------
 
-internal fun <R : DependencySource, B : Any> R.dependencyNullableProperty(
+internal fun <R : BaseDependencySource, B : Any> R.dependencyNullableProperty(
 		spec: TargetSpecification<in R, B>,
 		initial: B? = null
 ): DependencyNullableSingleton<B> = DependencyNullableSingleton(this, initial) {
@@ -136,7 +136,7 @@ internal fun <R : DependencySource, B : Any> R.dependencyNullableProperty(
 	}
 }
 
-internal fun <R : DependencySource, B : Any> R.dependencyProperty(
+internal fun <R : BaseDependencySource, B : Any> R.dependencyProperty(
 		spec: TargetSpecification<in R, B>,
 		initial: B
 ): DependencySingleton<B> = DependencySingleton(this, initial) {
@@ -146,7 +146,7 @@ internal fun <R : DependencySource, B : Any> R.dependencyProperty(
 	}
 }
 
-internal fun <R : DependencySource, A : Any, B : Any> R.dependencyProxyProperty(
+internal fun <R : BaseDependencySource, A : Any, B : Any> R.dependencyProxyProperty(
 		spec: TargetSpecification<in A, B>,
 		source: A,
 		initial: B
@@ -158,9 +158,18 @@ internal fun <R : DependencySource, A : Any, B : Any> R.dependencyProxyProperty(
 }
 
 
+// +---------------------------------------------------------------------------
+// |  Sets
+// +---------------------------------------------------------------------------
 
-
-
+internal fun <R : BaseDependencySource, B> R.dependencySet(
+		spec: TargetSpecification<in R, B>
+): DependencySet<B> = DependencySet(this) {
+	when (it) {
+		is MutationEvent.Add -> spec.accessor(it.item) inc this
+		is MutationEvent.Remove -> spec.accessor(it.item) dec this
+	}
+}
 
 
 

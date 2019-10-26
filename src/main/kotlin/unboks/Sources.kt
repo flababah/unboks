@@ -1,21 +1,23 @@
 package unboks
 
-/**
- * Base class for entities that can be removed from their parent.
- *
- * @See Ir
- * @see Block
- * // TODO class, field, method at some point... Think about invocation usages...
- */
-abstract class DependencySource internal constructor() {
+abstract class BaseDependencySource internal constructor() {
 	// TODO Make this list and check for duplicate insert if asserts are enabled.
 	private val dependencyCleaners = mutableListOf<() -> Unit>()
 	private var _detached = false
 
 	/**
-	 * Once detached a [DependencySource] can never become attached again.
+	 * Once detached a [BaseDependencySource] can never become attached again.
 	 */
 	val detached: Boolean get() = _detached
+
+	protected fun markDetached() {
+		_detached = true
+	}
+
+	protected fun cleanup() {
+		dependencyCleaners.forEach { it() }
+		dependencyCleaners.clear()
+	}
 
 	/**
 	 * Should only be called by dependency views, and creating new instances.
@@ -23,6 +25,16 @@ abstract class DependencySource internal constructor() {
 	internal fun register(cleaner: () -> Unit) {
 		dependencyCleaners += cleaner
 	}
+}
+
+/**
+ * Base class for entities that can be removed from their parent.
+ *
+ * @See Ir
+ * @see Block
+ * // TODO class, field, method at some point... Think about invocation usages...
+ */
+abstract class DependencySource : BaseDependencySource() {
 
 	protected abstract fun traverseChildren(): Sequence<DependencySource>
 
@@ -60,9 +72,9 @@ abstract class DependencySource internal constructor() {
 				return objections
 		}
 		for (source in hierarchy) {
-			source.dependencyCleaners.forEach { it() }
+			source.cleanup()
 			source.detachFromParent()
-			source._detached = true
+			source.markDetached()
 		}
 		return emptySet()
 	}

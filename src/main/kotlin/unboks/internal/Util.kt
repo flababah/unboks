@@ -8,7 +8,7 @@ package unboks.internal
  * is returned, it takes the place of both previous and current, (and becomes
  * the previous for the next invocation.)
  */
-internal fun <T> mergePairs(input: List<T>, f: (T, T) -> T?): List<T> = when (input.size) {
+internal fun <T> consolidateList(input: List<T>, f: (T, T) -> T?): List<T> = when (input.size) {
 	0, 1 -> input
 	else -> {
 		val result = mutableListOf<T>()

@@ -30,13 +30,14 @@ TODO Generalt
 --- det samme for om block af (func(...)) er reachable fra deinitionen d
  */
 
-private class LocalMax(var count: Int = 0)
+private class AllocInfo(var count: Int = 0, val allocs: MutableSet<Def> = mutableSetOf())
 
-private fun createWastefulSimpleRegisterMapping(max: LocalMax) = Pass<Int> {
+private fun createWastefulSimpleRegisterMapping(max: AllocInfo) = Pass<Int> {
 	max.count = graph.parameters.size
 
-	fun allocSlot(type: Thing) = max.count.also {
-		max.count += type.width
+	fun allocSlot(def: Def) = max.count.also {
+		max.count += def.type.width
+		max.allocs += def
 	}
 
 	// Parameters are always stored in the first local slots.
@@ -47,21 +48,21 @@ private fun createWastefulSimpleRegisterMapping(max: LocalMax) = Pass<Int> {
 	// Only alloc a register for non-void and if we actually need the result.
 	visit<IrInvoke> {
 		if (it.type != VOID && it.uses.isNotEmpty())
-			allocSlot(it.type)
+			allocSlot(it)
 		else
 			null
 	}
 
 	visit<IrPhi> {
-		allocSlot(it.type)
+		allocSlot(it)
 	}
 
 	visit<IrMutable> {
-		allocSlot(it.type)
+		allocSlot(it)
 	}
 
 	visit<HandlerBlock> {
-		allocSlot(it.type)
+		allocSlot(it)
 	}
 }
 
@@ -101,12 +102,11 @@ private fun store(x: Def, mapping: Pass<Int>, visitor: MethodVisitor) = when (x.
 	else             -> storeVarIfUsed(ISTORE, x, mapping, visitor)
 }
 
-// TODO Exceptions: store "e"
 internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: Thing) { // TODO Hvis void return? return at end
 	// XXX We need a more robust way of linearizing the graph.
 	val blocks = graph.blocks.sortedBy { it.name }
 	val labels = createLabelsForBlocks(blocks)
-	val max = LocalMax()
+	val max = AllocInfo()
 	val mapping = graph.execute(createWastefulSimpleRegisterMapping(max))
 
 	fun load(def: Def) = load(def, mapping, visitor)
@@ -141,6 +141,23 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 		}
 	}
 
+	// Force the stupid verifier to not stumble upon first initializations happening in the
+	// the beginning of watched blocks. We don't care about legacy async exceptions like
+	// ThreadDeath.
+	for (alloc in max.allocs) {
+		when (alloc.type) {
+			is SomeReference -> {
+				visitor.visitInsn(ACONST_NULL)
+				store(alloc)
+			}
+			is INT -> {
+				visitor.visitInsn(ICONST_0)
+				store(alloc)
+			}
+			else -> TODO("Some other shit: ${alloc.type}")
+		}
+	}
+
 	for (block in blocks) {
 		visitor.visitLabel(block.startLabel())
 
@@ -164,9 +181,9 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 					Cmp.IS_NULL -> IFNULL
 					Cmp.NOT_NULL -> IFNONNULL
 				}
-				visitor.visitJumpInsn(opcode, it.yes.startLabel()) // We assume "no" to be fallthrough.
+				visitor.visitJumpInsn(opcode, it.yes.startLabel()) // We assume "no" to be fallthrough, and if not...
 				if (block.endLabel() != it.no.startLabel())
-					throw IllegalStateException("bad fallthrough")
+					visitor.visitJumpInsn(GOTO, it.no.startLabel()) // ...Eww
 			}
 
 			visit<IrCmp2> {
@@ -184,9 +201,9 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 					Cmp.GE -> IF_ICMPGE
 					else -> throw Error("${it.cmp} not supported for Cmp2")
 				}
-				visitor.visitJumpInsn(opcode, it.yes.startLabel()) // We assume "no" to be fallthrough.
+				visitor.visitJumpInsn(opcode, it.yes.startLabel()) // We assume "no" to be fallthrough, and if not...
 				if (block.endLabel() != it.no.startLabel())
-					throw IllegalStateException("bad fallthrough")
+					visitor.visitJumpInsn(GOTO, it.no.startLabel()) // ...Eww
 			}
 
 			visit<IrGoto> {
@@ -236,7 +253,7 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 					store(it)
 			}
 
-			visit<IrMutable> {
+			visit<IrMutable> { // TODO Bør ske uden for watched block -- men hvad hvis initial IKKE kan komme ude fra -- f.eks. hvis initial er (Exception e)? i en watched handler? er det overhovedet lovligt?
 				load(it.initial)
 				store(it)
 			}
@@ -247,6 +264,7 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 			}
 		})
 	}
+	visitor.visitLabel(blocks.last().endLabel())
 
 	visitor.visitMaxs(15, max.count)
 	visitor.visitEnd()

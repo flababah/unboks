@@ -108,7 +108,7 @@ class IrGoto internal constructor(block: Block, target: BasicBlock)
 
 	var target: BasicBlock by dependencyProxyProperty(blockInputs, block, target)
 
-	override fun toString() = "GOTO $target"
+	override fun toString() = "GOTO ${target.name}"
 }
 
 class IrInvoke internal constructor(block: Block, val spec: Invocation, arguments: List<Def>)
@@ -228,7 +228,7 @@ class IrMutable internal constructor(block: Block, initial: Def)
 
 	override val type get() = initial.type
 
-	override fun toString() = "MUT initial ${initial.name}" // TODO add writes.
+	override fun toString() = "$name = MUT initial ${initial.name}" // TODO add writes.
 
 	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
 		super.checkRemove(batch, addObjection)

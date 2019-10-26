@@ -32,6 +32,12 @@
             <version>${asm.version}</version>
         </dependency>
 
+        <dependency> <!-- Remove at some point? -->
+            <groupId>org.ow2.asm</groupId>
+            <artifactId>asm-util</artifactId>
+            <version>${asm.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>

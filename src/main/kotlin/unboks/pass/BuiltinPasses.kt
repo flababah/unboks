@@ -223,8 +223,10 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 	}
 
 	visit<IrThrow> {
-		if (it.block.phiReferences.isNotEmpty())
-			fail("Block ${it.block} has phi dependencies even though its terminal is IrThrow")
+		//if (it.block.phiReferences.isNotEmpty())
+		//	fail("Block ${it.block} has phi dependencies even though its terminal is IrThrow")
+		// TODO This is OK, as long as the references are handler blocks and what is being referenced
+		// is mutables (normal defs are OK as well if they appear before any unsafe operation)
 	}
 
 	visit<IrReturn> {

@@ -3,7 +3,7 @@ package unboks
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
-// TODO tag DependencySource med og registrer selv.
+// TODO tag BaseDependencySource med og registrer selv.
 // TODO equals/hashcode ?
 
 /**
@@ -29,40 +29,50 @@ interface DependencyView<V, C> : Iterable<V> {
 	fun replace(old: V, new: V): Int
 }
 
-//class DependencySet<V> internal constructor(
-//		source: DependencySource,
-//		private val listener: (MutationEvent<V>) -> Unit
-//) : DependencyView<V, Set<V>> {
-//
-//	private val container = mutableSetOf<V>()
-//
-//	override val size get() = container.size
-//
-//	init {
-//		source.register {
-//			container.forEach { listener(MutationEvent.Remove(it)) }
-//			container.clear()
-//		}
-//	}
-//
-//	override fun iterator() = container.iterator()
-//
-//	override fun toImmutable() = container.toSet()
-//
-//	override fun replace(old: V, new: V): Int {
-//		if (container.remove(old)) {
-//			listener(MutationEvent.Remove(old))
-//			if (container.add(new)) {
-//				listener(MutationEvent.Add(new))
-//				return 1
-//			}
-//		}
-//		return 0
-//	}
-//}
+class DependencySet<V> internal constructor(
+		source: BaseDependencySource,
+		private val listener: (MutationEvent<V>) -> Unit
+) : DependencyView<V, Set<V>> {
+
+	private val container = mutableSetOf<V>()
+
+	override val size get() = container.size
+
+	init {
+		source.register {
+			container.forEach { listener(MutationEvent.Remove(it)) }
+			container.clear()
+		}
+	}
+
+	override fun iterator() = container.iterator()
+
+	override fun toImmutable() = container.toSet()
+
+	override fun replace(old: V, new: V): Int {
+		if (container.remove(old)) {
+			listener(MutationEvent.Remove(old))
+			if (container.add(new)) {
+				listener(MutationEvent.Add(new))
+				return 1
+			}
+		}
+		return 0
+	}
+
+	fun add(item: V): Boolean {
+		checkAttached(item)
+		return if (container.add(item)) {
+			listener(MutationEvent.Add(item))
+			true
+		} else {
+			false
+		}
+	}
+}
 
 class DependencyNullableSingleton<V : Any> internal constructor(
-		source: DependencySource,
+		source: BaseDependencySource,
 		private var element: V? = null,
 		private val listener: (MutationEvent<V>) -> Unit
 ) : DependencyView<V, V?>, ReadWriteProperty<Any, V?> {
@@ -118,7 +128,7 @@ class DependencyNullableSingleton<V : Any> internal constructor(
 }
 
 class DependencySingleton<V : Any> internal constructor(
-		source: DependencySource,
+		source: BaseDependencySource,
 		private var element: V,
 		private val listener: (MutationEvent<V>) -> Unit
 ) : DependencyView<V, V>, ReadWriteProperty<Any, V> {
@@ -173,7 +183,7 @@ class DependencySingleton<V : Any> internal constructor(
 }
 
 sealed class DependencyArrayLike<V> (
-		source: DependencySource,
+		source: BaseDependencySource,
 		vararg init: V,
 		internal val listener: (MutationEvent<V>) -> Unit
 ) : DependencyView<V, List<V>> {
@@ -234,7 +244,7 @@ sealed class DependencyArrayLike<V> (
 }
 
 class DependencyArray<V> internal constructor(
-		source: DependencySource,
+		source: BaseDependencySource,
 		vararg init: V,
 		listener: (MutationEvent<V>) -> Unit
 ) : DependencyArrayLike<V>(source, *init, listener = listener) { // TODO Mut should be Array<V>
@@ -254,7 +264,7 @@ class DependencyArray<V> internal constructor(
 }
 
 class DependencyList<V> internal constructor(
-		source: DependencySource,
+		source: BaseDependencySource,
 		listener: (MutationEvent<V>) -> Unit
 ) : DependencyArrayLike<V>(source, listener = listener) {
 
@@ -271,7 +281,7 @@ class DependencyList<V> internal constructor(
  * Note that the values are used in DependencyView.
  */
 class DependencyMapValues<K, V> internal constructor(
-		source: DependencySource,
+		source: BaseDependencySource,
 		private val listener: (MutationEvent<Pair<K, V>>) -> Unit
 ) : DependencyView<V, Map<K, V>> {
 
@@ -343,12 +353,12 @@ class DependencyMapValues<K, V> internal constructor(
 
 /**
  * Called for items that might get inserted into one of the views. Throws if the
- * item is a [DependencySource] that is detached. No need to check read operations
+ * item is a [BaseDependencySource] that is detached. No need to check read operations
  * and old-item arguments, since we assume they are already in the structure and
  * thus cannot be detached -- otherwise we have an inconsistency.
  */
 private fun checkAttached(item: Any?) {
-	if (item is DependencySource && item.detached)
+	if (item is BaseDependencySource && item.detached)
 		throw IllegalArgumentException("Not allowed on detached dependence source")
 }
 
