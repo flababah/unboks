@@ -267,7 +267,7 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 
 			when (prevType) {
 				null -> prevType = def.type
-				is Reference -> if (def.type !is Reference)
+				is SomeReference -> if (def.type !is SomeReference)
 					fail("Phi defs type mismatch: $prevType vs ${def.type}")
 				else -> if (def.type != prevType)
 					fail("Phi defs type mismatch: $prevType vs ${def.type}")

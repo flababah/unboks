@@ -7,11 +7,13 @@ import org.junit.jupiter.api.extension.ExtensionContext.Namespace.GLOBAL
 import org.junit.jupiter.api.extension.TestInstancePostProcessor
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.util.CheckClassAdapter
+import unboks.Reference
 import unboks.hierarchy.UnboksContext
+import java.io.File
 import java.io.IOException
 import java.io.PrintWriter
 import java.lang.reflect.Method
-import kotlin.reflect.KClass
+import java.time.LocalDateTime
 import kotlin.test.assertEquals
 
 /**
@@ -26,12 +28,43 @@ import kotlin.test.assertEquals
  */
 class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutionCallback, AfterTestExecutionCallback {
 
-	private class Loader : ClassLoader() {
+	private class Loader(private val ctx: UnboksContext) : ClassLoader() {
 
-		fun load(bytes: ByteArray): KClass<*> = defineClass(null, bytes, 0, bytes.size).kotlin
+		private fun dumpBytecode(code: ByteArray) { // TODO Lav så vi dumper alt i en mappe.
+			val now = LocalDateTime.now()
+			val f = File("dump.class")
+			f.createNewFile()
+			f.writeBytes(code)
+		}
+
+		override fun loadClass(name: String, resolve: Boolean): Class<*> {
+			if (name.startsWith("java."))
+				return super.loadClass(name, resolve)
+
+			if (name.startsWith("kotlin."))
+				return super.loadClass(name, resolve) // TODO Hmm, thanks Kotlin.
+
+			if (name == Companion::class.java.name)
+				return super.loadClass(name, resolve) // We need the traces to be visible from the "real" class, not the custom loaded.
+
+
+			val unboksClass = ctx.resolveClass(Reference(name.replace(".", "/")))
+			val bytecode = unboksClass.generateBytecode()
+			val cls = defineClass(name, bytecode, 0, bytecode.size)
+
+//			if (name.contains("PassthroughAss")) {
+//				dumpBytecode(bytecode)
+//			}
+
+			if (resolve)
+				resolveClass(cls)
+
+			println("Loaded $name")
+			return cls
+		}
 	}
 
-	private class Store(val instance: Any, val bytecode: ByteArray)
+	private class Store(val instance: Any)
 
 	override fun postProcessTestInstance(testInstance: Any, context: ExtensionContext) {
 		val ctx = UnboksContext {
@@ -41,18 +74,14 @@ class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutio
 				null
 			}
 		}
-		val unboksClass = ctx.resolveClass(testInstance::class)
-		val bytecode = unboksClass.generateBytecode()
-		val instance = createInstance(bytecode)
-		context.getStore(GLOBAL).put(PassthroughKey, Store(instance, bytecode))
-	}
 
-	private fun createInstance(bytecode: ByteArray): Any {
-		try {
-			return Loader().load(bytecode).java.newInstance()
-		} catch (e: VerifyError) {
-			printVerifyError(bytecode, e)
-		}
+
+		val loader = Loader(ctx)
+		val cls = Class.forName(testInstance::class.java.name, true, loader)
+		val instance = cls.newInstance()
+
+		// TODO fix.
+		context.getStore(GLOBAL).put(PassthroughKey, Store(instance))
 	}
 
 	override fun beforeTestExecution(context: ExtensionContext) {
@@ -66,7 +95,7 @@ class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutio
 		initTraces()
 		try {
 			val arguments = context.getStore(GLOBAL).get(ArgumentKey) as? List<*>
-			val method = findPassthoughMethod(context.requiredTestMethod, passthrough.instance)
+			val method = findPassthroughMethod(context.requiredTestMethod, passthrough.instance)
 			if (arguments == null)
 				method.invoke(passthrough.instance)
 			else
@@ -75,9 +104,6 @@ class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutio
 			val passthroughTraces = traces.get()
 			assertEquals(originalTraces, passthroughTraces, "Expected original traces to match passthrough")
 			println("Traces: $passthroughTraces")
-
-		} catch (e: VerifyError) {
-			printVerifyError(passthrough.bytecode, e)
 
 		} finally {
 			traces.remove()
@@ -97,7 +123,7 @@ class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutio
 		traces.set(mutableListOf())
 	}
 
-	private fun findPassthoughMethod(method: Method, passthrough: Any): Method {
+	private fun findPassthroughMethod(method: Method, passthrough: Any): Method {
 		val result = passthrough::class.java.declaredMethods.find {
 			it.name == method.name && it.parameterTypes!!.contentEquals(method.parameterTypes)
 		}
@@ -108,7 +134,7 @@ class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutio
 		private object PassthroughKey
 		object ArgumentKey
 
-		private val traces = ThreadLocal<MutableList<Any?>>()
+		private val traces = ThreadLocal<MutableList<Any?>>() // TODO Flyt til shared class og skip i classloader -- ellers har vi to versioner hvor den anden ikke er igang...
 
 		/**
 		 * Allows comparing a list of traces generated from the test class with traces from

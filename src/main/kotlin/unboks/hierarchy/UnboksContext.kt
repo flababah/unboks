@@ -4,17 +4,16 @@ import org.objectweb.asm.*
 import org.objectweb.asm.Opcodes.ASM6
 import unboks.Reference
 import unboks.Thing
-import unboks.internal.DebugMethodVisitor
 import unboks.internal.FlowGraphVisitor
 import unboks.internal.MethodSignature
 import java.lang.reflect.Modifier
 import kotlin.reflect.KClass
 
 class UnboksContext(private val resolver: (String) -> ClassReader? = { null }) {
-	private val knownTypes = mutableMapOf<Reference, UnboksClass>()
+	private val knownTypes = mutableMapOf<Reference, UnboksType>()
 
 	private inner class UnboksClassVisitor : ClassVisitor(ASM6) {
-		internal lateinit var type: UnboksClass
+		internal lateinit var type: UnboksType
 			private set
 
 		override fun visit(version: Int, mod: Int, name: String, sig: String?, superName: String?, ifs: Array<out String>?) {
@@ -31,8 +30,7 @@ class UnboksContext(private val resolver: (String) -> ClassReader? = { null }) {
 		}
 
 		override fun visitField(mod: Int, name: String, desc: String, sig: String?, value: Any?): FieldVisitor? {
-			type.newField(name, Thing.fromDescriptor(desc)).apply {
-				access = mod
+			type.newField(name, Thing.fromDescriptor(desc), mod).apply {
 				initial = value
 			}
 			return null
@@ -44,9 +42,7 @@ class UnboksContext(private val resolver: (String) -> ClassReader? = { null }) {
 					if (Modifier.isStatic(mod)) ms.parameterTypes
 					else listOf(type.name) + ms.parameterTypes
 
-			val method = type.newMethod(name, ms.returnType, *parameterTypes.toTypedArray()).apply {
-				access = mod
-
+			val method = type.newMethod(name, mod, ms.returnType, *parameterTypes.toTypedArray()).apply {
 				if (exs != null)
 					throws.addAll(exs.map { Reference(it) })
 			}
@@ -54,25 +50,29 @@ class UnboksContext(private val resolver: (String) -> ClassReader? = { null }) {
 //				println("Tracing 'choice'...................")
 //				return FlowGraphVisitor(method.flow, DebugMethodVisitor())
 //			}
-			return FlowGraphVisitor(method.flow)
+
+			val graph = method.graph
+			if (graph != null)
+				return FlowGraphVisitor(graph)
+			return null
 		}
 	}
 
-	private fun parseClass(reader: ClassReader): UnboksClass = UnboksClassVisitor()
+	private fun parseClass(reader: ClassReader): UnboksType = UnboksClassVisitor()
 			.apply { reader.accept(this, 0) }
 			.type
 
 	/**
 	 * Does not currently handle primitive types.
 	 */
-	fun resolveClass(name: Reference): UnboksClass = knownTypes.computeIfAbsent(name) {
+	fun resolveClass(name: Reference): UnboksType = knownTypes.computeIfAbsent(name) {
 		val reader = resolver(name.internal)
 		parseClass(reader ?: throw IllegalArgumentException("Type not found: $name"))
 	}
 
 	// TODO handle primitives...
-	fun resolveClass(type: KClass<*>): UnboksClass = resolveClass(Reference(type))
+	fun resolveClass(type: KClass<*>): UnboksType = resolveClass(Reference(type))
 
-	fun newClass(name: Reference, superType: Reference? = null): UnboksClass =
-			UnboksClass(this, name, superType).apply { knownTypes[name] = this }
+	fun newClass(name: Reference, superType: Reference? = null): UnboksType =
+			UnboksType(this, name, superType).apply { knownTypes[name] = this }
 }

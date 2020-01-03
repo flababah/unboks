@@ -102,7 +102,7 @@ class BasicBlock internal constructor(flow: FlowGraph) : Block(flow) {
 		}
 
 	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
-		predecessors.forEach { addObjection(Objection.BlockHasInput(this, it)) }
+		predecessors.forEach { addObjection(Objection.BlockHasInput(this, it)) } // TODO Check batch.
 		phiReferences.forEach { addObjection(Objection.BlockHasPhiReference(this, it)) }
 
 		if (root)
@@ -126,7 +126,7 @@ class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Blo
 	override val uses: RefCounts<Use> = RefCountsImpl()
 
 	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
-		predecessors.forEach { addObjection(Objection.HandlerIsUsed(this, it)) }
+		predecessors.forEach { addObjection(Objection.HandlerIsUsed(this, it)) } // TODO Check batch.
 		phiReferences.forEach { addObjection(Objection.BlockHasPhiReference(this, it)) }
 
 		for (use in uses) {

@@ -286,6 +286,8 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 
 				ATHROW -> appender.newThrow(stack.pop<SomeReference>())
 
+				ACONST_NULL -> stack.push(graph.constant(null))
+
 				ICONST_M1,
 				ICONST_0,
 				ICONST_1,
@@ -294,7 +296,11 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 				ICONST_4,
 				ICONST_5 -> stack.push(graph.constant(opcode - ICONST_0))
 
+				LCONST_0,
+				LCONST_1 -> stack.push(graph.constant(opcode - LCONST_0.toLong()))
+
 				DUP -> stack.push(stack.peek())
+				POP -> stack.pop<Thing>()
 
 				IRETURN -> appender.newReturn(stack.pop<IntType>())
 				LRETURN -> appender.newReturn(stack.pop<LONG>())
@@ -334,21 +340,21 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 			when (opcode) {
 				GOTO      -> appender.newGoto(resolveBlock(label))
 
-				IFEQ      -> newCmp1(Cmp.EQ,       stack.pop<INT>())
-				IFNE      -> newCmp1(Cmp.NE,       stack.pop<INT>())
-				IFLT      -> newCmp1(Cmp.LT,       stack.pop<INT>())
-				IFGE      -> newCmp1(Cmp.GE,       stack.pop<INT>())
-				IFGT      -> newCmp1(Cmp.GT,       stack.pop<INT>())
-				IFLE      -> newCmp1(Cmp.LE,       stack.pop<INT>())
+				IFEQ      -> newCmp1(Cmp.EQ,       stack.pop<IntType>())
+				IFNE      -> newCmp1(Cmp.NE,       stack.pop<IntType>())
+				IFLT      -> newCmp1(Cmp.LT,       stack.pop<IntType>())
+				IFGE      -> newCmp1(Cmp.GE,       stack.pop<IntType>())
+				IFGT      -> newCmp1(Cmp.GT,       stack.pop<IntType>())
+				IFLE      -> newCmp1(Cmp.LE,       stack.pop<IntType>())
 				IFNULL    -> newCmp1(Cmp.IS_NULL,  stack.pop<SomeReference>())
 				IFNONNULL -> newCmp1(Cmp.NOT_NULL, stack.pop<SomeReference>())
 
-				IF_ICMPEQ -> newCmp2(Cmp.EQ,       stack.popPair<INT>())
-				IF_ICMPNE -> newCmp2(Cmp.NE,       stack.popPair<INT>())
-				IF_ICMPLT -> newCmp2(Cmp.LT,       stack.popPair<INT>())
-				IF_ICMPGE -> newCmp2(Cmp.GE,       stack.popPair<INT>())
-				IF_ICMPGT -> newCmp2(Cmp.GT,       stack.popPair<INT>())
-				IF_ICMPLE -> newCmp2(Cmp.LE,       stack.popPair<INT>())
+				IF_ICMPEQ -> newCmp2(Cmp.EQ,       stack.popPair<IntType>())
+				IF_ICMPNE -> newCmp2(Cmp.NE,       stack.popPair<IntType>())
+				IF_ICMPLT -> newCmp2(Cmp.LT,       stack.popPair<IntType>())
+				IF_ICMPGE -> newCmp2(Cmp.GE,       stack.popPair<IntType>())
+				IF_ICMPGT -> newCmp2(Cmp.GT,       stack.popPair<IntType>())
+				IF_ICMPLE -> newCmp2(Cmp.LE,       stack.popPair<IntType>())
 				IF_ACMPEQ -> newCmp2(Cmp.EQ,       stack.popPair<SomeReference>())
 				IF_ACMPNE -> newCmp2(Cmp.NE,       stack.popPair<SomeReference>())
 
@@ -437,7 +443,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 				else -> throw ParseException("unknown field opcode")
 			}
 			val ret = when (opcode) {
-				GETSTATIC, PUTSTATIC -> type
+				GETSTATIC, GETFIELD -> type
 				else -> VOID
 			}
 			appendInvocation(InvField(opcode, ownerType, name, ret, type, params))
@@ -463,9 +469,11 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 
 	override fun visitLdcInsn(value: Any?) {
 		defer {
-			if (value !is String)
-				TODO("Other LDC types")
-			stack.push(graph.constant(value))
+			when (value) {
+				is String -> stack.push(graph.constant(value))
+				is Int -> stack.push(graph.constant(value))
+				else -> TODO("Other LDC types: $value")
+			}
 		}
 	}
 
@@ -863,6 +871,20 @@ private class LocalsMap(predecessor: Map<Int, Def>, val mutables: MutableLocals?
 			}
 		}
 	}
+
+	private fun repr(slot: Int): String {
+		val def = map[slot] ?: panic()
+		return if (mutables != null && mutables.map[slot] != null)
+			"MUT$slot: ${def.name}"
+		else
+			"$slot: ${def.name}"
+	}
+
+	override fun toString(): String {
+		return map.keys
+				.sorted()
+				.joinToString { repr(it) }
+	}
 }
 
 private class StackMap(predecessor: List<Def>): Iterable<Def> {
@@ -872,7 +894,7 @@ private class StackMap(predecessor: List<Def>): Iterable<Def> {
 
 	inline fun <reified T : Thing> pop(): Def = stack.removeAt(stack.size - 1).apply {
 		if (type !is T)
-			throw ParseException("Expected type ${T::class}, got ${this::class}")
+			throw ParseException("Expected type ${T::class}, got $type")
 	}
 
 	inline fun <reified T : Thing> popPair(): Pair<Def, Def> {
@@ -898,4 +920,8 @@ private class StackMap(predecessor: List<Def>): Iterable<Def> {
 	}
 
 	override fun iterator(): Iterator<Def> = stack.iterator()
+
+	override fun toString(): String {
+		return stack.joinToString(prefix = "{ ", postfix = " (TOP) }") { it.name }
+	}
 }

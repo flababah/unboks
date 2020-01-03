@@ -1,36 +1,68 @@
 package unboks.hierarchy
 
 import org.objectweb.asm.ClassVisitor
+import org.objectweb.asm.util.Textifier
+import org.objectweb.asm.util.TraceMethodVisitor
 import unboks.FlowGraph
 import unboks.Reference
 import unboks.Thing
-import java.lang.reflect.Modifier
+import unboks.internal.Access
 
-class UnboksMethod internal constructor(val type: UnboksClass, val name: String, val returnType: Thing, vararg parameterTypes: Thing) {
-	var access = 0
+class UnboksMethod internal constructor(
+		val type: UnboksType,
+		var name: String,
+		val parameterTypes: MutableList<Thing>,
+		var returnType: Thing,
+		accessMask: Int)
+{
+	private val access = Access.Box(Access.Tfm.METHOD, accessMask)
+
+	var public by Access.Property(access, Access.PUBLIC)
+	var private by Access.Property(access, Access.PRIVATE)
+	var protected by Access.Property(access, Access.PROTECTED)
+	var static by Access.Property(access, Access.STATIC)
+	var final by Access.Property(access, Access.FINAL)
+	var synchronized by Access.Property(access, Access.SYNCHRONIZED)
+	var bridge by Access.Property(access, Access.BRIDGE)
+	var varargs by Access.Property(access, Access.VARARGS)
+	var native by Access.Property(access, Access.NATIVE)
+	var abstract by Access.Property(access, Access.ABSTRACT)
+	var strict by Access.Property(access, Access.STRICT)
+	var synthetic by Access.Property(access, Access.SYNTHETIC)
+
 	val throws = mutableSetOf<Reference>()
-	val flow = FlowGraph(*parameterTypes)
+	val graph = if (native || abstract)
+		null
+	else
+		FlowGraph(*parameterTypes.toTypedArray())
 
-	override fun toString(): String = flow.parameters.joinToString(
+	// TODO modifiers.
+	override fun toString(): String = parameterTypes.joinToString(
 		prefix = "$name(", separator = ", ", postfix = ")")
 
 	internal fun write(visitor: ClassVisitor) {
-		val realParams = if (Modifier.isStatic(access))
-			flow.parameters
-		else
-			flow.parameters.drop(1)
+		val realParams = if (static) parameterTypes else parameterTypes.drop(1)
 
 		val desc = realParams.asSequence()
-				.map { it.type.asDescriptor }
+				.map { it.asDescriptor }
 				.joinToString(prefix = "(", separator = "", postfix = ")${returnType.asDescriptor}")
 
 		val exceptions = throws.map { it.internal }.toTypedArray()
 
-		val mv = visitor.visitMethod(access, name, desc, null, exceptions)
-		println("-------------------------")
-		println("Generating $name")
-		println("-------------------------")
-		flow.summary()
-		flow.generate(mv, returnType)
+		val mv = visitor.visitMethod(access.accessBits, name, desc, null, exceptions)
+
+		if (graph != null) {
+//			println("-------------------------")
+//			println("Generating $name")
+//			println("-------------------------")
+//			graph.summary()
+
+			val printer = Textifier()
+			val mp = TraceMethodVisitor(mv, printer)
+			graph.generate(mp, returnType)
+			mp.visitEnd()
+		} else {
+			mv.visitEnd()
+		}
 	}
 }

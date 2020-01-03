@@ -38,6 +38,7 @@ sealed class Thing {
  */
 sealed class SomeReference : Thing()
 
+// TODO assert ok name
 class Reference(val internal: String) : SomeReference() {
 	override val asDescriptor get() = "L$internal;"
 	override val width get() = 1
@@ -49,6 +50,11 @@ class Reference(val internal: String) : SomeReference() {
 	override fun hashCode(): Int = internal.hashCode()
 
 	override fun toString(): String = internal.split("/").last()
+}
+
+open class ArrayReference(val component: Thing) : SomeReference() {
+	override val width: Int get() = 1
+	override val asDescriptor: String get() = "[" + component.asDescriptor
 }
 
 sealed class Primitive(override val width: Int, private val repr: String, desc: Char) : Thing() {
@@ -67,6 +73,7 @@ object INT : IntType("int", 'I')
 object LONG : Primitive(2, "long", 'J')
 object FLOAT : Primitive(1, "float", 'F')
 object DOUBLE : Primitive(2, "double", 'D')
+
 object VOID : SomeReference() {
 	override val asDescriptor = "V"
 	override val width get() = throw UnsupportedOperationException("Hmm void doesn't have a width... hmmmmm")
@@ -77,6 +84,7 @@ object OBJECT : SomeReference() {
 	override val width = 1
 }
 
+object ARRAY : ArrayReference(OBJECT)
 
 internal object TOP : Primitive(1, "~TOP~", '!') {
 	override val asDescriptor get() = throw IllegalStateException("No desc for top")

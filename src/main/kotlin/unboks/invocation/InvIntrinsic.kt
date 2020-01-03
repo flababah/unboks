@@ -87,7 +87,7 @@ enum class InvIntrinsic(
 //	int FCMPG = 150; // -
 //	int DCMPL = 151; // -
 //	int DCMPG = 152; // -
-//	int ARRAYLENGTH = 190; // visitInsn
+	ARRAYLENGTH(INT, ARRAY),
 
 //	ATHROW(OBJECT, OBJECT), // Now Ir.
 

@@ -79,6 +79,7 @@ private fun createLabelsForBlocks(blocks: List<Block>): Map<Block, Pair<Label, L
 }
 
 private fun load(def: Def, mapping: Pass<Int>, visitor: MethodVisitor) = when {
+	def is NullConst          -> visitor.visitInsn(ACONST_NULL)
 	def is Constant<*>        -> visitor.visitLdcInsn(def.value)
 	def.type is SomeReference -> visitor.visitVarInsn(ALOAD, def.passValue(mapping))
 	def.type == unboks.FLOAT  -> visitor.visitVarInsn(FLOAD, def.passValue(mapping))
@@ -150,8 +151,13 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 				visitor.visitInsn(ACONST_NULL)
 				store(alloc)
 			}
+			is BOOLEAN,
 			is INT -> {
 				visitor.visitInsn(ICONST_0)
+				store(alloc)
+			}
+			is LONG -> {
+				visitor.visitInsn(LCONST_0)
 				store(alloc)
 			}
 			else -> TODO("Some other shit: ${alloc.type}")
@@ -265,7 +271,5 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 		})
 	}
 	visitor.visitLabel(blocks.last().endLabel())
-
 	visitor.visitMaxs(15, max.count)
-	visitor.visitEnd()
 }
