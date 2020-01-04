@@ -392,7 +392,21 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 				BIPUSH,
 				SIPUSH -> stack.push(graph.constant(operand))
 
-				else -> TODO()
+				NEWARRAY -> {
+					val type = when (operand) {
+						T_BOOLEAN -> BOOLEAN
+						T_CHAR -> CHAR
+						T_FLOAT -> unboks.FLOAT
+						T_DOUBLE -> unboks.DOUBLE
+						T_BYTE -> BYTE
+						T_SHORT -> SHORT
+						T_INT -> INT
+						T_LONG -> unboks.LONG
+						else -> throw ParseException("Bad operand for NEWARRAY: $operand")
+					}
+					appendInvocation(InvNewArray(type))
+				}
+				else -> throw ParseException("Illegal opcode: $opcode")
 			}
 		}
 	}

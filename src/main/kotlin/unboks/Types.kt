@@ -86,6 +86,6 @@ object OBJECT : SomeReference() {
 
 object ARRAY : ArrayReference(OBJECT)
 
-internal object TOP : Primitive(1, "~TOP~", '!') {
+internal object TOP : Primitive(1, "~TOP~", '!') { // TODO get rid of this
 	override val asDescriptor get() = throw IllegalStateException("No desc for top")
 }
