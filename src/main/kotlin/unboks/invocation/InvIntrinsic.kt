@@ -51,7 +51,7 @@ enum class InvIntrinsic(
 //	int LREM = 113; // -
 //	int FREM = 114; // -
 //	int DREM = 115; // -
-//	int INEG = 116; // -
+	INEG(INT, INT),
 //	int LNEG = 117; // -
 //	int FNEG = 118; // -
 //	int DNEG = 119; // -

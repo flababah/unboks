@@ -6,6 +6,7 @@ import unboks.util.Ints
 import unboks.util.PassthroughAssertExtension
 import unboks.util.PassthroughAssertExtension.Companion.trace
 import unboks.util.PermutationTest
+import kotlin.math.abs
 
 @ExtendWith(PassthroughAssertExtension::class)
 class BasicFlowTests {
@@ -42,11 +43,6 @@ class BasicFlowTests {
 		trace(result)
 	}
 
-	/*@Test // TODO Expect exception in junit.
-	fun testThrow() {
-		throw NullPointerException("Yes, this should happen!")
-	}*/
-
 	@Test
 	fun testPseudoRoot() {
 		var counter = 0
@@ -67,14 +63,18 @@ class BasicFlowTests {
 
 	@PermutationTest
 	fun testMultiply(
-			@Ints(0, 5, 10) a: Int,
-			@Ints(-1, 0, 3) b: Int) { // TODO Handle negative.
+			@Ints(0, -3, 5, 10) a: Int,
+			@Ints(-1, 0, 3) b: Int) {
 		var x = 0
-		for (i in (0 until a)) {
+		val neg = a < 0
+		for (i in (0 until abs(a))) {
 			trace(x)
 			x += b
 		}
-		trace(x)
+		if (neg)
+			trace(-x)
+		else
+			trace(x)
 	}
 
 	@PermutationTest
