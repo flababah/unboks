@@ -11,5 +11,5 @@ interface Def : Nameable, PassType {
 	/**
 	 * uses yo
 	 */
-	val uses: RefCounts<Use>
+	val uses: RefCount<Use>
 }

@@ -9,7 +9,7 @@ class InternalTest {
 
 	@Test
 	fun testRefCountsImpl() {
-		val counts = RefCounts<String>()
+		val counts = RefCount<String>()
 		counts.inc("a")
 		counts.inc("a")
 		counts.inc("b")

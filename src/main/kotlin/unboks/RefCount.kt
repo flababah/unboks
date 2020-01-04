@@ -1,6 +1,6 @@
 package unboks
 
-class RefCounts<T> private constructor(
+class RefCount<T> private constructor(
 		private val refs: MutableMap<T, Int>) : Set<T> by refs.keys {
 
 	internal constructor() : this(hashMapOf())
@@ -24,7 +24,7 @@ class RefCounts<T> private constructor(
 	}
 
 	override fun equals(other: Any?): Boolean = when (other) {
-		is RefCounts<*> -> refs == other.refs
+		is RefCount<*> -> refs == other.refs
 		is Set<*> -> refs.keys == other
 		else -> false
 	}

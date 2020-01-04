@@ -14,9 +14,9 @@ sealed class Block(val flow: FlowGraph) : DependencySource(), Nameable, PassType
 	/**
 	 * The set of immediate predecessors that can flow into this block.
 	 */
-	val predecessors = RefCounts<Block>()
+	val predecessors = RefCount<Block>()
 
-	val phiReferences = RefCounts<IrPhi>()
+	val phiReferences = RefCount<IrPhi>()
 
 	val terminal: IrTerminal? get() = opcodes.lastOrNull() as? IrTerminal
 
@@ -122,7 +122,7 @@ class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Blo
 	 */
 	override val type: Reference = type ?: Reference(java.lang.Throwable::class)
 
-	override val uses = RefCounts<Use>()
+	override val uses = RefCount<Use>()
 
 	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
 		predecessors.forEach { addObjection(Objection.HandlerIsUsed(this, it)) } // TODO Check batch.

@@ -8,7 +8,7 @@ class Parameter(val graph: FlowGraph, override val type: Thing) : Def, PassType 
 
 	override var name by graph.registerAutoName(this, "p")
 
-	override val uses = RefCounts<Use>()
+	override val uses = RefCount<Use>()
 
 	override fun toString(): String = "$type $name"
 }

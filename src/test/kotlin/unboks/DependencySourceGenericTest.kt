@@ -15,8 +15,8 @@ class DependencySourceGenericTest {
 		override fun traverseChildren(): Sequence<DependencySource> = emptySequence()
 		override fun detachFromParent() { }
 
-		val propInputs = RefCounts<TestNode>()
-		val listInputs = RefCounts<TestNode>()
+		val propInputs = RefCount<TestNode>()
+		val listInputs = RefCount<TestNode>()
 
 		var property by dependencyProperty(propertySpec, this)
 

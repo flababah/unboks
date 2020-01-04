@@ -718,7 +718,7 @@ private sealed class AsmBlock<T : Block>(val labels: Set<Label>, val exceptions:
 
 	// Phase 2 - Merge blocks and create graph.
 	var next: AsmBlock<*>? = null
-	val predecessors = RefCounts<AsmBlock<*>>() // Of branches and handlers.
+	val predecessors = RefCount<AsmBlock<*>>() // Of branches and handlers.
 	val branches = dependencySet(asmGraphBasicSpec)
 	val handlers = dependencySet(asmGraphHandlerSpec)
 	val successors get() = branches.asSequence() + handlers.asSequence()
@@ -793,7 +793,7 @@ private class ExceptionIntervals {
 private object WideDef : Def {
 	override val block: Block get() = panic()
 	override val type: Thing get() = panic()
-	override val uses: RefCounts<Use> get() = panic()
+	override val uses: RefCount<Use> get() = panic()
 	override var name: String = "Wide"
 }
 
