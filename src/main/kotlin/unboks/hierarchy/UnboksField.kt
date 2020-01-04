@@ -10,7 +10,15 @@ class UnboksField internal constructor(
 		val type: Thing,
 		override var access: Int) : Accessible {
 
-	// TODO access properties
+	var public by Access.PUBLIC
+	var private by Access.PRIVATE
+	var protected by Access.PROTECTED
+	var static by Access.STATIC
+	var final by Access.FINAL
+	var volatile by Access.VOLATILE
+	var transient by Access.TRANSIENT
+	var synthetic by Access.SYNTHETIC
+	var enum by Access.ENUM
 
 	var initial: Any? = null
 		set(value) {

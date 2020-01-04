@@ -4,6 +4,7 @@ import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.Opcodes
 import unboks.Reference
 import unboks.Thing
+import unboks.internal.Access
 
 class UnboksType internal constructor(private val ctx: UnboksContext, val name: Reference, superType: Reference?)
 	: Accessible {
@@ -15,7 +16,14 @@ class UnboksType internal constructor(private val ctx: UnboksContext, val name: 
 	val interfaces = mutableListOf<Reference>()
 
 	override var access = 0
-	// TODO access properties
+	var public by Access.PUBLIC
+	var final by Access.FINAL
+	var super_ by Access.SUPER
+	var interface_ by Access.INTERFACE
+	var abstract by Access.ABSTRACT
+	var synthetic by Access.SYNTHETIC
+	var annotation by Access.ANNOTATION
+	var enum by Access.ENUM
 
 	val fields: Set<UnboksField> get() = _fields
 
