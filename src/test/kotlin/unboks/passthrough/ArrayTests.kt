@@ -8,18 +8,21 @@ import unboks.util.PassthroughAssertExtension.Companion.trace
 @ExtendWith(PassthroughAssertExtension::class)
 class ArrayTests {
 
-	private fun traceArrayContent(array: IntArray) {
-		for (elm in array)
-			trace(elm)
-	}
-
 	@Test
 	fun testArrayAccess() {
 		val array = IntArray(2)
 		array[0] = 123
 		array[1] = 99
-		traceArrayContent(array)
+
+		for (elm in array)
+			trace(elm)
 	}
 
-	// TODO Multi array
+	@Test
+	fun testObjectArrayAccess() {
+		val array = Array(2) { it.toString() }
+
+		for (elm in array)
+			trace(elm)
+	}
 }

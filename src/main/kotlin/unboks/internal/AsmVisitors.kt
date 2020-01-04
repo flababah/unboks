@@ -477,7 +477,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 				INVOKESTATIC    -> InvMethod.Static(Reference(owner), name, desc, itf)
 				INVOKEINTERFACE -> InvMethod.Interface(Reference(owner), name, desc, itf)
 
-				else -> panic("Illegal opcode: $opcode")
+				else -> throw ParseException("Illegal opcode: $opcode")
 			})
 		}
 	}
