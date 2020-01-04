@@ -34,7 +34,6 @@ class UnboksMethod internal constructor(
 	else
 		FlowGraph(*parameterTypes.toTypedArray())
 
-	// TODO modifiers.
 	override fun toString(): String = parameterTypes.joinToString(
 		prefix = "$name(", separator = ", ", postfix = ")")
 
