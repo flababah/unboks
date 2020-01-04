@@ -13,22 +13,20 @@ class UnboksMethod internal constructor(
 		var name: String,
 		val parameterTypes: MutableList<Thing>,
 		var returnType: Thing,
-		accessMask: Int)
+		override var access: Int) : Accessible
 {
-	private val access = Access.Box(Access.Tfm.METHOD, accessMask)
-
-	var public by Access.Property(access, Access.PUBLIC)
-	var private by Access.Property(access, Access.PRIVATE)
-	var protected by Access.Property(access, Access.PROTECTED)
-	var static by Access.Property(access, Access.STATIC)
-	var final by Access.Property(access, Access.FINAL)
-	var synchronized by Access.Property(access, Access.SYNCHRONIZED)
-	var bridge by Access.Property(access, Access.BRIDGE)
-	var varargs by Access.Property(access, Access.VARARGS)
-	var native by Access.Property(access, Access.NATIVE)
-	var abstract by Access.Property(access, Access.ABSTRACT)
-	var strict by Access.Property(access, Access.STRICT)
-	var synthetic by Access.Property(access, Access.SYNTHETIC)
+	var public by Access.PUBLIC
+	var private by Access.PRIVATE
+	var protected by Access.PROTECTED
+	var static by Access.STATIC
+	var final by Access.FINAL
+	var synchronized by Access.SYNCHRONIZED
+	var bridge by Access.BRIDGE
+	var varargs by Access.VARARGS
+	var native by Access.NATIVE
+	var abstract by Access.ABSTRACT
+	var strict by Access.STRICT
+	var synthetic by Access.SYNTHETIC
 
 	val throws = mutableSetOf<Reference>()
 	val graph = if (native || abstract)
@@ -49,7 +47,7 @@ class UnboksMethod internal constructor(
 
 		val exceptions = throws.map { it.internal }.toTypedArray()
 
-		val mv = visitor.visitMethod(access.accessBits, name, desc, null, exceptions)
+		val mv = visitor.visitMethod(access, name, desc, null, exceptions)
 
 		if (graph != null) {
 //			println("-------------------------")

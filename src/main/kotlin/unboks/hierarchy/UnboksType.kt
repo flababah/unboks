@@ -5,13 +5,17 @@ import org.objectweb.asm.Opcodes
 import unboks.Reference
 import unboks.Thing
 
-class UnboksType internal constructor(private val ctx: UnboksContext, val name: Reference, superType: Reference?) {
+class UnboksType internal constructor(private val ctx: UnboksContext, val name: Reference, superType: Reference?)
+	: Accessible {
+
 	private val _fields = mutableSetOf<UnboksField>()
 	private val _methods = mutableSetOf<UnboksMethod>()
 
 	var superType: Reference = superType ?: Reference(Object::class)
-	var access = 0
 	val interfaces = mutableListOf<Reference>()
+
+	override var access = 0
+	// TODO access properties
 
 	val fields: Set<UnboksField> get() = _fields
 

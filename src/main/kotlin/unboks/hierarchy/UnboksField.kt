@@ -8,11 +8,9 @@ class UnboksField internal constructor(
 		private val ctx: UnboksContext,
 		val name: String,
 		val type: Thing,
-		accessMask: Int) {
+		override var access: Int) : Accessible {
 
-	private val access = Access.Box(Access.Tfm.FIELD, accessMask)
-
-	// TODO properties
+	// TODO access properties
 
 	var initial: Any? = null
 		set(value) {
@@ -23,7 +21,7 @@ class UnboksField internal constructor(
 		}
 
 	internal fun write(visitor: ClassVisitor) = visitor.apply {
-		visitField(access.accessBits, name, type.asDescriptor, null, initial)
+		visitField(access, name, type.asDescriptor, null, initial)
 		visitEnd()
 	}
 }
