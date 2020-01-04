@@ -1,7 +1,5 @@
 package unboks
 
-import unboks.internal.RefCountsImpl
-
 sealed class Constant<out T : Any>(
 		val graph: FlowGraph,
 		val value: T,
@@ -14,7 +12,7 @@ sealed class Constant<out T : Any>(
 		get() = "$prefix$value$suffix"
 		set(_) { }
 
-	override val uses: RefCounts<Use> = RefCountsImpl()
+	override val uses = RefCounts<Use>()
 
 	override fun equals(other: Any?) = other is Constant<*> && other.value == value
 

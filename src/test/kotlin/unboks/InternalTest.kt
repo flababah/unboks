@@ -2,7 +2,6 @@ package unboks
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
-import unboks.internal.RefCountsImpl
 import kotlin.test.assertEquals
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -10,7 +9,7 @@ class InternalTest {
 
 	@Test
 	fun testRefCountsImpl() {
-		val counts = RefCountsImpl<String>()
+		val counts = RefCounts<String>()
 		counts.inc("a")
 		counts.inc("a")
 		counts.inc("b")

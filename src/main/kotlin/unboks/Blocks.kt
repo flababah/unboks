@@ -1,6 +1,5 @@
 package unboks
 
-import unboks.internal.RefCountsImpl
 import unboks.internal.dependencyList
 import unboks.internal.handlerUses
 import unboks.pass.Pass
@@ -15,9 +14,9 @@ sealed class Block(val flow: FlowGraph) : DependencySource(), Nameable, PassType
 	/**
 	 * The set of immediate predecessors that can flow into this block.
 	 */
-	val predecessors: RefCounts<Block> = RefCountsImpl()
+	val predecessors = RefCounts<Block>()
 
-	val phiReferences: RefCounts<IrPhi> = RefCountsImpl()
+	val phiReferences = RefCounts<IrPhi>()
 
 	val terminal: IrTerminal? get() = opcodes.lastOrNull() as? IrTerminal
 
@@ -123,7 +122,7 @@ class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Blo
 	 */
 	override val type: Reference = type ?: Reference(java.lang.Throwable::class)
 
-	override val uses: RefCounts<Use> = RefCountsImpl()
+	override val uses = RefCounts<Use>()
 
 	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
 		predecessors.forEach { addObjection(Objection.HandlerIsUsed(this, it)) } // TODO Check batch.

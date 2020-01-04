@@ -116,7 +116,7 @@ class IrInvoke internal constructor(block: Block, val spec: Invocation, argument
 
 	override var name by flow.registerAutoName(this, "inv")
 
-	override val uses: RefCounts<Use> = RefCountsImpl()
+	override val uses = RefCounts<Use>()
 	override val type get() = spec.returnType
 
 	// XXX Do we need variable size list here -- only if methods change signature?
@@ -156,7 +156,7 @@ class IrPhi internal constructor(block: Block, private val explicitType: Thing)
 
 	override val defs: DependencyMapValues<Block, Def> = dependencyMap(phiReferences, defUses)
 
-	override val uses: RefCounts<Use> = RefCountsImpl()
+	override val uses = RefCounts<Use>()
 	override val type: Thing get() = when {
 		explicitType != TOP -> explicitType
 		defs.iterator().hasNext() -> defs.first().type
@@ -220,9 +220,9 @@ class IrMutable internal constructor(block: Block, initial: Def)
 
 	override var name by flow.registerAutoName(this, "mut")
 
-	override val uses: RefCounts<Use> = RefCountsImpl()
+	override val uses = RefCounts<Use>()
 
-	val writes: RefCounts<IrMutableWrite> = RefCountsImpl()
+	val writes = RefCounts<IrMutableWrite>()
 
 	var initial: Def by defs
 

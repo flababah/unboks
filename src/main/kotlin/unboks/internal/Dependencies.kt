@@ -4,46 +4,6 @@ import unboks.*
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
-/**
- * This (Impl) class exists as to not expose [inc] and [dec] as the public API.
- *
- * All places [RefCounts] is used, we must assume it's safe to cast to [RefCountsImpl].
- *
- * @see RefCounts.inc
- * @see RefCounts.dec
- */
-internal class RefCountsImpl<T> private constructor(
-		private val refs: MutableMap<T, Int>) : RefCounts<T>, Set<T> by refs.keys {
-
-	constructor() : this(hashMapOf())
-
-	override val count: Int get() = refs.values.sum()
-
-	fun inc(reference: T) {
-		refs[reference] = (refs[reference] ?: 0) + 1
-	}
-
-	fun dec(reference: T) {
-		val count = refs[reference] ?: throw IllegalArgumentException("Negative ref count: $reference")
-		when (count) {
-			1    -> refs.remove(reference)
-			else -> refs[reference] = count - 1
-		}
-	}
-
-	override fun equals(other: Any?): Boolean = when (other) {
-		is RefCountsImpl<*> -> refs == other.refs
-		is Set<*> -> refs.keys == other
-		else -> false
-	}
-
-	override fun hashCode(): Int = refs.hashCode()
-}
-
-private infix fun <T> RefCounts<T>.inc(ref: T) = (this as RefCountsImpl<T>).inc(ref)
-private infix fun <T> RefCounts<T>.dec(ref: T) = (this as RefCountsImpl<T>).dec(ref)
-
-
 // +---------------------------------------------------------------------------
 // |  Arrays
 // +---------------------------------------------------------------------------

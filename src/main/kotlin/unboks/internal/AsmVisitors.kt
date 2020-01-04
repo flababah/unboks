@@ -718,7 +718,7 @@ private sealed class AsmBlock<T : Block>(val labels: Set<Label>, val exceptions:
 
 	// Phase 2 - Merge blocks and create graph.
 	var next: AsmBlock<*>? = null
-	val predecessors = RefCountsImpl<AsmBlock<*>>() // Of branches and handlers.
+	val predecessors = RefCounts<AsmBlock<*>>() // Of branches and handlers.
 	val branches = dependencySet(asmGraphBasicSpec)
 	val handlers = dependencySet(asmGraphHandlerSpec)
 	val successors get() = branches.asSequence() + handlers.asSequence()
