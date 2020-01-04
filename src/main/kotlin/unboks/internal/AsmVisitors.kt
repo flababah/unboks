@@ -377,7 +377,12 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 
 	override fun visitLookupSwitchInsn(dflt: Label, keys: IntArray, labels: Array<out Label>) {
 		defer(terminal = Terminal.Yes(setOf(*labels) + dflt)) {
-			TODO("visitLookupSwitchInsn")
+			if (labels.size != keys.size)
+				throw ParseException("Lookup switch key/label size mismatch")
+
+			val switch = appender.newSwitch(stack.pop<INT>(), resolveBlock(dflt))
+			for (i in 0 until keys.size)
+				switch.cases[keys[i]] = resolveBlock(labels[i])
 		}
 	}
 

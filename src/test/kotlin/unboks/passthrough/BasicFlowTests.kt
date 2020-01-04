@@ -43,6 +43,16 @@ class BasicFlowTests {
 		trace(result)
 	}
 
+	@PermutationTest
+	fun testSwitchLookup(@Ints(0, 100, 200, 123) x: Int) {
+		trace(when(x) {
+			0 -> 1
+			100 -> 101
+			200 -> 201
+			else -> 999
+		})
+	}
+
 	@Test
 	fun testPseudoRoot() {
 		var counter = 0
