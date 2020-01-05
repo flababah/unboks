@@ -16,10 +16,6 @@ internal class MethodSignature(signature: String) {
 			val parameterTypes = mutableListOf<Thing>()
 			lateinit var returnType: Thing
 
-			override fun visitArrayType(): SignatureVisitor {
-				return super.visitArrayType()
-			}
-
 			override fun visitParameterType(): SignatureVisitor = createSub { parameterTypes += it }
 
 			override fun visitReturnType(): SignatureVisitor = createSub { returnType = it }

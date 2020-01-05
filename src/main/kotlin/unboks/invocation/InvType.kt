@@ -22,8 +22,6 @@ sealed class InvType(
 
 	class New(type: Reference) : InvType("new", type, type, null, Opcodes.NEW)
 
-	class NewObjectArray(type: Reference) : InvType("new[]", type, type, INT, Opcodes.ANEWARRAY)
-
 	class Checkcast(type: Reference) : InvType("checkcast", type, type, OBJECT, Opcodes.CHECKCAST)
 
 	class Instanceof(type: Reference) : InvType("instanceof", type, INT, OBJECT, Opcodes.INSTANCEOF)

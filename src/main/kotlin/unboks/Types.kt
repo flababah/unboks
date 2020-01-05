@@ -9,6 +9,7 @@ sealed class Thing {
 
 	companion object {
 		fun fromDescriptor(desc: String): Thing = when {
+			desc.startsWith("[") -> ArrayReference(fromDescriptor(desc.substring(1)))
 			desc.startsWith("L") && desc.endsWith(";") -> Reference(desc.substring(1, desc.length - 1))
 			desc.length == 1 -> fromPrimitiveChar(desc[0])
 			else -> throw IllegalArgumentException("Not a valid descriptor: $desc")
@@ -55,6 +56,29 @@ class Reference(val internal: String) : SomeReference() {
 open class ArrayReference(val component: Thing) : SomeReference() {
 	override val width: Int get() = 1
 	override val asDescriptor: String get() = "[" + component.asDescriptor
+
+	/**
+	 * For types like Array<Array<Array<Int>>> returns 3.
+	 */
+	fun getDimensions(): Int {
+		var count = 1
+		var ptr = component
+		while (ptr is ArrayReference) {
+			count++
+			ptr = ptr.component
+		}
+		return count
+	}
+
+	/**
+	 * For types like Array<Array<Array<Int>>> returns Int.
+	 */
+	fun getBottomComponent(): Thing {
+		var ptr = component
+		while (ptr is ArrayReference)
+			ptr = ptr.component
+		return ptr
+	}
 }
 
 sealed class Primitive(override val width: Int, private val repr: String, desc: Char) : Thing() {

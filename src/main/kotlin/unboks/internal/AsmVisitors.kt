@@ -404,7 +404,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 						T_LONG -> unboks.LONG
 						else -> throw ParseException("Bad operand for NEWARRAY: $operand")
 					}
-					appendInvocation(InvNewArray(type))
+					appendInvocation(InvNewArray(ArrayReference(type)))
 				}
 				else -> throw ParseException("Illegal opcode: $opcode")
 			}
@@ -441,7 +441,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 			val ownerType = Reference(type)
 			val inv = when (opcode) {
 				NEW        -> InvType.New(ownerType)
-				ANEWARRAY  -> InvType.NewObjectArray(ownerType)
+				ANEWARRAY  -> InvNewArray(ArrayReference(ownerType))
 				CHECKCAST  -> InvType.Checkcast(ownerType)
 				INSTANCEOF -> InvType.Instanceof(ownerType)
 				else       -> throw ParseException("Illegal opcode: $opcode")
@@ -505,8 +505,14 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 		}
 	}
 
-	override fun visitMultiANewArrayInsn(descriptor: String?, numDimensions: Int) {
-		TODO()
+	override fun visitMultiANewArrayInsn(descriptor: String, dims: Int) {
+		defer {
+			val type = Thing.fromDescriptor(descriptor)
+			if (type !is ArrayReference || type.getDimensions() != dims)
+				throw ParseException("Bad descriptor '$descriptor' for order $dims array")
+
+			appendInvocation(InvNewArray(type))
+		}
 	}
 }
 
