@@ -14,6 +14,7 @@ sealed class InvMethod(
 
 	/**
 	 * We don't know any better until we get interprocedural analysis.
+	 * ...and even then, stack overflows may still occur.
 	 */
 	override val safe get() = false
 

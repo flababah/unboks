@@ -482,8 +482,10 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 		}
 	}
 
-	override fun visitInvokeDynamicInsn(name: String?, descriptor: String?, handle: Handle?, vararg bma: Any?) {
-		TODO()
+	override fun visitInvokeDynamicInsn(name: String, descriptor: String, handle: Handle, vararg bma: Any) {
+		defer {
+			appendInvocation(InvDynamic(name, descriptor, handle, bma))
+		}
 	}
 
 	override fun visitLdcInsn(value: Any?) {
