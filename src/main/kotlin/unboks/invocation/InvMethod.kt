@@ -3,7 +3,7 @@ package unboks.invocation
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
 import unboks.Reference
-import unboks.internal.MethodSignature
+import unboks.internal.MethodDescriptor
 
 sealed class InvMethod(
 		private val owner: Reference,
@@ -18,14 +18,14 @@ sealed class InvMethod(
 	 */
 	override val safe get() = false
 
-	private val signature = MethodSignature(desc)
+	private val signature = MethodDescriptor(desc)
 
 	override val parameterTypes get() = when (opcode) {
-		Opcodes.INVOKESTATIC -> signature.parameterTypes
-		else -> listOf(owner) + signature.parameterTypes
+		Opcodes.INVOKESTATIC -> signature.parameters
+		else -> listOf(owner) + signature.parameters
 	}
 
-	override val returnType get() = signature.returnType
+	override val returnType get() = signature.returns
 
 	override val representation get() = "$owner#$name[${this::class.java.name}]" // TODO Hmm...
 

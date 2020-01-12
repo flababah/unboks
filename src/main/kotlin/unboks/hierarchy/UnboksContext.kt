@@ -5,7 +5,7 @@ import org.objectweb.asm.Opcodes.ASM6
 import unboks.Reference
 import unboks.Thing
 import unboks.internal.FlowGraphVisitor
-import unboks.internal.MethodSignature
+import unboks.internal.MethodDescriptor
 import java.lang.reflect.Modifier
 import kotlin.reflect.KClass
 
@@ -37,12 +37,12 @@ class UnboksContext(private val resolver: (String) -> ClassReader? = { null }) {
 		}
 
 		override fun visitMethod(mod: Int, name: String, desc: String, sig: String?, exs: Array<out String>?): MethodVisitor? {
-			val ms = MethodSignature(desc)
+			val ms = MethodDescriptor(desc)
 			val parameterTypes =
-					if (Modifier.isStatic(mod)) ms.parameterTypes
-					else listOf(type.name) + ms.parameterTypes
+					if (Modifier.isStatic(mod)) ms.parameters
+					else listOf(type.name) + ms.parameters
 
-			val method = type.newMethod(name, mod, ms.returnType, *parameterTypes.toTypedArray()).apply {
+			val method = type.newMethod(name, mod, ms.returns, *parameterTypes.toTypedArray()).apply {
 				if (exs != null)
 					throws.addAll(exs.map { Reference(it) })
 			}

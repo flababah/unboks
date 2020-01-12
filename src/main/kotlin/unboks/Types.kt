@@ -79,6 +79,18 @@ open class ArrayReference(val component: Thing) : SomeReference() {
 			ptr = ptr.component
 		return ptr
 	}
+
+	override fun equals(other: Any?): Boolean {
+		return other is ArrayReference && other.component == component
+	}
+
+	override fun hashCode(): Int {
+		return component.hashCode() + 1
+	}
+
+	override fun toString(): String {
+		return asDescriptor
+	}
 }
 
 sealed class Primitive(override val width: Int, private val repr: String, desc: Char) : Thing() {
