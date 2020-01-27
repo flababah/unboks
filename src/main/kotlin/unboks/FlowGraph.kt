@@ -79,19 +79,22 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 		nameRegistry.prune()
 	}
 
-
 	@Suppress("UNCHECKED_CAST")
 	private fun <C : Constant<*>> reuseConstant(const: C) = constantMap.computeIfAbsent(const.value) { const } as C
 
 	fun constant(value: Int): IntConst = reuseConstant(IntConst(this, value))
 	fun constant(value: Long): LongConst = reuseConstant(LongConst(this, value))
 	fun constant(value: Float): FloatConst = reuseConstant(FloatConst(this, value))
+	fun constant(value: Double): DoubleConst = reuseConstant(DoubleConst(this, value))
 	fun constant(value: String): StringConst = reuseConstant(StringConst(this, value))
+	fun constant(value: Thing): TypeConst = reuseConstant(TypeConst(this, value))
 
 	fun constant(value: Any?): Constant<*> = when (value) {
 		is Int    -> constant(value)
+		is Long   -> constant(value)
 		is Float  -> constant(value)
 		is String -> constant(value)
+		is Thing  -> constant(value)
 		null      -> nullConst
 		else -> throw IllegalArgumentException("Unsupported constant type: ${value::class}}")
 	}

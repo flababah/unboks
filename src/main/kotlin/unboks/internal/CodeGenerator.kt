@@ -3,6 +3,7 @@ package unboks.internal
 import org.objectweb.asm.Label
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes.*
+import org.objectweb.asm.Type
 import unboks.*
 import unboks.pass.Pass
 
@@ -33,7 +34,7 @@ TODO Generalt
 private class AllocInfo(var count: Int = 0, val allocs: MutableSet<Def> = mutableSetOf())
 
 private fun createWastefulSimpleRegisterMapping(max: AllocInfo) = Pass<Int> {
-	max.count = graph.parameters.size
+	max.count = graph.parameters.sumBy { it.type.width }
 
 	fun allocSlot(def: Def) = max.count.also {
 		max.count += def.type.width
@@ -42,7 +43,13 @@ private fun createWastefulSimpleRegisterMapping(max: AllocInfo) = Pass<Int> {
 
 	// Parameters are always stored in the first local slots.
 	visit<Parameter> {
-		it.graph.parameters.indexOf(it)
+		var offset = 0
+		for (parameter in it.graph.parameters) {
+			if (parameter == it)
+				break
+			offset += parameter.type.width
+		}
+		offset
 	}
 
 	// Only alloc a register for non-void and if we actually need the result.
@@ -71,16 +78,21 @@ private fun createWastefulSimpleRegisterMapping(max: AllocInfo) = Pass<Int> {
  */
 private fun createLabelsForBlocks(blocks: List<Block>): Map<Block, Pair<Label, Label>> {
 	val labels = Array(blocks.size + 1) { Label() }
-	return (0 until blocks.size).associate {
+	return blocks.indices.associate {
 		val k = blocks[it]
 		val v = labels[it] to labels[it + 1]
 		k to v
 	}
 }
 
+private fun loadConstant(const: Constant<*>, visitor: MethodVisitor) = when (const) {
+	is NullConst -> visitor.visitInsn(ACONST_NULL)
+	is TypeConst -> visitor.visitLdcInsn(Type.getType(const.value.asDescriptor))
+	else         -> visitor.visitLdcInsn(const.value)
+}
+
 private fun load(def: Def, mapping: Pass<Int>, visitor: MethodVisitor) = when {
-	def is NullConst          -> visitor.visitInsn(ACONST_NULL)
-	def is Constant<*>        -> visitor.visitLdcInsn(def.value)
+	def is Constant<*>        -> loadConstant(def, visitor)
 	def.type is SomeReference -> visitor.visitVarInsn(ALOAD, def.passValue(mapping))
 	def.type == unboks.FLOAT  -> visitor.visitVarInsn(FLOAD, def.passValue(mapping))
 	def.type == unboks.DOUBLE -> visitor.visitVarInsn(DLOAD, def.passValue(mapping))
@@ -92,6 +104,8 @@ private fun storeVarIfUsed(opcode: Int, x: Def, mapping: Pass<Int>, visitor: Met
 	val slot = x.passValueSafe(mapping)
 	if (slot != null)
 		visitor.visitVarInsn(opcode, slot)
+	else
+		visitor.visitInsn(POP)
 }
 
 private fun store(x: Def, mapping: Pass<Int>, visitor: MethodVisitor) = when (x.type) {
@@ -104,6 +118,7 @@ private fun store(x: Def, mapping: Pass<Int>, visitor: MethodVisitor) = when (x.
 }
 
 internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: Thing) { // TODO Hvis void return? return at end
+//	val visitor = DebugMethodVisitor(visitor1)
 	// XXX We need a more robust way of linearizing the graph.
 	val blocks = graph.blocks.sortedBy { it.name }
 	val labels = createLabelsForBlocks(blocks)
@@ -151,13 +166,20 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 				visitor.visitInsn(ACONST_NULL)
 				store(alloc)
 			}
-			is BOOLEAN,
-			is INT -> {
+			is IntType -> {
 				visitor.visitInsn(ICONST_0)
 				store(alloc)
 			}
 			is LONG -> {
 				visitor.visitInsn(LCONST_0)
+				store(alloc)
+			}
+			is FLOAT -> {
+				visitor.visitInsn(FCONST_0)
+				store(alloc)
+			}
+			is DOUBLE -> {
+				visitor.visitInsn(DCONST_0)
 				store(alloc)
 			}
 			else -> TODO("Some other shit: ${alloc.type}")
@@ -197,7 +219,7 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 
 				load(it.op1)
 				load(it.op2)
-				val reference = it.op1 is SomeReference
+				val reference = it.op1.type is SomeReference
 				val opcode = when (it.cmp) {
 					Cmp.EQ -> if (reference) IF_ACMPEQ else IF_ICMPEQ
 					Cmp.NE -> if (reference) IF_ACMPNE else IF_ICMPNE

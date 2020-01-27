@@ -13,15 +13,14 @@ class UnboksContext(private val resolver: (String) -> ClassReader? = { null }) {
 	private val knownTypes = mutableMapOf<Reference, UnboksType>()
 
 	private inner class UnboksClassVisitor : ClassVisitor(ASM6) {
+		private var version = -1
 		internal lateinit var type: UnboksType
 			private set
 
 		override fun visit(version: Int, mod: Int, name: String, sig: String?, superName: String?, ifs: Array<out String>?) {
-			if (version != Opcodes.V1_8)
-				throw IllegalStateException("Only 1.8 bytecode supported for now...")
-
 			val superType = superName?.let { Reference(it) }
-			type = newClass(Reference(name), superType).apply {
+			this.version = version
+			this.type = newClass(Reference(name), superType).apply {
 				access = mod
 
 				if (ifs != null)
@@ -53,7 +52,7 @@ class UnboksContext(private val resolver: (String) -> ClassReader? = { null }) {
 
 			val graph = method.graph
 			if (graph != null)
-				return FlowGraphVisitor(graph)
+				return FlowGraphVisitor(version, graph)
 			return null
 		}
 	}
@@ -65,13 +64,26 @@ class UnboksContext(private val resolver: (String) -> ClassReader? = { null }) {
 	/**
 	 * Does not currently handle primitive types.
 	 */
-	fun resolveClass(name: Reference): UnboksType = knownTypes.computeIfAbsent(name) {
-		val reader = resolver(name.internal)
-		parseClass(reader ?: throw IllegalArgumentException("Type not found: $name"))
+	fun resolveClassThrow(name: Reference): UnboksType {
+		return resolveClass(name) ?: throw IllegalArgumentException("Type not found: $name")
+	}
+
+	fun resolveClass(name: Reference): UnboksType? {
+		val type = knownTypes[name]
+		if (type != null)
+			return type
+		val reader = resolver(name.internal) ?: return null
+		val cls = parseClass(reader)
+		val rec = knownTypes[name]
+		if (rec != null)
+			return rec // TODO Clean up this mess.
+
+		knownTypes += name to cls
+		return cls
 	}
 
 	// TODO handle primitives...
-	fun resolveClass(type: KClass<*>): UnboksType = resolveClass(Reference(type))
+	fun resolveClass(type: KClass<*>): UnboksType = resolveClassThrow(Reference(type))
 
 	fun newClass(name: Reference, superType: Reference? = null): UnboksType =
 			UnboksType(this, name, superType).apply { knownTypes[name] = this }

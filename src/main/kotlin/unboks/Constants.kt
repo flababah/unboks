@@ -44,8 +44,20 @@ class FloatConst internal constructor(graph: FlowGraph, value: Float)
 /**
  * @see FlowGraph.constant
  */
+class DoubleConst internal constructor(graph: FlowGraph, value: Double)
+	: Constant<Double>(graph, value, DOUBLE, suffix = "d")
+
+/**
+ * @see FlowGraph.constant
+ */
 class StringConst internal constructor(graph: FlowGraph, value: String)
 	: Constant<String>(graph, value, Reference(String::class), prefix = "\"", suffix = "\"")
+
+/**
+ * @see FlowGraph.constant
+ */
+class TypeConst internal constructor(graph: FlowGraph, value: Thing)
+	: Constant<Thing>(graph, value, OBJECT)
 
 /**
  * @see FlowGraph.constant

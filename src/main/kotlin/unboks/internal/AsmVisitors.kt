@@ -4,6 +4,7 @@ import org.objectweb.asm.Handle
 import org.objectweb.asm.Label
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes.*
+import org.objectweb.asm.Type
 import unboks.*
 import unboks.invocation.*
 import unboks.pass.createPhiPruningPass
@@ -21,20 +22,30 @@ private fun panic(reason: String = "Fail"): Nothing = throw InternalUnboksError(
  * join, the potential parameters used in the phi join need to come from somewhere other
  * than the block itself.
  */
-internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(ASM6) {
+internal class FlowGraphVisitor(private val version: Int, private val graph: FlowGraph) : MethodVisitor(ASM6) {
 	private val slotIndex = SlotIndexMap(graph.parameters)
 	private lateinit var state: State
 
 	private fun defer(terminal: Terminal = Terminal.No, rw: Pair<Rw, Int>? = null, f: DeferredOp) {
 		state.mutate {
 			when (it) {
-				is Expecting.FrameInfo -> throw ParseException("Expected frame info after handler label, not op")
+				is Expecting.NewBlock -> {
+					blocks += AsmBlock.Basic(it.labels, exceptions.currentActives())
+				}
+				is Expecting.FrameInfo -> {
+					if (version >= V1_6)
+						throw ParseException("Missing frame information for 1.6+ bytecode")
+
+					// Normally we use the frame information to get the exception types. (For
+					// multiple type in a single handler, some hierarchy knowledge is otherwise
+					// required to get the best upper-bound for the type.)
+					// Bytecode version 1.5 or older does not contain frame information. In that case
+					// we just use Throwable as the type. Could be better, but it's old bytecode...
+					blocks += AsmBlock.Handler(it.labels, exceptions.currentActives(), null)
+				}
 				is Expecting.Any -> {
 					if (blocks.isEmpty())
 						blocks += AsmBlock.Basic(emptySet(), exceptions.currentActives()) // Root block without a label prior.
-				}
-				is Expecting.NewBlock -> {
-					blocks += AsmBlock.Basic(it.labels, exceptions.currentActives())
 				}
 			}
 			val current = blocks.last()
@@ -151,6 +162,8 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 		val locals: Map<Int, Def>
 		val stack: List<Def>
 
+		// Number of distinct predecessors. For multiple predecessors from the same block
+		// (eg. lookup switch), but only a single predecessor block, we shouldn't phi join.
 		if (block.predecessors.size > 1) {
 			val checkedPred = pred ?: panic("Joining in root block")
 			val stackJoin: List<IrPhi>?
@@ -215,15 +228,21 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 			fun <T : Block> joinOrReifySuccessor(successor: AsmBlock<T>): T {
 				val reification = successor.reification
 				return if (reification != null) {
-					// Successor has already been reified. We just need to add phi joins.
-					val join = reification.join ?: panic("Single entrance, yet we're not the creator?")
-					val target = reification.backing
+					val (target, join) = reification
+					if (join != null) {
+						// Successor has already been reified. We just need to add phi joins.
+						// We might add input to a successor that already has inputs from this block.
+						// There is no harm in this, just some redundancy.
+						this.locals.mergeInto(join.locals, backing, target is HandlerBlock)
+						if (join.stack != null) // The successor is a basic block.
+							this.stack.mergeInto(join.stack, backing)
 
-					// We might add input to a successor that already has inputs from this block.
-					// There is no harm in this, just some redundancy.
-					this.locals.mergeInto(join.locals, backing, target is HandlerBlock)
-					if (join.stack != null) // The success is a basic block.
-						this.stack.mergeInto(join.stack, backing)
+					} else if (successor.predecessors != setOf(block)) {
+						// OK to have multiple inputs but no joins as long as all the predecessors
+						// are from one single block, eg. table switch.
+						panic("No joins (eg. single entrance) but reached via" +
+								"another predecessor than the creator?")
+					}
 					target
 				} else {
 					// Recursively reify successor block.
@@ -299,8 +318,69 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 				LCONST_0,
 				LCONST_1 -> stack.push(graph.constant(opcode - LCONST_0.toLong()))
 
+				FCONST_0 -> stack.push(graph.constant(0f))
+				FCONST_1 -> stack.push(graph.constant(1f))
+				FCONST_2 -> stack.push(graph.constant(2f))
+
+				DCONST_0 -> stack.push(graph.constant(0.0))
+				DCONST_1 -> stack.push(graph.constant(1.0))
+
 				DUP -> stack.push(stack.peek())
+
+				DUP2 -> {
+					val top = stack.peek()
+					if (top.type.width == 2) {
+						// Category 2, see JVMS 6.5 (DUP2).
+						stack.push(top)
+					} else {
+						val under = stack.peek(1)
+						stack.push(under, top)
+					}
+				}
+
 				POP -> stack.pop<Thing>()
+				POP2 -> {
+					val top = stack.pop<Thing>()
+					if (top.type.width == 1)
+						stack.pop<Thing>()
+				}
+
+				SWAP -> {
+					val top = stack.pop<Thing>()
+					val under = stack.pop<Thing>()
+					if (top.type.width == 2 || under.type.width == 2)
+						throw ParseException("Trying to swap double with def ${top.type}/${under.type}")
+					stack.push(top, under)
+				}
+
+				DUP_X1 -> {
+					val top = stack.pop<Thing>()
+					val under = stack.pop<Thing>()
+					if (top.type.width == 2 || under.type.width == 2)
+						throw ParseException("DUP_X1 used with double width defs ${top.type}/${under.type}")
+					stack.push(top, under, top)
+				}
+
+				DUP_X2 -> {
+					val top = stack.pop<Thing>() // TODO Make marker interface for computational type widths ThingWidth1, ...
+					if (top.type.width == 2)
+						throw ParseException("DUP_X2 used with double width top ${top.type}")
+					val under = stack.pop<Thing>()
+					if (under.type.width == 1) { // Form 1
+						val under2 = stack.pop<Thing>()
+						stack.push(top, under2, under, top)
+					} else { // Form 2
+						stack.push(top, under, top)
+					}
+				}
+
+				DUP2_X2 -> {
+					val top = stack.pop<Thing>()
+					val under = stack.pop<Thing>()
+					if (top.type.width != 2 || under.type.width != 2)
+						TODO("case 1,2,3")
+					stack.push(top, under, top)
+				}
 
 				IRETURN -> appender.newReturn(stack.pop<IntType>())
 				LRETURN -> appender.newReturn(stack.pop<LONG>())
@@ -369,7 +449,7 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 			if (labels.size + min - 1 != max)
 				throw ParseException("Wrong number of labels (${labels.size}) for $min..$max")
 
-			val switch = appender.newSwitch(stack.pop<INT>(), resolveBlock(dflt))
+			val switch = appender.newSwitch(stack.pop<IntType>(), resolveBlock(dflt))
 			for ((i, label) in labels.withIndex())
 				switch.cases[min + i] = resolveBlock(label)
 		}
@@ -380,8 +460,8 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 			if (labels.size != keys.size)
 				throw ParseException("Lookup switch key/label size mismatch")
 
-			val switch = appender.newSwitch(stack.pop<INT>(), resolveBlock(dflt))
-			for (i in 0 until keys.size)
+			val switch = appender.newSwitch(stack.pop<IntType>(), resolveBlock(dflt))
+			for (i in keys.indices)
 				switch.cases[keys[i]] = resolveBlock(labels[i])
 		}
 	}
@@ -417,6 +497,9 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 			ISTORE, LSTORE, FSTORE, DSTORE, ASTORE -> Rw.WRITE to index
 			else -> null
 		}
+		if (opcode == RET)
+			throw ParseException("RET opcode not supported")
+
 		defer(rw = rw) {
 			when (opcode) {
 				LLOAD -> stack.push(locals.getTyped<LONG>(index))
@@ -430,8 +513,6 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 				ISTORE -> locals[index] = stack.pop<IntType>()
 				FSTORE -> locals[index] = stack.pop<FLOAT>()
 				ASTORE -> locals[index] = stack.pop<SomeReference>()
-
-				RET    -> throw ParseException("RET opcode not supported")
 			}
 		}
 	}
@@ -490,11 +571,21 @@ internal class FlowGraphVisitor(private val graph: FlowGraph) : MethodVisitor(AS
 
 	override fun visitLdcInsn(value: Any?) {
 		defer {
-			when (value) {
-				is String -> stack.push(graph.constant(value))
-				is Int -> stack.push(graph.constant(value))
+			val const = when (value) {
+				is String -> graph.constant(value)
+				is Int -> graph.constant(value)
+				is Long -> graph.constant(value)
+				is Type -> when (value.sort) {
+					Type.ARRAY,
+					Type.OBJECT-> graph.constant(Thing.fromDescriptor(value.descriptor))
+
+					// Type.ARRAY
+					else -> TODO("Other LDC type type: $value (${value.sort})")
+					// org.objectweb.asm.SymbolTable.addConstant
+				}
 				else -> TODO("Other LDC types: $value")
 			}
+			stack.push(const)
 		}
 	}
 
@@ -774,7 +865,7 @@ private sealed class AsmBlock<T : Block>(val labels: Set<Label>, val exceptions:
  */
 private class Join(val locals: Map<Int, IrPhi>, val stack: List<IrPhi>?)
 
-private class Reification<T : Block>(val backing: T, val join: Join?)
+private data class Reification<T : Block>(val backing: T, val join: Join?)
 
 private sealed class Expecting {
 	class NewBlock(val labels: Set<Label> = emptySet()) : Expecting()
@@ -917,7 +1008,13 @@ private class LocalsMap(predecessor: Map<Int, Def>, val mutables: MutableLocals?
 private class StackMap(predecessor: List<Def>): Iterable<Def> {
 	private val stack = predecessor.toMutableList()
 
-	fun push(def: Def) = stack.add(def)
+	fun push(def: Def) {
+		stack.add(def)
+	}
+
+	fun push(vararg defs: Def) {
+		defs.forEach { push(it) }
+	}
 
 	inline fun <reified T : Thing> pop(): Def = stack.removeAt(stack.size - 1).apply {
 		if (type !is T)

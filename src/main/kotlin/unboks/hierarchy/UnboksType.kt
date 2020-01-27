@@ -38,6 +38,13 @@ class UnboksType internal constructor(private val ctx: UnboksContext, val name: 
 	fun newMethod(name: String, access: Int = 0, returnType: Thing, vararg parameterTypes: Thing): UnboksMethod =
 		UnboksMethod(this, name, parameterTypes.toMutableList(), returnType, access).apply { _methods += this }
 
+	// TODO Figure out if we should have the "this" parameter explicit or implicit.
+	fun getMethod(name: String, vararg parameterTypes: Thing): UnboksMethod? {
+		return methods.find {
+			it.name == name && it.parameterTypes == parameterTypes.toList()
+		}
+	}
+
 	fun generateBytecode(): ByteArray = ClassWriter(ClassWriter.COMPUTE_FRAMES).run {
 		val interfaceNames = interfaces.map { it.internal }.toTypedArray()
 		visit(Opcodes.V1_8, access, name.internal, null, superType.internal, interfaceNames)

@@ -98,6 +98,7 @@ sealed class Primitive(override val width: Int, private val repr: String, desc: 
 	override fun toString(): String = repr
 }
 
+// See JVMS 2.11.1
 sealed class IntType(repr: String, desc: Char) : Primitive(1, repr, desc)
 
 object BOOLEAN : IntType("boolean", 'Z')

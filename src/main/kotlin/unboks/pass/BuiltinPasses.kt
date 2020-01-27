@@ -97,15 +97,19 @@ fun createPhiPruningPass() = Pass<Unit> {
 	}
 
 	// Because of the short-circuiting we can end up in a state where we
-	// have phi0 = PHI(phi0, x, y, ...). Remove phi0 from sources and hope
-	// we end in an consistent state at some point. The phi could be removed
-	// by the above visitor if we get to a point where phi0 = PHI(x).
+	// have phi0 = PHI(phi0, x), which should be reduced to just phi0 = x.
+	// More specifically remove self-def from phi if only zero or one def is not itself.
+	// phi0 = PHI(phi0, phi0, x) should also be reduced.
 	visit<IrPhi> {
 		val defs = it.defs
-		if (it in defs) {
-			defs.remove(it)
-			if (defs.size <= 1)
-				backlog(it)
+		val realDefs = defs.count { d -> d != it }
+
+		if (realDefs <= 1) {
+			if (it in defs) {
+				defs.remove(it)
+				if (defs.size <= 1)
+					backlog(it)
+			}
 		}
 	}
 
@@ -209,7 +213,9 @@ class InconsistencyException(msg: String) : IllegalStateException(msg)
 fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 	val d = Dominance(graph)
 
-	fun fail(reason: String): Nothing = throw InconsistencyException(reason)
+	fun fail(reason: String): Nothing {
+		throw InconsistencyException(reason)
+	}
 
 	visit<Block> {
 		if (it.opcodes.takeWhile { it is IrPhi } != it.opcodes.filterIsInstance<IrPhi>())
@@ -269,7 +275,7 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 				null -> prevType = def.type
 				is SomeReference -> if (def.type !is SomeReference)
 					fail("Phi defs type mismatch: $prevType vs ${def.type}")
-				else -> if (def.type != prevType)
+				else -> if (def.type != prevType && !(def.type is IntType && prevType is IntType)) // TODO Figure out the IntType mess, do we ever care about sub-int types unless it's in signatures??
 					fail("Phi defs type mismatch: $prevType vs ${def.type}")
 			}
 		}

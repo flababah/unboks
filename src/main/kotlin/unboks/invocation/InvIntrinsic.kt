@@ -29,64 +29,67 @@ enum class InvIntrinsic(
 
 	IADD(INT, INT, INT),
 	LADD(LONG, LONG, LONG),
-//	int FADD = 98; // -
-//	int DADD = 99; // -
+	FADD(FLOAT, FLOAT, FLOAT),
+	DADD(DOUBLE, DOUBLE, DOUBLE),
 	ISUB(INT, INT, INT),
-//	int LSUB = 101; // -
-//	int FSUB = 102; // -
-//	int DSUB = 103; // -
+	LSUB(LONG, LONG, LONG),
+	FSUB(FLOAT, FLOAT, FLOAT),
+	DSUB(DOUBLE, DOUBLE, DOUBLE),
 	IMUL(INT, INT, INT),
 	LMUL(LONG, LONG, LONG),
-//	int FMUL = 106; // -
-//	int DMUL = 107; // -
+	FMUL(FLOAT, FLOAT, FLOAT),
+	DMUL(DOUBLE, DOUBLE, DOUBLE),
 
 	/**
 	 * Throws [ArithmeticException] when the divisor is 0.
 	 */
 	IDIV(INT, INT, INT, safe = false),
-//	int LDIV = 109; // -
+	LDIV(LONG, LONG, LONG, safe = false),
 //	int FDIV = 110; // -
-//	int DDIV = 111; // -
-//	int IREM = 112; // -
-//	int LREM = 113; // -
+	DDIV(DOUBLE, DOUBLE, DOUBLE), // Is safe, NaN is used instead of exception.
+	IREM(INT, INT, INT, safe = false), // ArithmeticException
+	LREM(LONG, LONG, LONG, safe = false), // ArithmeticException
 //	int FREM = 114; // -
 //	int DREM = 115; // -
 	INEG(INT, INT),
-//	int LNEG = 117; // -
+	LNEG(LONG, LONG),
 //	int FNEG = 118; // -
 //	int DNEG = 119; // -
-//	int ISHL = 120; // -
-//	int LSHL = 121; // -
-//	int ISHR = 122; // -
+	ISHL(INT, INT, INT),
+	LSHL(LONG, LONG, INT),
+	ISHR(INT, INT, INT),
 //	int LSHR = 123; // -
-//	int IUSHR = 124; // -
-//	int LUSHR = 125; // -
-//	int IAND = 126; // -
-//	int LAND = 127; // -
+	IUSHR(INT, INT, INT),
+	LUSHR(LONG, LONG, INT),
+	IAND(INT, INT, INT),
+	LAND(LONG, LONG, LONG),
 	IOR(INT, INT, INT),
-	//	int LOR = 129; // -
-//	int IXOR = 130; // -
-//	int LXOR = 131; // -
+	LOR(LONG, LONG, LONG),
+	IXOR(INT, INT, INT),
 	I2L(LONG, INT),
 	I2F(FLOAT, INT),
-//	int I2D = 135; // -
+	I2D(DOUBLE, INT),
+	I2B(CHAR, INT),
+	I2C(CHAR, INT),
+	I2S(SHORT, INT),
+
 	L2I(INT, LONG),
-//	int L2F = 137; // -
-//	int L2D = 138; // -
+	L2F(FLOAT, LONG),
+	L2D(DOUBLE, LONG),
+
 	F2I(INT, FLOAT),
-//	int F2L = 140; // -
-//	int F2D = 141; // -
-//	int D2I = 142; // -
-//	int D2L = 143; // -
-//	int D2F = 144; // -
-//	int I2B = 145; // -
-//	int I2C = 146; // -
-//	int I2S = 147; // -
+	F2L(LONG, FLOAT),
+	F2D(DOUBLE, FLOAT),
+
+	D2I(INT, DOUBLE),
+	D2L(LONG, DOUBLE),
+	D2F(FLOAT, DOUBLE),
+
 	LCMP(INT, LONG, LONG),
-//	int FCMPL = 149; // -
-//	int FCMPG = 150; // -
-//	int DCMPL = 151; // -
-//	int DCMPG = 152; // -
+	FCMPL(INT, FLOAT, FLOAT),
+	FCMPG(INT, FLOAT, FLOAT),
+	DCMPL(INT, DOUBLE, DOUBLE),
+	DCMPG(INT, DOUBLE, DOUBLE),
 	ARRAYLENGTH(INT, ARRAY),
 
 //	ATHROW(OBJECT, OBJECT), // Now Ir.

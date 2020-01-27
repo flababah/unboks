@@ -41,14 +41,23 @@ class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutio
 			if (name.startsWith("java."))
 				return super.loadClass(name, resolve)
 
-			if (name.startsWith("kotlin."))
-				return super.loadClass(name, resolve) // TODO Hmm, thanks Kotlin.
+//			if (name.startsWith("kotlin."))
+//				return super.loadClass(name, resolve) // TODO Hmm, thanks Kotlin.
+
+//			if (name.startsWith("org.objectweb")) // Java 1.5.
+//				return super.loadClass(name, resolve)
 
 			if (name == Companion::class.java.name)
 				return super.loadClass(name, resolve) // We need the traces to be visible from the "real" class, not the custom loaded.
 
+			println("Loading $name")
 
 			val unboksClass = ctx.resolveClass(Reference(name.replace(".", "/")))
+			if (unboksClass == null)
+				throw ClassNotFoundException()
+
+
+
 			val bytecode = unboksClass.generateBytecode()
 			val cls = defineClass(name, bytecode, 0, bytecode.size)
 
@@ -58,8 +67,6 @@ class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutio
 
 			if (resolve)
 				resolveClass(cls)
-
-			println("Loaded $name")
 			return cls
 		}
 	}
@@ -114,7 +121,7 @@ class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutio
 		System.err.println("============ FAILED VERIFY ===========")
 		val cr = ClassReader(bytecode);
 		val pw = PrintWriter(System.err);
-		CheckClassAdapter.verify(cr, true, pw);
+		CheckClassAdapter.verify(cr, true, pw)
 		System.err.print("============ END FAILED VERIFY ===========")
 		throw e
 	}
