@@ -12,7 +12,7 @@ import unboks.*
  */
 class InvNewArray(override val returnType: ArrayReference) : Invocation {
 
-	override val parameterTypes = (0 until returnType.getDimensions()).map { INT }
+	override val parameterTypes = (0 until returnType.dimensions).map { INT }
 
 	override val representation get() = "new $returnType"
 
@@ -22,14 +22,13 @@ class InvNewArray(override val returnType: ArrayReference) : Invocation {
 	override val safe get() = false
 
 	override fun visit(visitor: MethodVisitor) {
-		val dimensions = returnType.getDimensions()
-		val bottom = returnType.getBottomComponent()
+		val dimensions = returnType.dimensions
+		val bottom = returnType.bottomComponent
 
 		when {
-			dimensions > 1      -> visitor.visitMultiANewArrayInsn(returnType.asDescriptor, dimensions)
+			dimensions > 1      -> visitor.visitMultiANewArrayInsn(returnType.descriptor, dimensions)
 			bottom is Primitive -> visitor.visitIntInsn(Opcodes.NEWARRAY, primitiveToOpcode(bottom))
 			bottom is Reference -> visitor.visitTypeInsn(Opcodes.ANEWARRAY, bottom.internal)
-			else -> TODO("Disallow SomeReference")
 		}
 	}
 
@@ -42,6 +41,5 @@ class InvNewArray(override val returnType: ArrayReference) : Invocation {
 		SHORT -> Opcodes.T_SHORT
 		INT -> Opcodes.T_INT
 		LONG -> Opcodes.T_LONG
-		TOP -> TODO("Probably remove this option somehow")
 	}
 }

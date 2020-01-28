@@ -29,7 +29,7 @@ class UnboksField internal constructor(
 		}
 
 	internal fun write(visitor: ClassVisitor) = visitor.apply {
-		visitField(access, name, type.asDescriptor, null, initial)
+		visitField(access, name, type.descriptor, null, initial)
 		visitEnd()
 	}
 }

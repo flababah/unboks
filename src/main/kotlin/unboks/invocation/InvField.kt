@@ -44,7 +44,7 @@ class InvField(
 		get() = "${ppOpcode()} $owner#$name"
 
 	override fun visit(visitor: MethodVisitor) {
-		visitor.visitFieldInsn(opcode, owner.internal, name, type.asDescriptor)
+		visitor.visitFieldInsn(opcode, owner.internal, name, type.descriptor)
 	}
 
 	private fun ppOpcode() = when(opcode) {

@@ -273,9 +273,9 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 
 			when (prevType) {
 				null -> prevType = def.type
-				is SomeReference -> if (def.type !is SomeReference)
+				is Reference -> if (def.type !is Reference)
 					fail("Phi defs type mismatch: $prevType vs ${def.type}")
-				else -> if (def.type != prevType && !(def.type is IntType && prevType is IntType)) // TODO Figure out the IntType mess, do we ever care about sub-int types unless it's in signatures??
+				else -> if (def.type != prevType && !(def.type is Int32 && prevType is Int32)) // TODO Figure out the IntType mess, do we ever care about sub-int types unless it's in signatures??
 					fail("Phi defs type mismatch: $prevType vs ${def.type}")
 			}
 		}

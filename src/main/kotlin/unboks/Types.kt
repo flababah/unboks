@@ -2,127 +2,114 @@ package unboks
 
 import kotlin.reflect.KClass
 
-sealed class Thing {
-	abstract val width: Int
+// +---------------------------------------------------------------------------
+// |  Markers
+// +---------------------------------------------------------------------------
 
-	abstract val asDescriptor: String
+interface IntegralType
+interface FloatingPointType
+interface T32
+interface T64
 
-	companion object {
-		fun fromDescriptor(desc: String): Thing = when {
-			desc.startsWith("[") -> ArrayReference(fromDescriptor(desc.substring(1)))
-			desc.startsWith("L") && desc.endsWith(";") -> Reference(desc.substring(1, desc.length - 1))
-			desc.length == 1 -> fromPrimitiveChar(desc[0])
-			else -> throw IllegalArgumentException("Not a valid descriptor: $desc")
-		}
+// +---------------------------------------------------------------------------
+// |  Hierarchy
+// +---------------------------------------------------------------------------
+/**
+ * Base type for every type in Unboks.
+ */
+sealed class Thing(
+		val width: Int,
+		val descriptor: String) {
 
-		fun fromPrimitiveChar(chr: Char): Primitive = when(chr) {
-			'Z' -> BOOLEAN
-			'B' -> BYTE
-			'C' -> CHAR
-			'S' -> SHORT
-			'I' -> INT
-			'J' -> LONG
-			'F' -> FLOAT
-			'D' -> DOUBLE
-			else -> throw IllegalArgumentException("Not a primitive char: $chr")
-		}
-
-		fun fromPrimitiveCharVoid(chr: Char): Thing = when(chr) {
-			'V' -> VOID
-			else -> fromPrimitiveChar(chr)
-		}
-	}
+	override fun equals(other: Any?) = other is Thing && descriptor == other.descriptor
+	override fun hashCode() = descriptor.hashCode()
+	override fun toString() = descriptor
 }
 
 /**
- * Represents a generic reference with no known type.
+ * Only open so we can have [ArrayReference].
  */
-sealed class SomeReference : Thing()
+open class Reference internal constructor(val internal: String, descriptor: String) : Thing(1, descriptor), T32 {
 
-// TODO assert ok name
-class Reference(val internal: String) : SomeReference() {
-	override val asDescriptor get() = "L$internal;"
-	override val width get() = 1
+	constructor(internal: String) : this(internal, "L$internal;")
 
 	constructor(type: KClass<*>) : this(type.java.name.replace(".", "/"))
-
-	override fun equals(other: Any?): Boolean = other is Reference && internal == other.internal
-
-	override fun hashCode(): Int = internal.hashCode()
-
-	override fun toString(): String = internal.split("/").last()
 }
 
-open class ArrayReference(val component: Thing) : SomeReference() {
-	override val width: Int get() = 1
-	override val asDescriptor: String get() = "[" + component.asDescriptor
+/**
+ * Only open so we can have [ARRAY].
+ */
+open class ArrayReference(component: Thing) : Reference(component.descriptor, "[${component.descriptor}") {
 
 	/**
-	 * For types like Array<Array<Array<Int>>> returns 3.
+	 * For types like Array<Array<Array<Int>>> gives 3.
 	 */
-	fun getDimensions(): Int {
-		var count = 1
-		var ptr = component
-		while (ptr is ArrayReference) {
-			count++
-			ptr = ptr.component
-		}
-		return count
-	}
+	val dimensions: Int = if (component is ArrayReference) component.dimensions + 1 else 1
 
 	/**
-	 * For types like Array<Array<Array<Int>>> returns Int.
+	 * For types like Array<Array<Array<Int>>> gives Int.
 	 */
-	fun getBottomComponent(): Thing {
-		var ptr = component
-		while (ptr is ArrayReference)
-			ptr = ptr.component
-		return ptr
-	}
-
-	override fun equals(other: Any?): Boolean {
-		return other is ArrayReference && other.component == component
-	}
-
-	override fun hashCode(): Int {
-		return component.hashCode() + 1
-	}
-
-	override fun toString(): String {
-		return asDescriptor
-	}
+	val bottomComponent: Thing = if (component is ArrayReference) component.bottomComponent else component
 }
 
-sealed class Primitive(override val width: Int, private val repr: String, desc: Char) : Thing() {
-	override val asDescriptor = "$desc"
-	override fun toString(): String = repr
-}
+sealed class Primitive(width: Int, symbol: Char) : Thing(width, "$symbol")
 
-// See JVMS 2.11.1
-sealed class IntType(repr: String, desc: Char) : Primitive(1, repr, desc)
+object OBJECT  : Reference("java/lang/Object")
+object ARRAY   : ArrayReference(OBJECT)
+object VOID    : Thing(0, "V")
 
-object BOOLEAN : IntType("boolean", 'Z')
-object BYTE : IntType("byte", 'B')
-object CHAR : IntType("char", 'C')
-object SHORT : IntType("short", 'S')
-object INT : IntType("int", 'I')
+// +---------------------------------------------------------------------------
+// |  Integer types
+// +---------------------------------------------------------------------------
 
-object LONG : Primitive(2, "long", 'J')
-object FLOAT : Primitive(1, "float", 'F')
-object DOUBLE : Primitive(2, "double", 'D')
+/**
+ * Integral computational type 1. See JVMS 2.11.1-B.
+ */
+sealed class Int32(desc: Char) : Primitive(1, desc), IntegralType, T32
+object INT     : Int32('I')
+object BOOLEAN : Int32('Z')
+object BYTE    : Int32('B')
+object CHAR    : Int32('C')
+object SHORT   : Int32('S')
 
-object VOID : SomeReference() {
-	override val asDescriptor = "V"
-	override val width get() = throw UnsupportedOperationException("Hmm void doesn't have a width... hmmmmm")
-}
+/**
+ * Integral computational type 2.
+ */
+sealed class Int64 : Primitive(2, 'J'), IntegralType, T64
+object LONG    : Int64()
 
-object OBJECT : SomeReference() {
-	override val asDescriptor get() = throw IllegalStateException("Not an exact reference")
-	override val width = 1
-}
+// +---------------------------------------------------------------------------
+// |  Floating point types
+// +---------------------------------------------------------------------------
+/**
+ * Floating point computational type 1.
+ */
+sealed class Fp32 : Primitive(1, 'F'), FloatingPointType, T32
+object FLOAT   : Fp32()
 
-object ARRAY : ArrayReference(OBJECT)
+/**
+ * Floating point computational type 2.
+ */
+sealed class Fp64 : Primitive(2, 'D'), FloatingPointType, T64
+object DOUBLE  : Fp64()
 
-internal object TOP : Primitive(1, "~TOP~", '!') { // TODO get rid of this
-	override val asDescriptor get() = throw IllegalStateException("No desc for top")
+// +---------------------------------------------------------------------------
+// |  Helpers
+// +---------------------------------------------------------------------------
+
+fun fromDescriptor(desc: String): Thing = when {
+	desc.startsWith("[") -> ArrayReference(fromDescriptor(desc.substring(1)))
+	desc.startsWith("L") && desc.endsWith(";") -> Reference(desc.substring(1, desc.length - 1))
+	desc.length == 1 -> when(val chr = desc[0]) {
+		'Z' -> BOOLEAN
+		'B' -> BYTE
+		'C' -> CHAR
+		'S' -> SHORT
+		'I' -> INT
+		'J' -> LONG
+		'F' -> FLOAT
+		'D' -> DOUBLE
+		else -> throw IllegalArgumentException("Not a primitive char: $chr")
+	}
+	else -> throw IllegalArgumentException("Not a valid descriptor: $desc")
 }

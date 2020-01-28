@@ -41,8 +41,8 @@ class UnboksMethod internal constructor(
 		val realParams = if (static) parameterTypes else parameterTypes.drop(1)
 
 		val desc = realParams.asSequence()
-				.map { it.asDescriptor }
-				.joinToString(prefix = "(", separator = "", postfix = ")${returnType.asDescriptor}")
+				.map { it.descriptor }
+				.joinToString(prefix = "(", separator = "", postfix = ")${returnType.descriptor}")
 
 		val exceptions = throws.map { it.internal }.toTypedArray()
 

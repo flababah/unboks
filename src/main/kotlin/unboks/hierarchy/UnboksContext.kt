@@ -3,7 +3,7 @@ package unboks.hierarchy
 import org.objectweb.asm.*
 import org.objectweb.asm.Opcodes.ASM6
 import unboks.Reference
-import unboks.Thing
+import unboks.fromDescriptor
 import unboks.internal.FlowGraphVisitor
 import unboks.internal.MethodDescriptor
 import java.lang.reflect.Modifier
@@ -29,7 +29,7 @@ class UnboksContext(private val resolver: (String) -> ClassReader? = { null }) {
 		}
 
 		override fun visitField(mod: Int, name: String, desc: String, sig: String?, value: Any?): FieldVisitor? {
-			type.newField(name, Thing.fromDescriptor(desc), mod).apply {
+			type.newField(name, fromDescriptor(desc), mod).apply {
 				initial = value
 			}
 			return null

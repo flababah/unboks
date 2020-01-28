@@ -172,14 +172,14 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 				stack = listOf(backing)
 				stackJoin = null
 			} else {
-				stack = predStack.map { appender.newPhi(it.type) }
+				stack = predStack.map { appender.newPhi() }
 				stackJoin = stack
 				predStack.mergeInto(stack, checkedPred)
 			}
 
 			// We need to insert a phi join for every read.
 			locals = reads.asSequence()
-					.map { it to appender.newPhi(predLocals[it].type) }
+					.map { it to appender.newPhi() }
 					.toMap()
 
 			predLocals.mergeInto(locals, checkedPred, backing is HandlerBlock)
@@ -303,7 +303,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 			when (opcode) {
 				NOP -> { }
 
-				ATHROW -> appender.newThrow(stack.pop<SomeReference>())
+				ATHROW -> appender.newThrow(stack.pop<Reference>())
 
 				ACONST_NULL -> stack.push(graph.constant(null))
 
@@ -382,11 +382,11 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 					stack.push(top, under, top)
 				}
 
-				IRETURN -> appender.newReturn(stack.pop<IntType>())
-				LRETURN -> appender.newReturn(stack.pop<LONG>())
-				FRETURN -> appender.newReturn(stack.pop<FLOAT>())
-				DRETURN -> appender.newReturn(stack.pop<DOUBLE>())
-				ARETURN -> appender.newReturn(stack.pop<SomeReference>())
+				IRETURN -> appender.newReturn(stack.pop<Int32>())
+				LRETURN -> appender.newReturn(stack.pop<Int64>())
+				FRETURN -> appender.newReturn(stack.pop<Fp32>())
+				DRETURN -> appender.newReturn(stack.pop<Fp64>())
+				ARETURN -> appender.newReturn(stack.pop<Reference>())
 				RETURN  -> appender.newReturn()
 
 
@@ -420,23 +420,23 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 			when (opcode) {
 				GOTO      -> appender.newGoto(resolveBlock(label))
 
-				IFEQ      -> newCmp1(Cmp.EQ,       stack.pop<IntType>())
-				IFNE      -> newCmp1(Cmp.NE,       stack.pop<IntType>())
-				IFLT      -> newCmp1(Cmp.LT,       stack.pop<IntType>())
-				IFGE      -> newCmp1(Cmp.GE,       stack.pop<IntType>())
-				IFGT      -> newCmp1(Cmp.GT,       stack.pop<IntType>())
-				IFLE      -> newCmp1(Cmp.LE,       stack.pop<IntType>())
-				IFNULL    -> newCmp1(Cmp.IS_NULL,  stack.pop<SomeReference>())
-				IFNONNULL -> newCmp1(Cmp.NOT_NULL, stack.pop<SomeReference>())
+				IFEQ      -> newCmp1(Cmp.EQ,       stack.pop<Int32>())
+				IFNE      -> newCmp1(Cmp.NE,       stack.pop<Int32>())
+				IFLT      -> newCmp1(Cmp.LT,       stack.pop<Int32>())
+				IFGE      -> newCmp1(Cmp.GE,       stack.pop<Int32>())
+				IFGT      -> newCmp1(Cmp.GT,       stack.pop<Int32>())
+				IFLE      -> newCmp1(Cmp.LE,       stack.pop<Int32>())
+				IFNULL    -> newCmp1(Cmp.IS_NULL,  stack.pop<Reference>())
+				IFNONNULL -> newCmp1(Cmp.NOT_NULL, stack.pop<Reference>())
 
-				IF_ICMPEQ -> newCmp2(Cmp.EQ,       stack.popPair<IntType>())
-				IF_ICMPNE -> newCmp2(Cmp.NE,       stack.popPair<IntType>())
-				IF_ICMPLT -> newCmp2(Cmp.LT,       stack.popPair<IntType>())
-				IF_ICMPGE -> newCmp2(Cmp.GE,       stack.popPair<IntType>())
-				IF_ICMPGT -> newCmp2(Cmp.GT,       stack.popPair<IntType>())
-				IF_ICMPLE -> newCmp2(Cmp.LE,       stack.popPair<IntType>())
-				IF_ACMPEQ -> newCmp2(Cmp.EQ,       stack.popPair<SomeReference>())
-				IF_ACMPNE -> newCmp2(Cmp.NE,       stack.popPair<SomeReference>())
+				IF_ICMPEQ -> newCmp2(Cmp.EQ,       stack.popPair<Int32>())
+				IF_ICMPNE -> newCmp2(Cmp.NE,       stack.popPair<Int32>())
+				IF_ICMPLT -> newCmp2(Cmp.LT,       stack.popPair<Int32>())
+				IF_ICMPGE -> newCmp2(Cmp.GE,       stack.popPair<Int32>())
+				IF_ICMPGT -> newCmp2(Cmp.GT,       stack.popPair<Int32>())
+				IF_ICMPLE -> newCmp2(Cmp.LE,       stack.popPair<Int32>())
+				IF_ACMPEQ -> newCmp2(Cmp.EQ,       stack.popPair<Reference>())
+				IF_ACMPNE -> newCmp2(Cmp.NE,       stack.popPair<Reference>())
 
 				JSR       -> throw ParseException("JSR opcode not supported")
 				else      -> throw ParseException("Unknown visitJumpInsn opcode: $opcode")
@@ -449,7 +449,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 			if (labels.size + min - 1 != max)
 				throw ParseException("Wrong number of labels (${labels.size}) for $min..$max")
 
-			val switch = appender.newSwitch(stack.pop<IntType>(), resolveBlock(dflt))
+			val switch = appender.newSwitch(stack.pop<Int32>(), resolveBlock(dflt))
 			for ((i, label) in labels.withIndex())
 				switch.cases[min + i] = resolveBlock(label)
 		}
@@ -460,7 +460,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 			if (labels.size != keys.size)
 				throw ParseException("Lookup switch key/label size mismatch")
 
-			val switch = appender.newSwitch(stack.pop<IntType>(), resolveBlock(dflt))
+			val switch = appender.newSwitch(stack.pop<Int32>(), resolveBlock(dflt))
 			for (i in keys.indices)
 				switch.cases[keys[i]] = resolveBlock(labels[i])
 		}
@@ -504,15 +504,15 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 			when (opcode) {
 				LLOAD -> stack.push(locals.getTyped<LONG>(index))
 				DLOAD -> stack.push(locals.getTyped<DOUBLE>(index))
-				ILOAD -> stack.push(locals.getTyped<IntType>(index))
+				ILOAD -> stack.push(locals.getTyped<Int32>(index))
 				FLOAD -> stack.push(locals.getTyped<FLOAT>(index))
-				ALOAD -> stack.push(locals.getTyped<SomeReference>(index))
+				ALOAD -> stack.push(locals.getTyped<Reference>(index))
 
 				LSTORE -> locals[index] = stack.pop<LONG>()
 				DSTORE -> locals[index] = stack.pop<DOUBLE>()
-				ISTORE -> locals[index] = stack.pop<IntType>()
+				ISTORE -> locals[index] = stack.pop<Int32>()
 				FSTORE -> locals[index] = stack.pop<FLOAT>()
-				ASTORE -> locals[index] = stack.pop<SomeReference>()
+				ASTORE -> locals[index] = stack.pop<Reference>()
 			}
 		}
 	}
@@ -533,7 +533,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 
 	override fun visitFieldInsn(opcode: Int, owner: String, name: String, descriptor: String) {
 		defer { // Real quick and dirty.
-			val type = Thing.fromDescriptor(descriptor)
+			val type = fromDescriptor(descriptor)
 			val ownerType = Reference(owner)
 			val params = when (opcode) {
 				GETFIELD -> listOf(ownerType)
@@ -577,7 +577,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 				is Long -> graph.constant(value)
 				is Type -> when (value.sort) {
 					Type.ARRAY,
-					Type.OBJECT-> graph.constant(Thing.fromDescriptor(value.descriptor))
+					Type.OBJECT-> graph.constant(fromDescriptor(value.descriptor))
 
 					// Type.ARRAY
 					else -> TODO("Other LDC type type: $value (${value.sort})")
@@ -600,8 +600,8 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 
 	override fun visitMultiANewArrayInsn(descriptor: String, dims: Int) {
 		defer {
-			val type = Thing.fromDescriptor(descriptor)
-			if (type !is ArrayReference || type.getDimensions() != dims)
+			val type = fromDescriptor(descriptor)
+			if (type !is ArrayReference || type.dimensions != dims)
 				throw ParseException("Bad descriptor '$descriptor' for order $dims array")
 
 			appendInvocation(InvNewArray(type))

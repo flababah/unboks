@@ -87,17 +87,18 @@ private fun createLabelsForBlocks(blocks: List<Block>): Map<Block, Pair<Label, L
 
 private fun loadConstant(const: Constant<*>, visitor: MethodVisitor) = when (const) {
 	is NullConst -> visitor.visitInsn(ACONST_NULL)
-	is TypeConst -> visitor.visitLdcInsn(Type.getType(const.value.asDescriptor))
+	is TypeConst -> visitor.visitLdcInsn(Type.getType(const.value.descriptor))
 	else         -> visitor.visitLdcInsn(const.value)
 }
 
 private fun load(def: Def, mapping: Pass<Int>, visitor: MethodVisitor) = when {
-	def is Constant<*>        -> loadConstant(def, visitor)
-	def.type is SomeReference -> visitor.visitVarInsn(ALOAD, def.passValue(mapping))
-	def.type == unboks.FLOAT  -> visitor.visitVarInsn(FLOAD, def.passValue(mapping))
-	def.type == unboks.DOUBLE -> visitor.visitVarInsn(DLOAD, def.passValue(mapping))
-	def.type == unboks.LONG   -> visitor.visitVarInsn(LLOAD, def.passValue(mapping))
-	else                      -> visitor.visitVarInsn(ILOAD, def.passValue(mapping))
+	def is Constant<*>    -> loadConstant(def, visitor)
+	def.type is Reference -> visitor.visitVarInsn(ALOAD, def.passValue(mapping))
+	def.type is Fp32      -> visitor.visitVarInsn(FLOAD, def.passValue(mapping))
+	def.type is Fp64      -> visitor.visitVarInsn(DLOAD, def.passValue(mapping))
+	def.type is Int64     -> visitor.visitVarInsn(LLOAD, def.passValue(mapping))
+	def.type is Int32     -> visitor.visitVarInsn(ILOAD, def.passValue(mapping))
+	else                  -> throw IllegalArgumentException()
 }
 
 private fun storeVarIfUsed(opcode: Int, x: Def, mapping: Pass<Int>, visitor: MethodVisitor) {
@@ -109,12 +110,13 @@ private fun storeVarIfUsed(opcode: Int, x: Def, mapping: Pass<Int>, visitor: Met
 }
 
 private fun store(x: Def, mapping: Pass<Int>, visitor: MethodVisitor) = when (x.type) {
-	is Constant<*>   -> throw Error("Cannot store in constant.")
-	is SomeReference -> storeVarIfUsed(ASTORE, x, mapping, visitor)
-	unboks.FLOAT     -> storeVarIfUsed(FSTORE, x, mapping, visitor)
-	unboks.DOUBLE    -> storeVarIfUsed(DSTORE, x, mapping, visitor)
-	unboks.LONG      -> storeVarIfUsed(LSTORE, x, mapping, visitor)
-	else             -> storeVarIfUsed(ISTORE, x, mapping, visitor)
+	is Constant<*> -> throw Error("Cannot store in constant.")
+	is Reference   -> storeVarIfUsed(ASTORE, x, mapping, visitor)
+	is Fp32        -> storeVarIfUsed(FSTORE, x, mapping, visitor)
+	is Fp64        -> storeVarIfUsed(DSTORE, x, mapping, visitor)
+	is Int64       -> storeVarIfUsed(LSTORE, x, mapping, visitor)
+	is Int32       -> storeVarIfUsed(ISTORE, x, mapping, visitor)
+	VOID           -> throw IllegalArgumentException()
 }
 
 internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: Thing) { // TODO Hvis void return? return at end
@@ -161,28 +163,28 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 	// the beginning of watched blocks. We don't care about legacy async exceptions like
 	// ThreadDeath.
 	for (alloc in max.allocs) {
-		when (alloc.type) {
-			is SomeReference -> {
+		val checked = when (alloc.type) {
+			is Reference -> {
 				visitor.visitInsn(ACONST_NULL)
 				store(alloc)
 			}
-			is IntType -> {
+			is Int32 -> {
 				visitor.visitInsn(ICONST_0)
 				store(alloc)
 			}
-			is LONG -> {
+			is Int64 -> {
 				visitor.visitInsn(LCONST_0)
 				store(alloc)
 			}
-			is FLOAT -> {
+			is Fp32 -> {
 				visitor.visitInsn(FCONST_0)
 				store(alloc)
 			}
-			is DOUBLE -> {
+			is Fp64 -> {
 				visitor.visitInsn(DCONST_0)
 				store(alloc)
 			}
-			else -> TODO("Some other shit: ${alloc.type}")
+			VOID -> throw IllegalArgumentException()
 		}
 	}
 
@@ -219,7 +221,7 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 
 				load(it.op1)
 				load(it.op2)
-				val reference = it.op1.type is SomeReference
+				val reference = it.op1.type is Reference
 				val opcode = when (it.cmp) {
 					Cmp.EQ -> if (reference) IF_ACMPEQ else IF_ICMPEQ
 					Cmp.NE -> if (reference) IF_ACMPNE else IF_ICMPNE
@@ -241,18 +243,17 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 
 			visit<IrReturn> {
 				val ret = it.value
-				if (ret != null) {
+				if (ret != null)
 					load(ret)
-					visitor.visitInsn(when (returnType) { // TODO what does JVMS say about narrowing here?
-						is SomeReference -> ARETURN
-						unboks.FLOAT -> FRETURN
-						unboks.DOUBLE -> DRETURN
-						unboks.LONG -> LRETURN
-						else -> IRETURN
-					})
-				} else {
-					visitor.visitInsn(RETURN)
-				}
+
+				visitor.visitInsn(when (returnType) {
+					is Reference -> ARETURN
+					is Fp32 -> FRETURN
+					is Fp64 -> DRETURN
+					is Int64 -> LRETURN
+					is Int32 -> IRETURN
+					VOID -> RETURN
+				})
 			}
 
 			visit<IrSwitch> {
