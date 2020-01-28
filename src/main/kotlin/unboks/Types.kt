@@ -21,6 +21,12 @@ sealed class Thing(
 		val width: Int,
 		val descriptor: String) {
 
+	/**
+	 * Returns some common compatible ancestor of the two types, if one exists.
+	 * Not too well-defined at the moment...
+	 */
+	open fun common(other: Thing): Thing? = if (this == other) this else null
+
 	override fun equals(other: Any?) = other is Thing && descriptor == other.descriptor
 	override fun hashCode() = descriptor.hashCode()
 	override fun toString() = descriptor
@@ -32,6 +38,10 @@ sealed class Thing(
 open class Reference internal constructor(val internal: String, descriptor: String) : Thing(1, descriptor), T32 {
 
 	internal constructor(internal: String) : this(internal, "L$internal;")
+
+	override fun common(other: Thing): Thing? {
+		return super.common(other) ?: (if (other is Reference) OBJECT else null)
+	}
 }
 
 /**
@@ -63,7 +73,15 @@ object VOID    : Thing(0, "V")
 /**
  * Integral computational type 1. See JVMS 2.11.1-B.
  */
-sealed class Int32(desc: Char) : Primitive(1, desc), IntegralType, T32
+sealed class Int32(desc: Char) : Primitive(1, desc), IntegralType, T32 {
+
+	/**
+	 * The sub-types of int are mostly ignored in the JVM...
+	 */
+	override fun common(other: Thing): Thing? {
+		return super.common(other) ?: (if (other is Int32) INT else null)
+	}
+}
 object INT     : Int32('I')
 object BOOLEAN : Int32('Z')
 object BYTE    : Int32('B')

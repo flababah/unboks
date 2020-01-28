@@ -267,17 +267,14 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 	 * TODO exception handling.
 	 */
 	visit<IrPhi> {
-		var prevType: Thing? = null
+		var firstType: Thing? = null
 		for (predecessor in it.block.predecessors) {
 			val def = it.defs[predecessor] ?: fail("$it does not cover predecessor $predecessor")
 
-			when (prevType) {
-				null -> prevType = def.type
-				is Reference -> if (def.type !is Reference)
-					fail("Phi defs type mismatch: $prevType vs ${def.type}")
-				else -> if (def.type != prevType && !(def.type is Int32 && prevType is Int32)) // TODO Figure out the IntType mess, do we ever care about sub-int types unless it's in signatures??
-					fail("Phi defs type mismatch: $prevType vs ${def.type}")
-			}
+			if (firstType == null)
+				firstType = def.type
+			else if (def.type.common(firstType) == null)
+				fail("Phi defs type mismatch: $firstType vs ${def.type}")
 		}
 		for ((assignedIn, def) in it.defs.entries) {
 			if (assignedIn !in it.block.predecessors) {

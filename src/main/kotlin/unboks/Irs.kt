@@ -158,9 +158,20 @@ class IrPhi internal constructor(block: Block)
 
 	override val uses = RefCount<Use>()
 	override val type: Thing get() = when {
-		defs.iterator().hasNext() -> defs.first().type // TODO common
+		defs.iterator().hasNext() -> defs.first().type // TODO For fuck's sake! Remember that stack overflow without an explitct type and a cycle?
 		else -> VOID
 	}
+
+//	// XXX Do we need to be more aggressive if no common type can be found?
+//	private fun commonType(): Thing {
+//		val iter = defs.iterator()
+//		if (!iter.hasNext())
+//			return VOID
+//		var acc = iter.next().type
+//		while (iter.hasNext())
+//			acc = acc.common(iter.next().type) ?: return VOID
+//		return acc
+//	}
 
 	override fun toString() = defs.entries.joinToString(
 			prefix = "$name = PHI(", separator = ", ", postfix = ")") { "${it.second.name} in ${it.first.name}" }
