@@ -172,14 +172,14 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 				stack = listOf(backing)
 				stackJoin = null
 			} else {
-				stack = predStack.map { appender.newPhi() }
+				stack = predStack.map { appender.newPhi(it.type) }
 				stackJoin = stack
 				predStack.mergeInto(stack, checkedPred)
 			}
 
 			// We need to insert a phi join for every read.
 			locals = reads.asSequence()
-					.map { it to appender.newPhi() }
+					.map { it to appender.newPhi(predLocals[it].type) }
 					.toMap()
 
 			predLocals.mergeInto(locals, checkedPred, backing is HandlerBlock)

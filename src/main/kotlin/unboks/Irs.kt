@@ -149,7 +149,7 @@ class IrInvoke internal constructor(block: Block, val spec: Invocation, argument
  * The one def per block rule cannot apply. Maybe at least one def before any unsafe
  * instruction?
  */
-class IrPhi internal constructor(block: Block)
+class IrPhi internal constructor(block: Block, private val explicitType: Thing?)
 		: Ir(block), Def, Use {
 
 	override var name by flow.registerAutoName(this, "phi")
@@ -158,6 +158,7 @@ class IrPhi internal constructor(block: Block)
 
 	override val uses = RefCount<Use>()
 	override val type: Thing get() = when {
+		explicitType != null -> explicitType
 		defs.iterator().hasNext() -> defs.first().type // TODO For fuck's sake! Remember that stack overflow without an explitct type and a cycle?
 		else -> VOID
 	}

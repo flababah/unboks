@@ -22,8 +22,8 @@ class IrFactory internal constructor(private val block: Block, private val offse
 	fun newInvoke(spec: Invocation, arguments: List<Def>): IrInvoke =
 			register(IrInvoke(block, spec, arguments))
 
-	fun newPhi(): IrPhi =
-			register(IrPhi(block))
+	fun newPhi(explicitType: Thing? = null): IrPhi =
+			register(IrPhi(block, explicitType))
 
 	fun newReturn(value: Def? = null): IrReturn =
 			register(IrReturn(block, value))
