@@ -3,6 +3,8 @@ package unboks.hierarchy
 import org.objectweb.asm.*
 import org.objectweb.asm.Opcodes.ASM6
 import unboks.Reference
+import unboks.Thing
+import unboks.asThing
 import unboks.fromDescriptor
 import unboks.internal.FlowGraphVisitor
 import unboks.internal.MethodDescriptor
@@ -10,7 +12,7 @@ import java.lang.reflect.Modifier
 import kotlin.reflect.KClass
 
 class UnboksContext(private val resolver: (String) -> ClassReader? = { null }) {
-	private val knownTypes = mutableMapOf<Reference, UnboksType>()
+	private val knownTypes = mutableMapOf<Thing, UnboksType>()
 
 	private inner class UnboksClassVisitor : ClassVisitor(ASM6) {
 		private var version = -1
@@ -61,18 +63,19 @@ class UnboksContext(private val resolver: (String) -> ClassReader? = { null }) {
 			.apply { reader.accept(this, 0) }
 			.type
 
-	/**
-	 * Does not currently handle primitive types.
-	 */
-	fun resolveClassThrow(name: Reference): UnboksType {
+	fun resolveClassThrow(name: Thing): UnboksType {
 		return resolveClass(name) ?: throw IllegalArgumentException("Type not found: $name")
 	}
 
-	fun resolveClass(name: Reference): UnboksType? {
+	fun resolveClass(name: Thing): UnboksType? {
 		val type = knownTypes[name]
 		if (type != null)
 			return type
-		val reader = resolver(name.internal) ?: return null
+		val internalName = when (name) {
+			is Reference -> name.internal
+			else -> name.descriptor
+		}
+		val reader = resolver(internalName) ?: return null
 		val cls = parseClass(reader)
 		val rec = knownTypes[name]
 		if (rec != null)
@@ -82,8 +85,7 @@ class UnboksContext(private val resolver: (String) -> ClassReader? = { null }) {
 		return cls
 	}
 
-	// TODO handle primitives...
-	fun resolveClass(type: KClass<*>): UnboksType = resolveClassThrow(Reference(type))
+	fun resolveClass(type: KClass<*>): UnboksType = resolveClassThrow(asThing(type))
 
 	fun newClass(name: Reference, superType: Reference? = null): UnboksType =
 			UnboksType(this, name, superType).apply { knownTypes[name] = this }

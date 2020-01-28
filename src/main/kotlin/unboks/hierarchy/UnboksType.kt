@@ -2,6 +2,7 @@ package unboks.hierarchy
 
 import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.Opcodes
+import unboks.OBJECT
 import unboks.Reference
 import unboks.Thing
 import unboks.internal.Access
@@ -12,7 +13,7 @@ class UnboksType internal constructor(private val ctx: UnboksContext, val name: 
 	private val _fields = mutableSetOf<UnboksField>()
 	private val _methods = mutableSetOf<UnboksMethod>()
 
-	var superType: Reference = superType ?: Reference(Object::class)
+	var superType: Reference = superType ?: OBJECT
 	val interfaces = mutableListOf<Reference>()
 
 	override var access = 0

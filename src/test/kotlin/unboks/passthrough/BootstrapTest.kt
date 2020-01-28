@@ -5,6 +5,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.objectweb.asm.ClassReader
 import unboks.Reference
 import unboks.StringConst
+import unboks.asReference
 import unboks.hierarchy.UnboksContext
 import unboks.hierarchy.UnboksType
 import unboks.pass.Pass
@@ -21,7 +22,7 @@ class BootstrapTest {
 	private class Loader(private val ctx: UnboksContext) : ClassLoader() { // TODO reuse base.
 
 		private fun tryPatchDummyMethod(cls: UnboksType) {
-			val dummy = Reference(Dummy::class)
+			val dummy = asReference(Dummy::class)
 			if (cls.name == dummy) {
 				val method = cls.getMethod("getOutput", dummy) ?: throw IllegalStateException()
 				val graph = method.graph ?: throw IllegalStateException()

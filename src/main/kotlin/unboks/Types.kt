@@ -31,15 +31,13 @@ sealed class Thing(
  */
 open class Reference internal constructor(val internal: String, descriptor: String) : Thing(1, descriptor), T32 {
 
-	constructor(internal: String) : this(internal, "L$internal;")
-
-	constructor(type: KClass<*>) : this(type.java.name.replace(".", "/"))
+	internal constructor(internal: String) : this(internal, "L$internal;")
 }
 
 /**
  * Only open so we can have [ARRAY].
  */
-open class ArrayReference(component: Thing) : Reference(component.descriptor, "[${component.descriptor}") {
+open class ArrayReference(val component: Thing) : Reference(component.descriptor, "[${component.descriptor}") {
 
 	/**
 	 * For types like Array<Array<Array<Int>>> gives 3.
@@ -100,7 +98,7 @@ object DOUBLE  : Fp64()
 fun fromDescriptor(desc: String): Thing = when {
 	desc.startsWith("[") -> ArrayReference(fromDescriptor(desc.substring(1)))
 	desc.startsWith("L") && desc.endsWith(";") -> Reference(desc.substring(1, desc.length - 1))
-	desc.length == 1 -> when(val chr = desc[0]) {
+	desc.length == 1 -> when (val char = desc[0]) {
 		'Z' -> BOOLEAN
 		'B' -> BYTE
 		'C' -> CHAR
@@ -109,7 +107,34 @@ fun fromDescriptor(desc: String): Thing = when {
 		'J' -> LONG
 		'F' -> FLOAT
 		'D' -> DOUBLE
-		else -> throw IllegalArgumentException("Not a primitive char: $chr")
+		else -> throw IllegalArgumentException("Not a primitive char: $char")
 	}
 	else -> throw IllegalArgumentException("Not a valid descriptor: $desc")
+}
+
+fun asThing(type: Class<*>): Thing = when {
+	type.isPrimitive -> when (type) {
+		Boolean::class.java -> BOOLEAN
+		Byte::class.java    -> BYTE
+		Char::class.java    -> CHAR
+		Short::class.java   -> SHORT
+		Int::class.java     -> INT
+		Long::class.java    -> LONG
+		Float::class.java   -> FLOAT
+		Double::class.java  -> DOUBLE
+		else -> throw IllegalArgumentException("Not a primitive type: $type")
+	}
+	type.isArray -> ArrayReference(asThing(type.componentType))
+	else -> Reference(type.name.replace(".", "/"))
+}
+
+fun asThing(type: KClass<*>): Thing {
+	return asThing(type.java)
+}
+
+fun asReference(type: KClass<*>): Reference {
+	val ref = asThing(type)
+	if (ref !is Reference)
+		throw IllegalArgumentException("$type is not a reference type")
+	return ref
 }
