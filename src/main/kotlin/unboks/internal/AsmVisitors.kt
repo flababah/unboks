@@ -22,7 +22,7 @@ private fun panic(reason: String = "Fail"): Nothing = throw InternalUnboksError(
  * join, the potential parameters used in the phi join need to come from somewhere other
  * than the block itself.
  */
-internal class FlowGraphVisitor(private val version: Int, private val graph: FlowGraph) : MethodVisitor(ASM6) {
+internal class FlowGraphVisitor(private val version: Int, private val graph: FlowGraph) : MethodVisitor(ASM_VERSION) {
 	private val slotIndex = SlotIndexMap(graph.parameters)
 	private lateinit var state: State
 
@@ -72,10 +72,12 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	}
 
 	override fun visitCode() {
+		super.visitCode()
 		state = State()
 	}
 
 	override fun visitLabel(label: Label) {
+		super.visitLabel(label)
 		state.mutate {
 			// In case multiple labels without anything of interest (line number markers) appeared
 			// before we need to make sure all those labels are registered for the resulting block.
@@ -93,11 +95,14 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	}
 
 	override fun visitTryCatchBlock(start: Label, end: Label, handler: Label, type: String?) {
+		super.visitTryCatchBlock(start, end, handler, type)
 		state.exceptions.addEntry(start, end, handler, type?.let(::Reference))
 		state.targetLabels += handler
 	}
 
 	override fun visitLocalVariable(name: String, desc: String?, sig: String?, start: Label?, end: Label?, index: Int) {
+		super.visitLocalVariable(name, desc, sig, start, end, index)
+
 		// We don't care about exception name for now, but should ideally check this better...
 		// We could name the HandlerBlock in case of exception name?
 		val parameterIndex = slotIndex.tryResolve(index)
@@ -108,6 +113,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	}
 
 	override fun visitFrame(type: Int, nLocal: Int, local: Array<out Any>?, nStack: Int, stack: Array<out Any>?) {
+		super.visitFrame(type, nLocal, local, nStack, stack)
 		state.mutate {
 			if (it is Expecting.FrameInfo) {
 				when (type) {
@@ -264,6 +270,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	}
 
 	override fun visitEnd() {
+		super.visitEnd()
 		val blocks = createMergedBlocks()
 		if (blocks.isEmpty())
 			throw ParseException("Empty method body")
@@ -295,6 +302,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	//
 
 	override fun visitInsn(opcode: Int) {
+		super.visitInsn(opcode)
 		val type = when (opcode) {
 			ATHROW, IRETURN, LRETURN, FRETURN, DRETURN, ARETURN, RETURN -> Terminal.Yes()
 			else -> Terminal.No
@@ -402,6 +410,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	}
 
 	override fun visitJumpInsn(opcode: Int, label: Label) {
+		super.visitJumpInsn(opcode, label)
 		val type = if (opcode == GOTO)
 			Terminal.Yes(setOf(label))
 		else
@@ -445,6 +454,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	}
 
 	override fun visitTableSwitchInsn(min: Int, max: Int, dflt: Label, vararg labels: Label) {
+		super.visitTableSwitchInsn(min, max, dflt, *labels)
 		defer(terminal = Terminal.Yes(setOf(*labels) + dflt)) {
 			if (labels.size + min - 1 != max)
 				throw ParseException("Wrong number of labels (${labels.size}) for $min..$max")
@@ -456,6 +466,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	}
 
 	override fun visitLookupSwitchInsn(dflt: Label, keys: IntArray, labels: Array<out Label>) {
+		super.visitLookupSwitchInsn(dflt, keys, labels)
 		defer(terminal = Terminal.Yes(setOf(*labels) + dflt)) {
 			if (labels.size != keys.size)
 				throw ParseException("Lookup switch key/label size mismatch")
@@ -467,6 +478,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	}
 
 	override fun visitIntInsn(opcode: Int, operand: Int) {
+		super.visitIntInsn(opcode, operand)
 		defer {
 			when (opcode) {
 				BIPUSH,
@@ -492,6 +504,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	}
 
 	override fun visitVarInsn(opcode: Int, index: Int) {
+		super.visitVarInsn(opcode, index)
 		val rw = when (opcode) {
 			ILOAD,  LLOAD,  FLOAD,  DLOAD,  ALOAD  -> Rw.READ to index
 			ISTORE, LSTORE, FSTORE, DSTORE, ASTORE -> Rw.WRITE to index
@@ -518,6 +531,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	}
 
 	override fun visitTypeInsn(opcode: Int, type: String) {
+		super.visitTypeInsn(opcode, type)
 		defer {
 			val ownerType = Reference(type)
 			val inv = when (opcode) {
@@ -532,6 +546,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	}
 
 	override fun visitFieldInsn(opcode: Int, owner: String, name: String, descriptor: String) {
+		super.visitFieldInsn(opcode, owner, name, descriptor)
 		defer { // Real quick and dirty.
 			val type = fromDescriptor(descriptor)
 			val ownerType = Reference(owner)
@@ -551,6 +566,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	}
 
 	override fun visitMethodInsn(opcode: Int, owner: String, name: String, desc: String, itf: Boolean) {
+		super.visitMethodInsn(opcode, owner, name, desc, itf)
 		defer {
 			appendInvocation(when(opcode) {
 				INVOKEVIRTUAL   -> InvMethod.Virtual(Reference(owner), name, desc, itf)
@@ -564,12 +580,14 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	}
 
 	override fun visitInvokeDynamicInsn(name: String, descriptor: String, handle: Handle, vararg bma: Any) {
+		super.visitInvokeDynamicInsn(name, descriptor, handle, bma)
 		defer {
 			appendInvocation(InvDynamic(name, descriptor, handle, bma))
 		}
 	}
 
 	override fun visitLdcInsn(value: Any?) {
+		super.visitLdcInsn(value)
 		defer {
 			val const = when (value) {
 				is String -> graph.constant(value)
@@ -590,6 +608,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	}
 
 	override fun visitIincInsn(varId: Int, increment: Int) {
+		super.visitIincInsn(varId, increment)
 		defer(rw = Rw.READ_BEFORE_WRITE to varId) {
 			// IINC doesn't exist in our internal representation. Lower it into IADD.
 			locals[varId] = appender.newInvoke(InvIntrinsic.IADD,
@@ -599,6 +618,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	}
 
 	override fun visitMultiANewArrayInsn(descriptor: String, dims: Int) {
+		super.visitMultiANewArrayInsn(descriptor, dims)
 		defer {
 			val type = fromDescriptor(descriptor)
 			if (type !is ArrayReference || type.dimensions != dims)

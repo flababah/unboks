@@ -7,13 +7,10 @@ import org.junit.jupiter.api.extension.ExtensionContext.Namespace.GLOBAL
 import org.junit.jupiter.api.extension.TestInstancePostProcessor
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.util.CheckClassAdapter
-import unboks.Reference
-import unboks.hierarchy.UnboksContext
-import java.io.File
-import java.io.IOException
+import unboks.asThing
+import unboks.passthrough.loader.PassthroughLoader
 import java.io.PrintWriter
 import java.lang.reflect.Method
-import java.time.LocalDateTime
 import kotlin.test.assertEquals
 
 /**
@@ -27,63 +24,14 @@ import kotlin.test.assertEquals
  *  Why not simply return a value from the method to compare? Because JUnit won't let us.
  */
 class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutionCallback, AfterTestExecutionCallback {
-
-	private class Loader(private val ctx: UnboksContext) : ClassLoader() {
-
-		private fun dumpBytecode(code: ByteArray) { // TODO Lav så vi dumper alt i en mappe.
-			val now = LocalDateTime.now()
-			val f = File("dump.class")
-			f.createNewFile()
-			f.writeBytes(code)
-		}
-
-		override fun loadClass(name: String, resolve: Boolean): Class<*> {
-			if (name.startsWith("java."))
-				return super.loadClass(name, resolve)
-
-//			if (name.startsWith("kotlin."))
-//				return super.loadClass(name, resolve) // TODO Hmm, thanks Kotlin.
-
-//			if (name.startsWith("org.objectweb")) // Java 1.5.
-//				return super.loadClass(name, resolve)
-
-			if (name == Companion::class.java.name)
-				return super.loadClass(name, resolve) // We need the traces to be visible from the "real" class, not the custom loaded.
-
-			println("Loading $name")
-
-			val unboksClass = ctx.resolveClass(Reference(name.replace(".", "/")))
-			if (unboksClass == null)
-				throw ClassNotFoundException()
-
-
-
-			val bytecode = unboksClass.generateBytecode()
-			val cls = defineClass(name, bytecode, 0, bytecode.size)
-
-//			if (name.contains("PassthroughAss")) {
-//				dumpBytecode(bytecode)
-//			}
-
-			if (resolve)
-				resolveClass(cls)
-			return cls
-		}
+	private val loader = PassthroughLoader {
+		// We need the traces to be visible from the "real" class, not the custom loaded.
+		it.name != asThing(Companion::class)
 	}
 
 	private class Store(val instance: Any)
 
 	override fun postProcessTestInstance(testInstance: Any, context: ExtensionContext) {
-		val ctx = UnboksContext {
-			try {
-				ClassReader(it)
-			} catch (e: IOException) {
-				null
-			}
-		}
-
-
-		val loader = Loader(ctx)
 		val cls = Class.forName(testInstance::class.java.name, true, loader)
 		val instance = cls.newInstance()
 
@@ -110,7 +58,10 @@ class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutio
 
 			val passthroughTraces = traces.get()
 			assertEquals(originalTraces, passthroughTraces, "Expected original traces to match passthrough")
+			println()
 			println("Traces: $passthroughTraces")
+			println()
+			println(loader.getComparedStats())
 
 		} finally {
 			traces.remove()
@@ -141,7 +92,7 @@ class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutio
 		private object PassthroughKey
 		object ArgumentKey
 
-		private val traces = ThreadLocal<MutableList<Any?>>() // TODO Flyt til shared class og skip i classloader -- ellers har vi to versioner hvor den anden ikke er igang...
+		private val traces = ThreadLocal<MutableList<Any?>>()
 
 		/**
 		 * Allows comparing a list of traces generated from the test class with traces from

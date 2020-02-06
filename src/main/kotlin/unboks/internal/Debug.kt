@@ -3,10 +3,9 @@ package unboks.internal
 import org.objectweb.asm.Handle
 import org.objectweb.asm.Label
 import org.objectweb.asm.MethodVisitor
-import org.objectweb.asm.Opcodes.ASM6
 import org.objectweb.asm.util.Printer
 
-internal class DebugMethodVisitor(delegate: MethodVisitor? = null) : MethodVisitor(ASM6, delegate) {
+internal class DebugMethodVisitor(delegate: MethodVisitor? = null) : MethodVisitor(ASM_VERSION, delegate) {
 	private val labels = mutableMapOf<Label, String>()
 
 	private fun repr(label: Label?): String {

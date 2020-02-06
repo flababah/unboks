@@ -13,8 +13,8 @@ class UnboksMethod internal constructor(
 		var name: String,
 		val parameterTypes: MutableList<Thing>,
 		var returnType: Thing,
-		override var access: Int) : Accessible
-{
+		override var access: Int) : Accessible {
+
 	var public by Access.PUBLIC
 	var private by Access.PRIVATE
 	var protected by Access.PROTECTED
@@ -45,20 +45,15 @@ class UnboksMethod internal constructor(
 				.joinToString(prefix = "(", separator = "", postfix = ")${returnType.descriptor}")
 
 		val exceptions = throws.map { it.internal }.toTypedArray()
-
-		val mv = visitor.visitMethod(access, name, desc, null, exceptions)
+		val asmWriter = visitor.visitMethod(access, name, desc, null, exceptions)
 
 		if (graph != null) {
-//			println()
-//			println("Generating $name $parameterTypes")
-//			graph.summary()
-
-			val printer = Textifier()
-			val mp = TraceMethodVisitor(mv, printer)
-			graph.generate(mp, returnType)
-			mp.visitEnd()
-		} else {
+			val tracing = type.ctx.tracing
+			val mv = tracing?.getOutputVisitor(asmWriter, this) ?: asmWriter
+			graph.generate(mv, returnType)
 			mv.visitEnd()
+		} else {
+			asmWriter.visitEnd()
 		}
 	}
 }

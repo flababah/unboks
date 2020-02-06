@@ -7,8 +7,10 @@ import unboks.Reference
 import unboks.Thing
 import unboks.internal.Access
 
-class UnboksType internal constructor(private val ctx: UnboksContext, val name: Reference, superType: Reference?)
-	: Accessible {
+class UnboksType internal constructor(
+		internal val ctx: UnboksContext,
+		val name: Reference,
+		superType: Reference?) : Accessible {
 
 	private val _fields = mutableSetOf<UnboksField>()
 	private val _methods = mutableSetOf<UnboksMethod>()

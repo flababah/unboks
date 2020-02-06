@@ -150,6 +150,12 @@ fun asThing(type: KClass<*>): Thing {
 	return asThing(type.java)
 }
 
+fun asThing(javaFqn: String): Thing {
+	if ("." !in javaFqn)
+		TODO("primitive types, etc")
+	return Reference(javaFqn.replace(".", "/"))
+}
+
 fun asReference(type: KClass<*>): Reference {
 	val ref = asThing(type)
 	if (ref !is Reference)

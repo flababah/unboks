@@ -1,20 +1,20 @@
 package unboks.hierarchy
 
 import org.objectweb.asm.*
-import org.objectweb.asm.Opcodes.ASM6
-import unboks.Reference
-import unboks.Thing
-import unboks.asThing
-import unboks.fromDescriptor
+import unboks.*
+import unboks.internal.ASM_VERSION
 import unboks.internal.FlowGraphVisitor
 import unboks.internal.MethodDescriptor
 import java.lang.reflect.Modifier
 import kotlin.reflect.KClass
 
-class UnboksContext(private val resolver: (String) -> ClassReader? = { null }) {
+class UnboksContext(
+		internal val tracing: Tracing? = null,
+		private val resolver: (String) -> ClassReader? = { null }) {
+
 	private val knownTypes = mutableMapOf<Thing, UnboksType>()
 
-	private inner class UnboksClassVisitor : ClassVisitor(ASM6) {
+	private inner class UnboksClassVisitor : ClassVisitor(ASM_VERSION) {
 		private var version = -1
 		internal lateinit var type: UnboksType
 			private set
@@ -47,14 +47,11 @@ class UnboksContext(private val resolver: (String) -> ClassReader? = { null }) {
 				if (exs != null)
 					throws.addAll(exs.map { Reference(it) })
 			}
-//			if (name == "choice") {
-//				println("Tracing 'choice'...................")
-//				return FlowGraphVisitor(method.flow, DebugMethodVisitor())
-//			}
-
 			val graph = method.graph
-			if (graph != null)
-				return FlowGraphVisitor(version, graph)
+			if (graph != null) {
+				val flowVisitor = FlowGraphVisitor(version, graph)
+				return tracing?.getInputVisitor(flowVisitor, method) ?: flowVisitor
+			}
 			return null
 		}
 	}

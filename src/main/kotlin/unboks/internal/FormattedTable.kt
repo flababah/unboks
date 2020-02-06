@@ -48,6 +48,8 @@ class FormattedTable<R : Any>(private val data: Collection<R>) {
     }
 
     private fun render(value: Any): String {
+        if (value is Double)
+            return "%.1f".format(value)
         return value.toString()
     }
 
