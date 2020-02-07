@@ -9,6 +9,7 @@ import unboks.hierarchy.UnboksMethod
 import unboks.hierarchy.UnboksType
 import unboks.internal.StatVisitor
 import java.io.IOException
+import java.lang.Exception
 
 class PassthroughLoader(private val hook: (UnboksType) -> Boolean = { true })
 
@@ -88,6 +89,10 @@ class PassthroughLoader(private val hook: (UnboksType) -> Boolean = { true })
 		// We can't load our own or monkey patch java classes, but reflection is fair game?
 		// I guess it could be used to circumvent SecurityManager in weird ways...
 		if (name.startsWith("java."))
+			throw ClassNotFoundException(name)
+
+		// TODO Look deeper into the problem with MagicAccessorImpl and friends on Java 9+.
+		if (name.startsWith("jdk.internal.reflect."))
 			throw ClassNotFoundException(name)
 
 		val bytecode = getDefinitionBytecode(name) ?: throw ClassNotFoundException(name)
