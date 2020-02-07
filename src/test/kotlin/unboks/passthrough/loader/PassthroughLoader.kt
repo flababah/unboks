@@ -16,16 +16,20 @@ class PassthroughLoader(private val hook: (UnboksType) -> Boolean = { true })
 		: ClassLoader(PassthroughLoader::class.java.classLoader), BytecodeLoader {
 
 	/**
-	 * Empty array means the class could not be found. (Not that it's not loaded yet.)
+	 * Empty array means the class could not be found.
 	 */
-	private val bytecode = mutableMapOf<String, ByteArray>()
+	private val ownedBytecode = mutableMapOf<String, ByteArray>()
 	private var statsInput = StatVisitor()
 	private var statsOutput = StatVisitor()
 	private val context = UnboksContext(createTracing()) {
 		try {
 			val parent = parent
 			if (parent is BytecodeLoader) {
-                ClassReader(parent.getBytecode(it.replace("/", ".")))
+				val bytecode = parent.getDefinitionBytecode(it.replace("/", "."))
+				if (bytecode != null)
+					ClassReader(bytecode)
+				else
+					null
             } else {
                 ClassReader(it)
             }
@@ -60,51 +64,51 @@ class PassthroughLoader(private val hook: (UnboksType) -> Boolean = { true })
 		return count
 	}
 
-	private fun createByteCode(name: String): ByteArray {
-		val type = context.resolveClass(asThing(name))
-		if (type == null)
-			return ByteArray(0)
+	private fun createByteCode(name: String): ByteArray? {
+		val type = context.resolveClass(asThing(name)) ?: return null
 		val ok = hook(type)
-        if (!ok)
-            return ByteArray(1)
-		return type.generateBytecode()
+		return if (ok) type.generateBytecode() else null
 	}
 
-    override fun getBytecode(name: String): ByteArray {
-        val bytes = bytecode[name]
-        if (bytes != null)
-            return bytes
-
-        val new = createByteCode(name)
-        bytecode[name] = new
-        return new
+    override fun getDefinitionBytecode(name: String): ByteArray? {
+        var bytes = ownedBytecode[name]
+        if (bytes == null) {
+	        bytes = createByteCode(name) ?: ByteArray(0)
+	        ownedBytecode[name] = bytes
+        }
+	    return if (bytes.isEmpty()) null else bytes
     }
 
-	// findClass does not help us because it delegates to parents FIRST.
-	override fun loadClass(name: String, resolve: Boolean): Class<*> {
+	override fun findClass(name: String): Class<*> {
 
 		// Don't load this, since we need all class loaders to share the same version.
 		if (name == BytecodeLoader::class.java.name)
-			return super.loadClass(name, resolve)
+			throw ClassNotFoundException(name)
 
 		// We can't load our own or monkey patch java classes, but reflection is fair game?
 		// I guess it could be used to circumvent SecurityManager in weird ways...
 		if (name.startsWith("java."))
-			return super.loadClass(name, resolve)
+			throw ClassNotFoundException(name)
 
-		val bytecode = getBytecode(name)
-		return when (bytecode.size) {
-			0 -> throw ClassNotFoundException(name)
-			1 -> super.loadClass(name, resolve)
-			else -> {
-				println("Defining class '$name' with depth ${getPassthroughParentCount()}.")
+		val bytecode = getDefinitionBytecode(name) ?: throw ClassNotFoundException(name)
 
-				val cls = defineClass(name, bytecode, 0, bytecode.size)
-				if (resolve)
-					resolveClass(cls)
-				cls
+		println("Defining class '$name' with depth ${getPassthroughParentCount()}.")
+		return defineClass(name, bytecode, 0, bytecode.size)
+	}
+
+	override fun loadClass(name: String, resolve: Boolean): Class<*> {
+		var c = findLoadedClass(name)
+		if (c == null) {
+			c = try {
+				findClass(name)
+			} catch (e: ClassNotFoundException) {
+				// Delegate last rather than first.
+				parent.loadClass(name)
 			}
 		}
+		if (resolve)
+			resolveClass(c)
+		return c
 	}
 
 	fun getComparedStats(): String {
