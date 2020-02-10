@@ -333,49 +333,42 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 				DCONST_0 -> stack.push(graph.constant(0.0))
 				DCONST_1 -> stack.push(graph.constant(1.0))
 
-				DUP -> stack.push(stack.peek())
+				DUP -> stack.push(stack.peek<T32>())
 
 				DUP2 -> {
-					val top = stack.peek()
+					val top = stack.peek<Thing>()
 					if (top.type.width == 2) {
-						// Category 2, see JVMS 6.5 (DUP2).
 						stack.push(top)
 					} else {
-						val under = stack.peek(1)
+						val under = stack.peek<T32>(1)
 						stack.push(under, top)
 					}
 				}
 
-				POP -> stack.pop<Thing>()
+				POP -> stack.pop<T32>()
+
 				POP2 -> {
 					val top = stack.pop<Thing>()
 					if (top.type.width == 1)
-						stack.pop<Thing>()
+						stack.pop<T32>()
 				}
 
 				SWAP -> {
-					val top = stack.pop<Thing>()
-					val under = stack.pop<Thing>()
-					if (top.type.width == 2 || under.type.width == 2)
-						throw ParseException("Trying to swap double with def ${top.type}/${under.type}")
+					val (under, top) = stack.popPair<T32>()
 					stack.push(top, under)
 				}
 
 				DUP_X1 -> {
-					val top = stack.pop<Thing>()
-					val under = stack.pop<Thing>()
-					if (top.type.width == 2 || under.type.width == 2)
-						throw ParseException("DUP_X1 used with double width defs ${top.type}/${under.type}")
+					val top = stack.pop<T32>()
+					val under = stack.pop<T32>()
 					stack.push(top, under, top)
 				}
 
 				DUP_X2 -> {
-					val top = stack.pop<Thing>() // TODO Make marker interface for computational type widths ThingWidth1, ...
-					if (top.type.width == 2)
-						throw ParseException("DUP_X2 used with double width top ${top.type}")
+					val top = stack.pop<T32>()
 					val under = stack.pop<Thing>()
 					if (under.type.width == 1) { // Form 1
-						val under2 = stack.pop<Thing>()
+						val under2 = stack.pop<T32>()
 						stack.push(top, under2, under, top)
 					} else { // Form 2
 						stack.push(top, under, top)
@@ -383,11 +376,29 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 				}
 
 				DUP2_X2 -> {
-					val top = stack.pop<Thing>()
-					val under = stack.pop<Thing>()
-					if (top.type.width != 2 || under.type.width != 2)
-						TODO("case 1,2,3")
-					stack.push(top, under, top)
+					// Form 1: 4  3  2  1 -> 2  1 - 4  3  2  1
+					// Form 2: 3  2  11   ->   11 - 3  2  11
+					// Form 3: 33 2  1    -> 2  1 - 33 2  1
+					// Form 4: 22 11      ->   11 - 22 11
+					val s1 = stack.pop<Thing>()
+					if (s1.type.width == 1) { // 1 or 3.
+						val s2 = stack.pop<T32>()
+						val s3 = stack.pop<Thing>()
+						if (s3.type.width == 1) { // 1.
+							val s4 = stack.pop<T32>()
+							stack.push(s2, s1, s4, s3, s2, s1)
+						} else { // 3.
+							stack.push(s2, s1, s3, s2, s1)
+						}
+					} else { // 2 or 4.
+						val s2 = stack.pop<Thing>()
+						if (s2.type.width == 1) { // 2.
+							val s3 = stack.pop<T32>()
+							stack.push(s1, s3, s2, s1)
+						} else { // 4.
+							stack.push(s1, s2, s1)
+						}
+					}
 				}
 
 				IRETURN -> appender.newReturn(stack.pop<Int32>())
@@ -1036,12 +1047,12 @@ private class StackMap(predecessor: List<Def>): Iterable<Def> {
 		defs.forEach { push(it) }
 	}
 
-	inline fun <reified T : Thing> pop(): Def = stack.removeAt(stack.size - 1).apply {
+	inline fun <reified T> pop(): Def = stack.removeAt(stack.size - 1).apply {
 		if (type !is T)
 			throw ParseException("Expected type ${T::class}, got $type")
 	}
 
-	inline fun <reified T : Thing> popPair(): Pair<Def, Def> {
+	inline fun <reified T> popPair(): Pair<Def, Def> {
 		val top = pop<T>()
 		val under = pop<T>()
 		return under to top
@@ -1055,7 +1066,10 @@ private class StackMap(predecessor: List<Def>): Iterable<Def> {
 		}
 	}
 
-	fun peek(reverseIndex: Int = 0) = stack[stack.size - reverseIndex - 1]
+	inline fun <reified T> peek(reverseIndex: Int = 0) = stack[stack.size - reverseIndex - 1].apply {
+		if (type !is T)
+			throw ParseException("Expected type ${T::class}, got $type")
+	}
 
 	fun mergeInto(phis: List<IrPhi>, definedIn: Block) {
 		zipIterators(phis.iterator(), stack.iterator()) { phi, def ->
