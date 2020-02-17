@@ -129,34 +129,34 @@ class DependencyNullableSingleton<V : Any> internal constructor(
 
 class DependencySingleton<V : Any> internal constructor(
 		source: BaseDependencySource,
-		private var element: V,
+		initial: V,
 		private val listener: (MutationEvent<V>) -> Unit
 ) : DependencyView<V, V>, ReadWriteProperty<Any, V> {
+
+	private var element: V? = initial
 
 	var value: V
 		set(value) {
 			if (value != element) {
 				checkAttached(value)
-				if (element != SENTINEL)
-					listener(MutationEvent.Remove(element))
-				if (value != SENTINEL)
-					listener(MutationEvent.Add(value))
+				element?.apply { listener(MutationEvent.Remove(this)) }
+				listener(MutationEvent.Add(value))
 				element = value
 			}
 		}
 		get() {
-			if (element === SENTINEL)
-				throw IllegalStateException("No element")
-			return element
+			return element ?: throw IllegalStateException("No element")
 		}
 
 	override val size get() = 1
 
 	init {
-		checkAttached(element)
-		listener(MutationEvent.Add(element))
+		checkAttached(initial)
+		listener(MutationEvent.Add(initial))
+
 		source.register {
-			value = SENTINEL as V
+			element?.apply { listener(MutationEvent.Remove(this)) }
+			element = null
 		}
 	}
 
@@ -175,10 +175,6 @@ class DependencySingleton<V : Any> internal constructor(
 
 	override fun setValue(thisRef: Any, property: KProperty<*>, value: V) {
 		this@DependencySingleton.value = value
-	}
-
-	private companion object { // TODO Virker det her?
-		object SENTINEL
 	}
 }
 
