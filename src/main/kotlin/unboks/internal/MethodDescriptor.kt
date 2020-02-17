@@ -54,7 +54,7 @@ internal class MethodDescriptor(descriptor: String) {
 			else
 				sb.append(c)
 		}
-		return Reference(sb.toString())
+		return Reference.create(sb.toString())
 	}
 
 	private fun fail(s: String): Nothing {

@@ -51,7 +51,7 @@ class DoubleConst internal constructor(graph: FlowGraph, value: Double)
  * @see FlowGraph.constant
  */
 class StringConst internal constructor(graph: FlowGraph, value: String)
-	: Constant<String>(graph, value, asThing(String::class), prefix = "\"", suffix = "\"")
+	: Constant<String>(graph, value, Thing.create(String::class), prefix = "\"", suffix = "\"")
 
 /**
  * @see FlowGraph.constant

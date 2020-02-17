@@ -96,7 +96,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 
 	override fun visitTryCatchBlock(start: Label, end: Label, handler: Label, type: String?) {
 		super.visitTryCatchBlock(start, end, handler, type)
-		state.exceptions.addEntry(start, end, handler, type?.let(::Reference))
+		state.exceptions.addEntry(start, end, handler, type?.let { Reference.create(it) })
 		state.targetLabels += handler
 	}
 
@@ -120,7 +120,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 					F_FULL, F_SAME1 -> assert(nStack == 1) { "Stack size at handler is not 1" }
 					else -> TODO("Some other frame info type, yo")
 				}
-				val exceptionType = Reference(stack!![0] as String) // Mmm, unsafe Java.
+				val exceptionType = Reference.create(stack!![0] as String) // Mmm, unsafe Java.
 				blocks += AsmBlock.Handler(it.labels, exceptions.currentActives(), exceptionType)
 				Expecting.Any
 			} else {
@@ -544,7 +544,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	override fun visitTypeInsn(opcode: Int, type: String) {
 		super.visitTypeInsn(opcode, type)
 		defer {
-			val ownerType = Reference(type)
+			val ownerType = Reference.create(type)
 			val inv = when (opcode) {
 				NEW        -> InvType.New(ownerType)
 				ANEWARRAY  -> InvNewArray(ArrayReference(ownerType))
@@ -559,8 +559,8 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	override fun visitFieldInsn(opcode: Int, owner: String, name: String, descriptor: String) {
 		super.visitFieldInsn(opcode, owner, name, descriptor)
 		defer { // Real quick and dirty.
-			val type = fromDescriptor(descriptor)
-			val ownerType = Reference(owner)
+			val type = Thing.create(descriptor)
+			val ownerType = Reference.create(owner)
 			val params = when (opcode) {
 				GETFIELD -> listOf(ownerType)
 				PUTFIELD -> listOf(ownerType, type)
@@ -579,11 +579,12 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	override fun visitMethodInsn(opcode: Int, owner: String, name: String, desc: String, itf: Boolean) {
 		super.visitMethodInsn(opcode, owner, name, desc, itf)
 		defer {
+			val ownerReference = Reference.create(owner)
 			appendInvocation(when(opcode) {
-				INVOKEVIRTUAL   -> InvMethod.Virtual(Reference(owner), name, desc, itf)
-				INVOKESPECIAL   -> InvMethod.Special(Reference(owner), name, desc, itf)
-				INVOKESTATIC    -> InvMethod.Static(Reference(owner), name, desc, itf)
-				INVOKEINTERFACE -> InvMethod.Interface(Reference(owner), name, desc, itf)
+				INVOKEVIRTUAL   -> InvMethod.Virtual(ownerReference, name, desc, itf)
+				INVOKESPECIAL   -> InvMethod.Special(ownerReference, name, desc, itf)
+				INVOKESTATIC    -> InvMethod.Static(ownerReference, name, desc, itf)
+				INVOKEINTERFACE -> InvMethod.Interface(ownerReference, name, desc, itf)
 
 				else -> throw ParseException("Illegal opcode: $opcode")
 			})
@@ -606,7 +607,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 				is Long -> graph.constant(value)
 				is Type -> when (value.sort) {
 					Type.ARRAY,
-					Type.OBJECT-> graph.constant(fromDescriptor(value.descriptor))
+					Type.OBJECT-> graph.constant(Thing.create(value.descriptor))
 
 					// Type.ARRAY
 					else -> TODO("Other LDC type type: $value (${value.sort})")
@@ -631,7 +632,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 	override fun visitMultiANewArrayInsn(descriptor: String, dims: Int) {
 		super.visitMultiANewArrayInsn(descriptor, dims)
 		defer {
-			val type = fromDescriptor(descriptor)
+			val type = Thing.create(descriptor)
 			if (type !is ArrayReference || type.dimensions != dims)
 				throw ParseException("Bad descriptor '$descriptor' for order $dims array")
 

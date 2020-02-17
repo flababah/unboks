@@ -7,7 +7,7 @@ package unboks.passthrough.loader
 interface BytecodeLoader {
 
     /**
-     * [name] is Java-style, eg. "java.lang.Class", not slashes.
+     * [name] is internal-style, eg. "java/lang/Object".
      *
      * Returns bytecode for the version of the class by [name] known by the loader, or null if not found.
      */

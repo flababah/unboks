@@ -294,5 +294,7 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 		})
 	}
 	visitor.visitLabel(blocks.last().endLabel())
+	for (alloc in max.allocs)
+		visitor.visitLocalVariable(alloc.name, alloc.type.descriptor, null, blocks.first().startLabel(), blocks.last().endLabel(), alloc.passValue(mapping))
 	visitor.visitMaxs(15, max.count)
 }

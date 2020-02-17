@@ -7,7 +7,7 @@ import org.junit.jupiter.api.extension.ExtensionContext.Namespace.GLOBAL
 import org.junit.jupiter.api.extension.TestInstancePostProcessor
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.util.CheckClassAdapter
-import unboks.asThing
+import unboks.Thing
 import unboks.passthrough.loader.PassthroughLoader
 import java.io.PrintWriter
 import java.lang.reflect.Method
@@ -26,7 +26,7 @@ import kotlin.test.assertEquals
 class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutionCallback, AfterTestExecutionCallback {
 	private val loader = PassthroughLoader {
 		// We need the traces to be visible from the "real" class, not the custom loaded.
-		it.name != asThing(Companion::class)
+		it.name != Thing.create(Companion::class)
 	}
 
 	private class Store(val instance: Any)

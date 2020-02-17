@@ -18,8 +18,8 @@ class MethodDescriptorTest {
 	@Test
 	fun testDescriptors() {
 		test("([BLjava/lang/VerifyError;)Ljava/lang/Void;",
-				Reference("java/lang/Void"),
-				ArrayReference(BYTE), Reference("java/lang/VerifyError"))
+				Reference.create("java/lang/Void"),
+				ArrayReference(BYTE), Reference.create("java/lang/VerifyError"))
 
 		test("()V",
 				VOID)

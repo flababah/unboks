@@ -20,18 +20,18 @@ class UnboksContext(
 			private set
 
 		override fun visit(version: Int, mod: Int, name: String, sig: String?, superName: String?, ifs: Array<out String>?) {
-			val superType = superName?.let { Reference(it) }
+			val superType = superName?.let { Reference.create(it) }
 			this.version = version
-			this.type = newClass(Reference(name), superType).apply {
+			this.type = newClass(Reference.create(name), superType).apply {
 				access = mod
 
 				if (ifs != null)
-					interfaces.addAll(ifs.map { Reference(it) })
+					interfaces.addAll(ifs.map { Reference.create(it) })
 			}
 		}
 
 		override fun visitField(mod: Int, name: String, desc: String, sig: String?, value: Any?): FieldVisitor? {
-			type.newField(name, fromDescriptor(desc), mod).apply {
+			type.newField(name, Thing.create(desc), mod).apply {
 				initial = value
 			}
 			return null
@@ -45,7 +45,7 @@ class UnboksContext(
 
 			val method = type.newMethod(name, mod, ms.returns, *parameterTypes.toTypedArray()).apply {
 				if (exs != null)
-					throws.addAll(exs.map { Reference(it) })
+					throws.addAll(exs.map { Reference.create(it) })
 			}
 			val graph = method.graph
 			if (graph != null) {
@@ -82,7 +82,7 @@ class UnboksContext(
 		return cls
 	}
 
-	fun resolveClass(type: KClass<*>): UnboksType = resolveClassThrow(asThing(type))
+	fun resolveClass(type: KClass<*>): UnboksType = resolveClassThrow(Thing.create(type))
 
 	fun newClass(name: Reference, superType: Reference? = null): UnboksType =
 			UnboksType(this, name, superType).apply { knownTypes[name] = this }

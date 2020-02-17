@@ -2,8 +2,8 @@ package unboks.passthrough
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import unboks.Reference
 import unboks.StringConst
-import unboks.asReference
 import unboks.pass.Pass
 import unboks.passthrough.loader.PassthroughLoader
 import unboks.util.PassthroughAssertExtension
@@ -21,7 +21,7 @@ class BootstrapTest {
 
 	@Test
 	fun testSimpleBootstrap() {
-		val dummy = asReference(Dummy::class)
+		val dummy = Reference.create(Dummy::class)
 		val loader = PassthroughLoader { cls ->
 			if (cls.name == dummy) {
 				val method = cls.getMethod("getOutput", dummy)!!

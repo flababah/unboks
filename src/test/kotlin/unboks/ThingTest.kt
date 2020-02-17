@@ -10,7 +10,7 @@ class ThingTest {
 
     @Test
     fun testReferenceArray() {
-        val ref = asReference(IntArray::class)
+        val ref = Reference.create(IntArray::class)
         assertTrue(ref is ArrayReference)
         assertEquals(INT, ref.component)
     }

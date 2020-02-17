@@ -52,6 +52,11 @@ class StatVisitor private constructor(
 		return StatVisitor(delegate, counters.toMutableMap())
 	}
 
+	override fun visitLocalVariable(name: String?, descriptor: String?, signature: String?, start: Label?, end: Label?, index: Int) {
+		super.visitLocalVariable(name, descriptor, signature, start, end, index)
+		visit("visitLocalVariable")
+	}
+
 	override fun visitMultiANewArrayInsn(descriptor: String?, numDimensions: Int) {
 		super.visitMultiANewArrayInsn(descriptor, numDimensions)
 		visit("visitMultiANewArrayInsn", MULTIANEWARRAY)

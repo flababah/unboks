@@ -39,8 +39,8 @@ class GraphTest {
 
 	@Test
 	fun testHandlerUsage() {
-		val re = asReference(RuntimeException::class)
-		val npe = asReference(NullPointerException::class)
+		val re = Reference.create(RuntimeException::class)
+		val npe = Reference.create(NullPointerException::class)
 
 		val graph = FlowGraph()
 		val b1 = graph.newBasicBlock()

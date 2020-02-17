@@ -2,14 +2,13 @@ package unboks.passthrough.loader
 
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.MethodVisitor
+import unboks.Reference
 import unboks.Tracing
-import unboks.asThing
 import unboks.hierarchy.UnboksContext
 import unboks.hierarchy.UnboksMethod
 import unboks.hierarchy.UnboksType
 import unboks.internal.StatVisitor
 import java.io.IOException
-import java.lang.Exception
 
 class PassthroughLoader(private val hook: (UnboksType) -> Boolean = { true })
 
@@ -26,7 +25,7 @@ class PassthroughLoader(private val hook: (UnboksType) -> Boolean = { true })
 		try {
 			val parent = parent
 			if (parent is BytecodeLoader) {
-				val bytecode = parent.getDefinitionBytecode(it.replace("/", "."))
+				val bytecode = parent.getDefinitionBytecode(it)
 				if (bytecode != null)
 					ClassReader(bytecode)
 				else
@@ -66,7 +65,7 @@ class PassthroughLoader(private val hook: (UnboksType) -> Boolean = { true })
 	}
 
 	private fun createByteCode(name: String): ByteArray? {
-		val type = context.resolveClass(asThing(name)) ?: return null
+		val type = context.resolveClass(Reference.create(name)) ?: return null
 		val ok = hook(type)
 		return if (ok) type.generateBytecode() else null
 	}
@@ -95,7 +94,7 @@ class PassthroughLoader(private val hook: (UnboksType) -> Boolean = { true })
 		if (name.startsWith("jdk.internal.reflect."))
 			throw ClassNotFoundException(name)
 
-		val bytecode = getDefinitionBytecode(name) ?: throw ClassNotFoundException(name)
+		val bytecode = getDefinitionBytecode(name.replace(".", "/")) ?: throw ClassNotFoundException(name)
 
 		println("Defining class '$name' with depth ${getPassthroughParentCount()}.")
 		return defineClass(name, bytecode, 0, bytecode.size)

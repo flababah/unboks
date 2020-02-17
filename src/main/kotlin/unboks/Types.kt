@@ -30,24 +30,93 @@ sealed class Thing(
 	override fun equals(other: Any?) = other is Thing && descriptor == other.descriptor
 	override fun hashCode() = descriptor.hashCode()
 	override fun toString() = descriptor
+
+	companion object {
+
+		fun create(desc: String): Thing = when {
+			desc.startsWith("[") -> ArrayReference(create(desc.substring(1)))
+			desc.startsWith("L") && desc.endsWith(";") -> Reference(desc.substring(1, desc.length - 1), desc)
+			desc.length == 1 -> when (val char = desc[0]) {
+				'Z' -> BOOLEAN
+				'B' -> BYTE
+				'C' -> CHAR
+				'S' -> SHORT
+				'I' -> INT
+				'J' -> LONG
+				'F' -> FLOAT
+				'D' -> DOUBLE
+				else -> throw IllegalArgumentException("Not a primitive char: $char")
+			}
+			else -> throw IllegalArgumentException("Not a valid descriptor: $desc")
+		}
+
+		fun create(type: Class<*>): Thing = when {
+			type.isPrimitive -> when (type) {
+				Boolean::class.java -> BOOLEAN
+				Byte::class.java    -> BYTE
+				Char::class.java    -> CHAR
+				Short::class.java   -> SHORT
+				Int::class.java     -> INT
+				Long::class.java    -> LONG
+				Float::class.java   -> FLOAT
+				Double::class.java  -> DOUBLE
+				else -> throw IllegalArgumentException("Not a primitive type: $type")
+			}
+			type.isArray -> ArrayReference(create(type.componentType))
+			else -> type.name.replace(".", "/").run {
+				Reference(this, "L$this;")
+			}
+		}
+
+		fun create(type: KClass<*>): Thing {
+			return create(type.java)
+		}
+	}
 }
 
 /**
+ * Use [create] to construct. That we the format is checked correctly and
+ * the most specific type is returned. Eg. [ArrayReference].
+ *
  * Only open so we can have [ArrayReference].
  */
 open class Reference internal constructor(val internal: String, descriptor: String) : Thing(1, descriptor), T32 {
 
-	internal constructor(internal: String) : this(internal, "L$internal;")
-
 	override fun common(other: Thing): Thing? {
 		return super.common(other) ?: (if (other is Reference) OBJECT else null)
+	}
+
+	companion object {
+
+		/**
+		 * Creates a reference from an internal name.
+		 */
+		fun create(internal: String): Reference {
+			if (internal.startsWith("[")) // [java/lang/Object; or [B or ...
+				return ArrayReference(Thing.create(internal.substring(1)))
+
+			if (internal.startsWith("L") || internal.endsWith(";"))
+				throw IllegalArgumentException("Not an internal name: $internal")
+
+			return Reference(internal, "L$internal;")
+		}
+
+		/**
+		 * Creates a reference from a class literal.
+		 */
+		fun create(type: KClass<*>): Reference {
+			val ref = Thing.create(type)
+			if (ref !is Reference)
+				throw IllegalArgumentException("$type is not a reference type")
+			return ref
+		}
 	}
 }
 
 /**
  * Only open so we can have [ARRAY].
  */
-open class ArrayReference(val component: Thing) : Reference(component.descriptor, "[${component.descriptor}") {
+open class ArrayReference(val component: Thing) : Reference("[${component.descriptor}", "[${component.descriptor}") {
 
 	/**
 	 * For types like Array<Array<Array<Int>>> gives 3.
@@ -62,7 +131,7 @@ open class ArrayReference(val component: Thing) : Reference(component.descriptor
 
 sealed class Primitive(width: Int, symbol: Char) : Thing(width, "$symbol")
 
-object OBJECT  : Reference("java/lang/Object")
+object OBJECT  : Reference("java/lang/Object", "Ljava/lang/Object;")
 object ARRAY   : ArrayReference(OBJECT)
 object VOID    : Thing(0, "V")
 
@@ -108,57 +177,3 @@ object FLOAT   : Fp32()
  */
 sealed class Fp64 : Primitive(2, 'D'), FloatingPointType, T64
 object DOUBLE  : Fp64()
-
-// +---------------------------------------------------------------------------
-// |  Helpers
-// +---------------------------------------------------------------------------
-
-fun fromDescriptor(desc: String): Thing = when {
-	desc.startsWith("[") -> ArrayReference(fromDescriptor(desc.substring(1)))
-	desc.startsWith("L") && desc.endsWith(";") -> Reference(desc.substring(1, desc.length - 1))
-	desc.length == 1 -> when (val char = desc[0]) {
-		'Z' -> BOOLEAN
-		'B' -> BYTE
-		'C' -> CHAR
-		'S' -> SHORT
-		'I' -> INT
-		'J' -> LONG
-		'F' -> FLOAT
-		'D' -> DOUBLE
-		else -> throw IllegalArgumentException("Not a primitive char: $char")
-	}
-	else -> throw IllegalArgumentException("Not a valid descriptor: $desc")
-}
-
-fun asThing(type: Class<*>): Thing = when {
-	type.isPrimitive -> when (type) {
-		Boolean::class.java -> BOOLEAN
-		Byte::class.java    -> BYTE
-		Char::class.java    -> CHAR
-		Short::class.java   -> SHORT
-		Int::class.java     -> INT
-		Long::class.java    -> LONG
-		Float::class.java   -> FLOAT
-		Double::class.java  -> DOUBLE
-		else -> throw IllegalArgumentException("Not a primitive type: $type")
-	}
-	type.isArray -> ArrayReference(asThing(type.componentType))
-	else -> Reference(type.name.replace(".", "/"))
-}
-
-fun asThing(type: KClass<*>): Thing {
-	return asThing(type.java)
-}
-
-fun asThing(javaFqn: String): Thing {
-	if ("." !in javaFqn)
-		TODO("primitive types, etc")
-	return Reference(javaFqn.replace(".", "/"))
-}
-
-fun asReference(type: KClass<*>): Reference {
-	val ref = asThing(type)
-	if (ref !is Reference)
-		throw IllegalArgumentException("$type is not a reference type")
-	return ref
-}

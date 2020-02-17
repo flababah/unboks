@@ -120,7 +120,7 @@ class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Blo
 	/**
 	 * Defaults to the highest possible exception type, [java.lang.Throwable].
 	 */
-	override val type: Reference = type ?: Reference("java/lang/Throwable")
+	override val type: Reference = type ?: Reference.create(Throwable::class)
 
 	override val uses = RefCount<Use>()
 
