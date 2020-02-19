@@ -5,7 +5,7 @@ import unboks.internal.NameRegistry
 import unboks.internal.codeGenerate
 import unboks.pass.Pass
 import unboks.pass.PassType
-import unboks.pass.createConsistencyCheckPass
+import unboks.pass.builtin.createConsistencyCheckPass
 import kotlin.properties.ReadWriteProperty
 
 /**

@@ -7,7 +7,7 @@ import org.objectweb.asm.Opcodes.*
 import org.objectweb.asm.Type
 import unboks.*
 import unboks.invocation.*
-import unboks.pass.createPhiPruningPass
+import unboks.pass.builtin.createPhiPruningPass
 
 private val asmGraphBasicSpec = TargetSpecification<AsmBlock<*>, AsmBlock.Basic> { it.predecessors }
 private val asmGraphHandlerSpec = TargetSpecification<AsmBlock<*>, AsmBlock.Handler> { it.predecessors }
