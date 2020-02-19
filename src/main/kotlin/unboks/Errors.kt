@@ -9,8 +9,6 @@ class InternalUnboksError(msg: String) : RuntimeException(msg)
 
 class RemoveException(val objections: Set<Objection>) : RuntimeException("Cannot remove due to objections: $objections")
 
-class IllegalTerminalStateException(msg: String) : RuntimeException(msg)
-
 class DetachedException(msg: String) : RuntimeException(msg)
 
 /**

@@ -74,12 +74,6 @@ sealed class Block(val flow: FlowGraph) : DependencySource(), Nameable, PassType
 			is IrFactory.Offset.After -> _opcodes.add(checkedIndexOf(offset.at) + 1, ir)
 			is IrFactory.Offset.Append -> _opcodes.add(ir)
 		}
-
-		// TODO Do this check properly before actually mutating the list.
-		if (_opcodes.filterIsInstance<IrTerminal>().size > 1)
-			throw IllegalTerminalStateException("More than one terminal")
-		if (terminal != null && _opcodes.last() !is IrTerminal)
-			throw IllegalTerminalStateException("Non-terminal last ir")
 	}
 
 	fun append() = IrFactory(this, IrFactory.Offset.Append)

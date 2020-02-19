@@ -3,6 +3,7 @@ package unboks.pass
 import unboks.*
 import unboks.analysis.Dominance
 import unboks.internal.traverseGraph
+import kotlin.reflect.KClass
 
 //private fun Pass.Context.tryBacklog(thing: Any) {
 //	if (thing is PassType)
@@ -210,6 +211,30 @@ fun createPhiPruningPass() = Pass<Unit> {
 
 class InconsistencyException(msg: String) : IllegalStateException(msg)
 
+/**
+ * The order in which each IR type is allowed to occur in a block.
+ */
+private val irTypeOccuranceOrder = mapOf(
+	IrPhi::class          to   0, // IrPhi first.
+	IrMutable::class      to   1, // IrMutable second.
+	IrInvoke::class       to  10, // Non-terminals.
+	IrMutableWrite::class to  10,
+	IrCmp1::class         to 100, // Terminals.
+	IrCmp2::class         to 100,
+	IrGoto::class         to 100,
+	IrReturn::class       to 100,
+	IrSwitch::class       to 100,
+	IrThrow::class        to 100)
+
+/**
+ * Contains the "rule book" of constaints in a [FlowGraph].
+ *
+ * The API still enforces some of the simpler invariants. But the more complicated
+ * rules are placed here in order to allow some "slack" in order to not make the API
+ * overly restictive. Ie., it's OK to leave the graph in a temporarily inconsent state
+ * since we don't have the notion of transactions. Another reason is performance. The
+ * API should not do potentially slow consistency checks for every little mutation.
+ */
 fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 	val d = Dominance(graph)
 
@@ -217,15 +242,65 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 		throw InconsistencyException(reason)
 	}
 
+	fun panic(reason: String): Nothing {
+		throw IllegalStateException(reason)
+	}
+
+	// +---------------------------------------------------------------------------
+	// |  IrMutable
+	// +---------------------------------------------------------------------------
+
+	// Only exception-watched blocks may use IrMutable.
+	//
+	// This is an artificial limitation. There is nothing restricting us from using IrMutables
+	// everywhere, but their use is intended for "watched" blocks where an exception handler
+	// depends on a value defined therein. This goes against SSA form, which is why it should only
+	// be used where nothing else suffices.
+	visit<IrMutable> {
+		if (it.block.exceptions.isEmpty())
+			fail("Unwatched block ${it.block.name} contains an IrMutable: $it")
+	}
+
+	// +---------------------------------------------------------------------------
+	// |  General rules
+	// +---------------------------------------------------------------------------
+
+	// Instruction order: IrPhi, IrMutable, Non-terminal Ir, Terminal Ir.
+	//
+	// - IrPhi must come first so it's possible to depend on them for other [Use]s in the block.
+	// - IrMutable must come before everything else. Otherwise it would be possible to depend on
+	//     an IrMutable from a handler block where the watched block might have thrown before the
+	//     IrMutable was declared.
+	// - None-terminal Irs.
+	// - Single terminal last.
+	visit<Block> {
+		var previous = -1
+		for (ir in it.opcodes) {
+			val current = irTypeOccuranceOrder[ir::class] ?: panic("New opcode type $ir?")
+			if (current < previous)
+				fail("Bad IR order: $ir appears after ${it.opcodes[ir.index - 1]}")
+			previous = current
+		}
+	}
+
+	// Each block must have exact 1 terminal instruction.
+	//
+	// Additionally, it should appear as the last instruction but that's asserted above.
+	visit<Block> {
+		val terminals = it.opcodes.count { ir -> ir is IrTerminal }
+		if (terminals != 1)
+			fail("Block ${it.name} does not have a single terminal, but $terminals")
+	}
+
+
+	// +---------------------------------------------------------------------------
+	// |  Others... TODO Cleanup.
+	// +---------------------------------------------------------------------------
+
+
 	visit<Block> {
 		if (it.opcodes.takeWhile { it is IrPhi } != it.opcodes.filterIsInstance<IrPhi>())
 			fail("Block $it does not have all phi nodes at the beginning")
-	}
-
-	visit<Block> {
-		if (it.terminal == null)
-			fail("Block $it does not have a terminal instruction")
-		// TODO What about Kotlin Nothing method calls?
 	}
 
 	visit<IrThrow> {
@@ -324,6 +399,6 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 	}
 
 	// TODO Check that mut dominates its writes
-	// TOOD Check that any def (from another block) used in an exception handler,
-	// must be at a safe point.
+	// TODO Check that any def (from another block) used in an exception handler,
+	//  must be at a safe point. <--- Not allowed in bytecode verification, use IrMutable.
 }
