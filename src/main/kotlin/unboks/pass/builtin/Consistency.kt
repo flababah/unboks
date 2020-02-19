@@ -22,11 +22,11 @@ private val irTypeOccurrenceOrder = mapOf(
 	IrThrow::class        to 100)
 
 /**
- * Contains the "rule book" of constaints in a [FlowGraph].
+ * Contains the "rule book" of constraints in a [FlowGraph].
  *
  * The API still enforces some of the simpler invariants. But the more complicated
  * rules are placed here in order to allow some "slack" in order to not make the API
- * overly restictive. Ie., it's OK to leave the graph in a temporarily inconsent state
+ * overly restrictive. Ie., it's OK to leave the graph in a temporarily inconsistent state
  * since we don't have the notion of transactions. Another reason is performance. The
  * API should not do potentially slow consistency checks for every little mutation.
  */
