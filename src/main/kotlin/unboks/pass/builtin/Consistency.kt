@@ -57,6 +57,19 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 	}
 
 	// +---------------------------------------------------------------------------
+	// |  IrMutableWrite
+	// +---------------------------------------------------------------------------
+
+	// Writes to an IrMutable should only happen in the block where the mutable is defined.
+	//
+	// Another artificial limitation. This is simply placed to restrict the use of mutables.
+	visit<IrMutableWrite> {
+		val mut = it.target
+		if (it.block != mut.block)
+			fail("Mutable write $it (${it.block.name}) to $mut in different block ${mut.block.name}")
+	}
+
+	// +---------------------------------------------------------------------------
 	// |  General rules
 	// +---------------------------------------------------------------------------
 
