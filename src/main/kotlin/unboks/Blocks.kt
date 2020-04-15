@@ -9,7 +9,7 @@ sealed class Block(val flow: FlowGraph) : DependencySource(), Nameable, PassType
 	private val _opcodes = mutableListOf<Ir>()
 	val opcodes: List<Ir> get() = _opcodes
 
-	open val root get() = flow.root === this
+	abstract val root: Boolean
 
 	/**
 	 * The set of immediate predecessors that can flow into this block.
@@ -117,6 +117,11 @@ class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Blo
 	override val type: Reference = type ?: Reference.create(Throwable::class)
 
 	override val uses = RefCount<Use>()
+
+	/**
+	 * Handler blocks cannot be used as root. (Since they also define a throwable.)
+	 */
+	override val root get() = false
 
 	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
 		predecessors.forEach { addObjection(Objection.HandlerIsUsed(this, it)) } // TODO Check batch.
