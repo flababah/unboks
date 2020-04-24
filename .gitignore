@@ -1,3 +1,4 @@
 *.iml
+*/*.iml
 .idea/
-unboks/target/
+*/target/
