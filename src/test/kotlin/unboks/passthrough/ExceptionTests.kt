@@ -110,7 +110,25 @@ class ExceptionTests {
 
 		} catch (e: Exception) {
 			flags = flags + 1
+			trace(flags)
 		}
 		trace(flags)
+	}
+
+	fun willThrow() {
+		throw RuntimeException()
+	}
+
+	@PermutationTest
+	fun testMutCodeGenProblem(@Ints(0, 1) input: Int) {
+		var value = 10
+		try {
+			value = 20
+			willThrow()
+			if (input == 1)
+				value = 999 // Just to force the handler having a phi join on the mutable value.
+		} catch (e: RuntimeException) {
+			trace(value)
+		}
 	}
 }

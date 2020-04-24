@@ -20,7 +20,6 @@ class IrMutableTest {
 
 		val objections = mut.remove(throws = false)
 		assertEquals(setOf(Objection.MutableHasWrite(mut, write)), objections)
-		// TODO java.lang.AssertionError: Expected <[[UNKNOWN] has non-empty set of writes]>, actual <[]>.
 
 		// Remove and check.
 		write.remove()

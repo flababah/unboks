@@ -135,6 +135,23 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 	// TODO 2019 - insert copies in each phi def? -- hmm med liste af phis i starten... og hvordan med co-dependen phis?
 
 	fun feedPhiDependers(block: Block) {
+		// Do this before phi swapping, so we get the correct value.
+		for (successor in block.terminal!!.successors) {
+			for (mut in successor.opcodes.filterIsInstance<IrMutable>()) {
+				val initial = mut.initial
+				if (initial !is IrPhi) {
+					load(initial)
+					store(mut)
+				}
+
+				// See visit<IrMutableWrite> -- same deal
+				for (phiTarget in mut.uses.filterIsInstance<IrPhi>()) {
+					load(initial)
+					store(phiTarget)
+				}
+			}
+		}
+
 		// The def that is assigned in this block from the phi's perspective.
 		val dependers = block.phiReferences.toList()
 		if (dependers.isNotEmpty()) {
@@ -156,35 +173,6 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 		for ((handler, type) in block.exceptions) {
 			val name = type?.internal
 			visitor.visitTryCatchBlock(block.startLabel(), block.endLabel(), handler.startLabel(), name)
-		}
-	}
-
-	// Force the stupid verifier to not stumble upon first initializations happening in the
-	// the beginning of watched blocks. We don't care about legacy async exceptions like
-	// ThreadDeath.
-	for (alloc in max.allocs) {
-		val checked = when (alloc.type) {
-			is Reference -> {
-				visitor.visitInsn(ACONST_NULL)
-				store(alloc)
-			}
-			is Int32 -> {
-				visitor.visitInsn(ICONST_0)
-				store(alloc)
-			}
-			is Int64 -> {
-				visitor.visitInsn(LCONST_0)
-				store(alloc)
-			}
-			is Fp32 -> {
-				visitor.visitInsn(FCONST_0)
-				store(alloc)
-			}
-			is Fp64 -> {
-				visitor.visitInsn(DCONST_0)
-				store(alloc)
-			}
-			VOID -> throw IllegalArgumentException()
 		}
 	}
 
@@ -290,6 +278,13 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 			visit<IrMutableWrite> {
 				load(it.value)
 				store(it.target)
+
+				// XXX The register allocator can optimize the itMut itself away if only phis depend on it, right?
+				// -> Since we directly copy each write into depending phis.
+				for (phiTarget in it.target.uses.filterIsInstance<IrPhi>()) {
+					load(it.value)
+					store(phiTarget)
+				}
 			}
 		})
 	}

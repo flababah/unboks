@@ -12,7 +12,9 @@ import unboks.pass.builtin.createPhiPruningPass
 private val asmGraphBasicSpec = TargetSpecification<AsmBlock<*>, AsmBlock.Basic> { it.predecessors }
 private val asmGraphHandlerSpec = TargetSpecification<AsmBlock<*>, AsmBlock.Handler> { it.predecessors }
 
-private fun panic(reason: String = "Fail"): Nothing = throw InternalUnboksError(reason)
+private fun panic(reason: String = "Fail"): Nothing {
+	throw InternalUnboksError(reason)
+}
 
 /**
  * Builds a [FlowGraph] using the ASM library.
@@ -275,11 +277,14 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 		if (blocks.isEmpty())
 			throw ParseException("Empty method body")
 
+		// Phase 1 ends.
+		// Phase 2 (and propagate initial rw states).
 		addGraphEdges(blocks)
 		propagateReadStates(blocks)
 		val rootedBlocks = addPseudoRootIfNecessary(blocks)
 		addFallthroughOperations(rootedBlocks)
 
+		// Phase 3.
 		val locals = LocalsMap(createInitialLocalsMap())
 		val stack = StackMap(emptyList())
 		reify(rootedBlocks.first(), null, locals, stack)
@@ -720,7 +725,12 @@ private fun addGraphEdges(blocks: List<AsmBlock<*>>) {
 private fun propagateReadStates(blocks: List<AsmBlock<*>>) {
 	val visitedMap = mutableMapOf<AsmBlock<*>, MutableSet<Int>>()
 
-	fun rec(block: AsmBlock<*>, reads: List<Int>) {
+	/**
+	 * @param block the current block being visited (propagating from one of its successors)
+	 * @param reads the reads the successor depends on
+	 * @param handlerSuccessor true if the successor is a handler block (see [Rw.HANDLER_READ])
+	 */
+	fun rec(block: AsmBlock<*>, reads: List<Int>, handlerSuccessor: Boolean) {
 		val propagate = mutableListOf<Int>()
 		val visited = visitedMap.computeIfAbsent(block) {
 			val localReads = block.rw.asSequence()
@@ -736,18 +746,19 @@ private fun propagateReadStates(blocks: List<AsmBlock<*>>) {
 
 			// We only terminate the read propagation if this block writes.
 			val rw = block.rw[read]
-			if (rw == null || !rw.writes) {
-				block.rw[read] = rw + Rw.READ
+			if (rw == null || !rw.writes || handlerSuccessor) {
+				val readType = if (handlerSuccessor) Rw.HANDLER_READ else Rw.READ
+				block.rw[read] = rw + readType
 				visited += read
 				propagate += read
 			}
 		}
 		if (propagate.isNotEmpty()) {
 			for (predecessor in block.predecessors)
-				rec(predecessor, propagate)
+				rec(predecessor, propagate, block is AsmBlock.Handler)
 		}
 	}
-	blocks.forEach { rec(it, emptyList()) }
+	blocks.forEach { rec(it, emptyList(), false) }
 }
 
 private fun addPseudoRootIfNecessary(blocks: List<AsmBlock<*>>): List<AsmBlock<*>> {
@@ -779,44 +790,68 @@ private sealed class Terminal(val jumps: Set<Label>) {
 	class YesFallthrough(branch: Label) : Terminal(setOf(branch))
 }
 
-private enum class Rw(val reads: Boolean, val writes: Boolean, val update: (Rw) -> Rw) {
+private enum class Rw(val reads: Boolean, val writes: Boolean) {
 
 	/**
 	 * ONLY read on this slot.
 	 *
 	 * Used to make sure we provide a def or phi to use when this slot is read.
-	 *
-	 * r -> r = r
-	 * r -> w = rw
-	 * r -> rw = rw
 	 */
-	READ(true, false, { if (it == READ) READ else READ_BEFORE_WRITE }),
+	READ(true, false) {
+		override fun update(other: Rw) = when (other) {
+			READ -> READ
+			WRITE,
+			READ_BEFORE_WRITE -> READ_BEFORE_WRITE
+			HANDLER_READ -> READ
+		}
+	},
 
 	/**
-	 * Signals that the first wr operation is a write. We can have reads later
+	 * Signals that the first RW operation is a write. We can have reads later
 	 * but that does NOT make it READ_WRITE. In that case we only read the value we
 	 * set ourselves, not the original value.
 	 *
 	 * Used as a stop for read propagation. When a successor depends on a certain slot
 	 * we don't need to look further back since this write would provide it.
-	 *
-	 * w -> r = w
-	 * w -> w = w
-	 * w -> rw = w
 	 */
-	WRITE(false, true, { WRITE }),
+	WRITE(false, true) {
+		override fun update(other: Rw) = when (other) {
+			READ,
+			WRITE,
+			READ_BEFORE_WRITE -> WRITE
+			HANDLER_READ -> READ_BEFORE_WRITE
+		}
+	},
 
 	/**
 	 * Read(s) happens BEFORE write(s). Does not mean read AND write.
-	 *
-	 * rw -> r = rw
-	 * rw -> w = rw
-	 * rw -> rw = rw
 	 */
-	READ_BEFORE_WRITE(true, true, { READ_BEFORE_WRITE })
+	READ_BEFORE_WRITE(true, true) {
+		override fun update(other: Rw) = READ_BEFORE_WRITE
+	},
+
+	/**
+	 * This RW itself is not used as a valid RW state for a local. Only as right-hand operand
+	 * when updating existing RW with a read from a handler block. Most interesting is the
+	 * WRITE -> HANDLER_READ situation, since we cannot depend ONLY only the value written by the
+	 * watched block. The block might throw before the write, so we need to propagate a read
+	 * (for some initial value) even though the write is enough to stop read-propagation
+	 * under normal circumstances (since it would be the ONLY possible value).
+	 */
+	HANDLER_READ(true, false) {
+		override fun update(other: Rw) = throw IllegalStateException("Only to be used as right-hand")
+	};
+
+	/**
+	 * Update of this state into another.
+	 */
+	abstract fun update(other: Rw): Rw
 }
 
-private operator fun Rw?.plus(other: Rw): Rw = if (this == null) other else update(other)
+/**
+ * Transition this state into another. If we're null use the right-hand state as the result.
+ */
+private operator fun Rw?.plus(other: Rw): Rw = this?.update(other) ?: other
 
 private typealias DeferredOp = DeferContext.() -> Unit
 

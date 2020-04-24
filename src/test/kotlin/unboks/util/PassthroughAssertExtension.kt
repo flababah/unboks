@@ -32,11 +32,19 @@ class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutio
 	private class Store(val instance: Any)
 
 	override fun postProcessTestInstance(testInstance: Any, context: ExtensionContext) {
-		val cls = Class.forName(testInstance::class.java.name, true, loader)
-		val instance = cls.newInstance()
+		val name = testInstance::class.java.name
+		try {
+			val cls = Class.forName(name, true, loader)
+			val instance = cls.newInstance()
 
-		// TODO fix.
-		context.getStore(GLOBAL).put(PassthroughKey, Store(instance))
+			// TODO fix.
+			context.getStore(GLOBAL).put(PassthroughKey, Store(instance))
+		} catch (e: VerifyError) {
+			val bytecode = loader.getDefinitionBytecode(name.replace(".", "/"))
+			if (bytecode != null)
+				printVerifyError(bytecode)
+			throw e
+		}
 	}
 
 	override fun beforeTestExecution(context: ExtensionContext) {
@@ -68,13 +76,12 @@ class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutio
 		}
 	}
 
-	private fun printVerifyError(bytecode: ByteArray, e: VerifyError): Nothing {
+	private fun printVerifyError(bytecode: ByteArray) {
 		System.err.println("============ FAILED VERIFY ===========")
-		val cr = ClassReader(bytecode);
-		val pw = PrintWriter(System.err);
+		val cr = ClassReader(bytecode)
+		val pw = PrintWriter(System.err)
 		CheckClassAdapter.verify(cr, true, pw)
-		System.err.print("============ END FAILED VERIFY ===========")
-		throw e
+		System.err.println("============ END FAILED VERIFY ===========")
 	}
 
 	private fun initTraces() {

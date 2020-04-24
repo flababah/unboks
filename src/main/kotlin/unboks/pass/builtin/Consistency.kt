@@ -56,6 +56,21 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 			fail("Unwatched block ${it.block.name} contains an IrMutable: $it")
 	}
 
+	// XXX Temporary limitation.
+	//
+	// In order to satisfy the JVM bytecode verification the initial value must be stored
+	// by a predecessor. This means we should only depend on:
+	// - IrPhis defined in same block (or predecessor)
+	// - Normal defs defined in predecessor (following normal def-dominates-uses rules)
+	// IrMutables are grouped, so without the restriction we could have on mutable depend
+	// on another in the same block. This could be made to work -- just requires extra logic
+	// in the code generator -> XXX implement later.
+	visit<IrMutable> {
+		val initial = it.initial
+		if (initial !is IrPhi && initial.block == it.block)
+			fail("IrMutable ${it.name} depends on local def $initial for its initial value")
+	}
+
 	// +---------------------------------------------------------------------------
 	// |  IrMutableWrite
 	// +---------------------------------------------------------------------------
