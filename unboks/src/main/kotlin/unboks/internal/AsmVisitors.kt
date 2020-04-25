@@ -364,8 +364,7 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 				}
 
 				DUP_X1 -> {
-					val top = stack.pop<T32>()
-					val under = stack.pop<T32>()
+					val (under, top) = stack.popPair<T32>()
 					stack.push(top, under, top)
 				}
 
@@ -377,6 +376,17 @@ internal class FlowGraphVisitor(private val version: Int, private val graph: Flo
 						stack.push(top, under2, under, top)
 					} else { // Form 2
 						stack.push(top, under, top)
+					}
+				}
+
+				DUP2_X1 -> {
+					val s1 = stack.pop<Thing>()
+					if (s1.type.width == 1) { // Form 1.
+						val (s3, s2) = stack.popPair<T32>()
+						stack.push(s2, s1, s3, s2, s1)
+					} else { // Form 2.
+						val s2 = stack.pop<T32>()
+						stack.push(s1, s2, s1)
 					}
 				}
 
