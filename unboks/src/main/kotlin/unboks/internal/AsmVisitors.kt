@@ -763,13 +763,19 @@ private fun propagateReadStates(blocks: List<AsmBlock<*>>) {
 
 private fun addPseudoRootIfNecessary(blocks: List<AsmBlock<*>>): List<AsmBlock<*>> {
 	val root = check<AsmBlock.Basic>(blocks.first())
+	val rootReads = root.rw.any { it.value.reads }
 
-	if (root.predecessors.isEmpty() || !root.rw.any { it.value.reads })
+	if ((root.predecessors.isEmpty() && root.handlers.isEmpty()) || !rootReads)
 		// If no other predecessors than the input exists, we're good since
 		// we don't have to do any joins. If the root block doesn't read anything
 		// we don't need to join either. Nor do we have to worry about joining the stack.
 		// If this is the root block, the stack should be empty and any predecessor with
 		// a non-empty stack entry cannot pass bytecode validation.
+
+		// Also, if the root block is watched and also reads we must insert a pseudo root.
+		// The root might say "mut = arg0" and the handler depending on that. Initial mut
+		// values need to be written in the predecessor which is only possible if we insert
+		// a pseudo root.
 		return blocks
 
 	val pseudo = AsmBlock.Basic(emptySet(), emptyList()).apply {

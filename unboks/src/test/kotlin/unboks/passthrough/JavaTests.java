@@ -36,4 +36,13 @@ public class JavaTests {
 		IntFunction<Integer> func =  a -> a * free[0];
 		trace(func.apply(x));
 	}
+
+	private static String mustCreatePseudoBlock(String someString) {
+		try {
+			return someString;
+
+		} catch (RuntimeException ioe) {
+			return someString;
+		}
+	}
 }

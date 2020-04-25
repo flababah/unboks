@@ -95,8 +95,11 @@ enum class InvIntrinsic(
 //	ATHROW(OBJECT, OBJECT), // Now Ir.
 
 //	int INSTANCEOF = 193; // - TODO Nope har object med
-//	int MONITORENTER = 194; // visitInsn
-//	int MONITOREXIT = 195; // -
+
+
+	MONITORENTER(VOID, OBJECT, safe = false),
+	MONITOREXIT(VOID, OBJECT, safe = false),
+
 
 	;
 
