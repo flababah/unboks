@@ -106,7 +106,7 @@ private fun storeVarIfUsed(opcode: Int, x: Def, mapping: Pass<Int>, visitor: Met
 	if (slot != null)
 		visitor.visitVarInsn(opcode, slot)
 	else
-		visitor.visitInsn(POP)
+		visitor.visitInsn(if (x.type.width == 1) POP else POP2)
 }
 
 private fun store(x: Def, mapping: Pass<Int>, visitor: MethodVisitor) = when (x.type) {
