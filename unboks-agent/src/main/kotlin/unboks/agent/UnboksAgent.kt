@@ -42,7 +42,7 @@ class UnboksAgent private constructor(): ClassFileTransformer {
 		val t = System.currentTimeMillis()
 		var error = ""
 
-		// TODO Add these again at some point...
+		// TODO Add these again at some point... Could the JNI problem be because of lack of annotations? Some of the ones used internally by the JVM?
 		if (className.startsWith("java/"))
 			return null
 		if (className.startsWith("javax/"))
