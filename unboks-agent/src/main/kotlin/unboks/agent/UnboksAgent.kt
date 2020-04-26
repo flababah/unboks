@@ -38,12 +38,22 @@ class UnboksAgent private constructor(): ClassFileTransformer {
 			method.graph?.execute(createPass())
 	}
 
-	override fun transform(module: Module?, loader: ClassLoader?, className: String, classBeingRedefined: Class<*>?, protectionDomain: ProtectionDomain?, classfileBuffer: ByteArray): ByteArray? {
+	override fun transform(/*module: Module?,*/ loader: ClassLoader?, className: String, classBeingRedefined: Class<*>?, protectionDomain: ProtectionDomain?, classfileBuffer: ByteArray): ByteArray? {
 		val t = System.currentTimeMillis()
 		var error = ""
 
+		// TODO Add these again at some point...
+		if (className.startsWith("java/"))
+			return null
+		if (className.startsWith("javax/"))
+			return null
+		if (className.startsWith("jdk/"))
+			return null
+		if (className.startsWith("sun/"))
+			return null
+
 		try {
-			val name = Reference.create(className.replace(".", "/"))
+			val name = Reference.create(className)
 			val context = UnboksContext {
 				if (it != name.internal)
 					throw IllegalStateException("Expected $name, not $it")

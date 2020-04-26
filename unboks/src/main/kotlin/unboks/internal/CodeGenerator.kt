@@ -176,6 +176,37 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 		}
 	}
 
+	// Force the stupid verifier to not stumble upon first initializations happening in the
+	// the beginning of watched blocks. We don't care about legacy async exceptions like
+	// ThreadDeath.
+	//
+	// Round 2 --> Still some things need to be fixed. Pass through on Minecraft fails.
+	for (alloc in max.allocs) {
+		val checked = when (alloc.type) {
+			is Reference -> {
+				visitor.visitInsn(ACONST_NULL)
+				store(alloc)
+			}
+			is Int32 -> {
+				visitor.visitInsn(ICONST_0)
+				store(alloc)
+			}
+			is Int64 -> {
+				visitor.visitInsn(LCONST_0)
+				store(alloc)
+			}
+			is Fp32 -> {
+				visitor.visitInsn(FCONST_0)
+				store(alloc)
+			}
+			is Fp64 -> {
+				visitor.visitInsn(DCONST_0)
+				store(alloc)
+			}
+			VOID -> throw IllegalArgumentException()
+		}
+	}
+
 	for (block in blocks) {
 		visitor.visitLabel(block.startLabel())
 
