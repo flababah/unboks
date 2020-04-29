@@ -1,11 +1,10 @@
 package unboks.agent
 
 import org.objectweb.asm.ClassReader
-import unboks.Reference
+import org.objectweb.asm.ClassWriter
 import unboks.StringConst
-import unboks.hierarchy.UnboksContext
-import unboks.hierarchy.UnboksType
 import unboks.pass.Pass
+import unboks.util.PassThroughClassVisitor
 import java.lang.instrument.ClassFileTransformer
 import java.lang.instrument.Instrumentation
 import java.security.ProtectionDomain
@@ -33,35 +32,25 @@ class UnboksAgent private constructor(): ClassFileTransformer {
 		}
 	}
 
-	private fun transform(cls: UnboksType) {
-		for (method in cls.methods)
-			method.graph?.execute(createPass())
-	}
-
 	override fun transform(/*module: Module?,*/ loader: ClassLoader?, className: String, classBeingRedefined: Class<*>?, protectionDomain: ProtectionDomain?, classfileBuffer: ByteArray): ByteArray? {
 		val t = System.currentTimeMillis()
 		var error = ""
 
-		// TODO Add these again at some point... Could the JNI problem be because of lack of annotations? Some of the ones used internally by the JVM?
 		if (className.startsWith("java/"))
 			return null
-		if (className.startsWith("javax/"))
+		if (className.startsWith("com/google/")) // Attempted dup def
 			return null
-		if (className.startsWith("jdk/"))
-			return null
-		if (className.startsWith("sun/"))
+		if (className.startsWith("org/apache/")) // Attempted dup def
 			return null
 
 		try {
-			val name = Reference.create(className)
-			val context = UnboksContext {
-				if (it != name.internal)
-					throw IllegalStateException("Expected $name, not $it")
-				ClassReader(classfileBuffer)
+			val reader = ClassReader(className)
+			val writer = ClassWriter(ClassWriter.COMPUTE_FRAMES)
+			val visitor = PassThroughClassVisitor(writer) { _, _ ->
+				createPass()
 			}
-			val cls = context.resolveClass(name) ?: throw IllegalStateException("Unresolved class??? $name")
-			transform(cls)
-			return cls.generateBytecode()
+			reader.accept(visitor, 0)
+			return writer.toByteArray()
 
 		} catch (e: Throwable) {
 			error = " ${e.javaClass.simpleName}: ${e.message}"

@@ -6,7 +6,7 @@ import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes.*
 import org.objectweb.asm.util.Printer
 
-class StatVisitor private constructor(
+class StatMethodVisitor private constructor(
 		delegate: MethodVisitor?,
 		private val counters: MutableMap<String, Int>) : MethodVisitor(ASM_VERSION, delegate) {
 
@@ -29,7 +29,7 @@ class StatVisitor private constructor(
 			.sortedOn(1, ascending = false)
 			.toString()
 
-	fun compared(other: StatVisitor): String = FormattedTable(counters.keys + other.counters.keys)
+	fun compared(other: StatMethodVisitor): String = FormattedTable(counters.keys + other.counters.keys)
 			.column("Opcode") { it }
 			.column("Source") { counters[it] ?: 0 }
 			.column("Target") { other.counters[it] ?: 0 }
@@ -48,8 +48,8 @@ class StatVisitor private constructor(
 	 * Create a new copy of this visitor and its current counters with
 	 * a different delegate visitor.
 	 */
-	fun copy(delegate: MethodVisitor? = null): StatVisitor {
-		return StatVisitor(delegate, counters.toMutableMap())
+	fun copy(delegate: MethodVisitor? = null): StatMethodVisitor {
+		return StatMethodVisitor(delegate, counters.toMutableMap())
 	}
 
 	override fun visitLocalVariable(name: String?, descriptor: String?, signature: String?, start: Label?, end: Label?, index: Int) {

@@ -1,17 +1,18 @@
 package unboks.passthrough.loader
 
 import org.objectweb.asm.ClassReader
-import org.objectweb.asm.MethodVisitor
+import org.objectweb.asm.ClassWriter
 import unboks.Reference
-import unboks.Tracing
-import unboks.hierarchy.UnboksContext
-import unboks.hierarchy.UnboksMethod
-import unboks.hierarchy.UnboksType
-import unboks.internal.StatVisitor
+import unboks.Thing
+import unboks.internal.StatMethodVisitor
+import unboks.pass.Pass
+import unboks.util.PassThroughClassVisitor
 import java.io.IOException
 
-class PassthroughLoader(private val hook: (UnboksType) -> Boolean = { true })
-
+class PassthroughLoader(
+		private val filter: (Reference) -> Boolean = { true },
+		private val transformer: (Reference, String) -> Pass<*>? = { _, _ -> null }
+)
 		// Delegate to the one that loaded us.
 		: ClassLoader(PassthroughLoader::class.java.classLoader), BytecodeLoader {
 
@@ -19,37 +20,8 @@ class PassthroughLoader(private val hook: (UnboksType) -> Boolean = { true })
 	 * Empty array means the class could not be found.
 	 */
 	private val ownedBytecode = mutableMapOf<String, ByteArray>()
-	private var statsInput = StatVisitor()
-	private var statsOutput = StatVisitor()
-	private val context = UnboksContext(createTracing()) {
-		try {
-			val parent = parent
-			if (parent is BytecodeLoader) {
-				val bytecode = parent.getDefinitionBytecode(it)
-				if (bytecode != null)
-					ClassReader(bytecode)
-				else
-					null
-            } else {
-                ClassReader(it)
-            }
-		} catch (e: IOException) {
-			null
-		}
-	}
-
-    private fun createTracing(): Tracing = object : Tracing {
-
-		override fun getInputVisitor(delegate: MethodVisitor, method: UnboksMethod): MethodVisitor {
-			statsInput = statsInput.copy(delegate)
-			return statsInput
-		}
-
-		override fun getOutputVisitor(delegate: MethodVisitor, method: UnboksMethod): MethodVisitor {
-			statsOutput = statsOutput.copy(delegate)
-			return statsOutput
-		}
-	}
+	private var statsInput = StatClassVisitor()
+	private var statsOutput = StatClassVisitor()
 
 	private fun getPassthroughParentCount(): Int {
 		var count = 0
@@ -64,10 +36,41 @@ class PassthroughLoader(private val hook: (UnboksType) -> Boolean = { true })
 		return count
 	}
 
+	private fun resolver(it: String): ClassReader? {
+		return try {
+			val parent = parent
+			if (parent is BytecodeLoader) {
+				val bytecode = parent.getDefinitionBytecode(it)
+				if (bytecode != null)
+					ClassReader(bytecode)
+				else
+					null
+			} else {
+				ClassReader(it)
+			}
+		} catch (e: IOException) {
+			null
+		}
+	}
+
+	private fun resolveClass(name: Thing): ByteArray? {
+		val internalName = when (name) {
+			is Reference -> name.internal
+			else -> name.descriptor
+		}
+		val reader = resolver(internalName) ?: return null
+		val writer = ClassWriter(ClassWriter.COMPUTE_FRAMES)
+		statsOutput = statsOutput.copy(writer) // TODO Oh dear ugly.... Make the stat stuff better!
+		statsInput = statsInput.copy(PassThroughClassVisitor(statsOutput, transformer))
+		reader.accept(statsInput, 0)
+		return writer.toByteArray()
+	}
+
 	private fun createByteCode(name: String): ByteArray? {
-		val type = context.resolveClass(Reference.create(name)) ?: return null
-		val ok = hook(type)
-		return if (ok) type.generateBytecode() else null
+		val reference = Reference.create(name)
+		if (!filter(reference))
+			return null
+		return resolveClass(reference)
 	}
 
     override fun getDefinitionBytecode(name: String): ByteArray? {

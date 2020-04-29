@@ -22,24 +22,24 @@ class BootstrapTest {
 	@Test
 	fun testSimpleBootstrap() {
 		val dummy = Reference.create(Dummy::class)
-		val loader = PassthroughLoader { cls ->
-			if (cls.name == dummy) {
-				val method = cls.getMethod("getOutput", dummy)!!
-				val graph = method.graph!!
 
-				graph.execute(Pass<Unit> {
+		val loader = PassthroughLoader { cls, method ->
+			if (cls == dummy && method == "getOutput") {
+				Pass<Unit> {
 					visit<StringConst> {
 						if (it.value == "Unmodified") {
 							trace("Modified constant!")
-							val newConstant = graph.constant("MODIFIED!")
+							val newConstant = it.graph.constant("MODIFIED!")
 							for (use in it.uses)
 								use.defs.replace(it, newConstant)
 						}
 					}
-				})
+				}
+			} else {
+				null
 			}
-			true
 		}
+
 		val cls = Class.forName(Dummy::class.java.name, true, loader)
 		val instance = cls.newInstance()
 		val method = cls.getDeclaredMethod("getOutput")

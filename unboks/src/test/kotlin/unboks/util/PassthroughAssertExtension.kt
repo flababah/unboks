@@ -24,10 +24,10 @@ import kotlin.test.assertEquals
  *  Why not simply return a value from the method to compare? Because JUnit won't let us.
  */
 class PassthroughAssertExtension : TestInstancePostProcessor, BeforeTestExecutionCallback, AfterTestExecutionCallback {
-	private val loader = PassthroughLoader {
+	private val loader = PassthroughLoader({
 		// We need the traces to be visible from the "real" class, not the custom loaded.
-		it.name != Thing.create(Companion::class)
-	}
+		it != Thing.create(Companion::class)
+	})
 
 	private class Store(val instance: Any)
 

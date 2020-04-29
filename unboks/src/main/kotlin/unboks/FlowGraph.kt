@@ -1,6 +1,7 @@
 package unboks
 
 import org.objectweb.asm.MethodVisitor
+import unboks.internal.FlowGraphVisitor
 import unboks.internal.NameRegistry
 import unboks.internal.codeGenerate
 import unboks.pass.Pass
@@ -69,10 +70,18 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 	 * Compile the CFG for the method and emit it into an ASM [MethodVisitor].
 	 *
 	 * Blabla starts with [MethodVisitor.visitCode], and ends with [MethodVisitor.visitEnd].
+	 * Will output 1.7+ bytecode. Frame infos, no JSR/RET.
 	 */
 	fun generate(receiver: MethodVisitor, returnType: Thing) {
 		execute(createConsistencyCheckPass(this))
 		codeGenerate(this, receiver, returnType)
+	}
+
+	/**
+	 * Blablla blocks visitCode until (and including) visitEnd -> passes rest to delegate
+	 */
+	fun createInputVisitor(version: Int, delegate: MethodVisitor?, completion: () -> Unit): MethodVisitor {
+		return FlowGraphVisitor(version, this, delegate, completion)
 	}
 
 	fun compactNames() {
