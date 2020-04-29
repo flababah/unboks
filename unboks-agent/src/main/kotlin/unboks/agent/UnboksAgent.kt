@@ -44,7 +44,7 @@ class UnboksAgent private constructor(): ClassFileTransformer {
 			return null
 
 		try {
-			val reader = ClassReader(className)
+			val reader = ClassReader(classfileBuffer, 0, classfileBuffer.size)
 			val writer = ClassWriter(ClassWriter.COMPUTE_FRAMES)
 			val visitor = PassThroughClassVisitor(writer) { _, _ ->
 				createPass()
