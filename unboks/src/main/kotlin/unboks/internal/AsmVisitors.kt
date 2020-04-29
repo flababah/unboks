@@ -610,6 +610,8 @@ internal class FlowGraphVisitor(
 				is String -> graph.constant(value)
 				is Int -> graph.constant(value)
 				is Long -> graph.constant(value)
+				is Float -> graph.constant(value)
+				is Double -> graph.constant(value)
 				is Type -> when (value.sort) {
 					Type.ARRAY,
 					Type.OBJECT-> graph.constant(Thing.create(value.descriptor))
