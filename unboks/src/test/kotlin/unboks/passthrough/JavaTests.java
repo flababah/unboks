@@ -18,7 +18,7 @@ public class JavaTests {
 
 	@Test
 	public void testMultiDimArray() {
-		int[][] array = new int[1][2];
+		int[][] array = new int[1][2]; // MULTIANEWARRAY [[I 2
 		array[0][0] = 1;
 		array[0][1] = 2;
 
@@ -26,6 +26,30 @@ public class JavaTests {
 			for (int i : inner)
 				trace(i);
 		}
+	}
+
+	@Test
+	public void testMultiDimArrayRef() {
+		String[][] array = new String[1][2];
+		array[0][0] = "one";
+		array[0][1] = "two";
+
+		for (String[] inner : array) {
+			for (String i : inner)
+				trace(i);
+		}
+	}
+
+	@Test
+	public void test1dArrayOfArrays() {
+		int[][] array = new int[][] { { 42 } }; // ANEWARRAY [I
+		trace(array[0][0]);
+	}
+
+	@Test
+	public void test1dArrayOfArraysRef() {
+		String[][] array = new String[][] { { "hello" } };
+		trace(array[0][0]);
 	}
 
 	@PermutationTest

@@ -10,9 +10,9 @@ import unboks.*
  * ANEWARRAY visitTypeInsn
  * MULTIANEWARRAY visitMultiANewArrayInsn
  */
-class InvNewArray(override val returnType: ArrayReference) : Invocation {
+class InvNewArray(override val returnType: ArrayReference, val dimensions: Int) : Invocation {
 
-	override val parameterTypes = (0 until returnType.dimensions).map { INT }
+	override val parameterTypes = (0 until dimensions).map { INT }
 
 	override val representation get() = "new $returnType"
 
@@ -22,13 +22,12 @@ class InvNewArray(override val returnType: ArrayReference) : Invocation {
 	override val safe get() = false
 
 	override fun visit(visitor: MethodVisitor) {
-		val dimensions = returnType.dimensions
-		val bottom = returnType.bottomComponent
+		val wrapped = returnType.component
 
 		when {
 			dimensions > 1      -> visitor.visitMultiANewArrayInsn(returnType.descriptor, dimensions)
-			bottom is Primitive -> visitor.visitIntInsn(Opcodes.NEWARRAY, primitiveToOpcode(bottom))
-			bottom is Reference -> visitor.visitTypeInsn(Opcodes.ANEWARRAY, bottom.internal)
+			wrapped is Primitive -> visitor.visitIntInsn(Opcodes.NEWARRAY, primitiveToOpcode(wrapped))
+			wrapped is Reference -> visitor.visitTypeInsn(Opcodes.ANEWARRAY, wrapped.internal)
 		}
 	}
 
