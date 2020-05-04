@@ -33,12 +33,28 @@ TODO Generalt
 
 private class AllocInfo(var count: Int = 0, val allocs: MutableSet<Def> = mutableSetOf())
 
-private fun createWastefulSimpleRegisterMapping(max: AllocInfo) = Pass<Int> {
+/**
+ * For phis, [joinPhiSlot] is the one as we used to know. [slot] is a copy that is made after
+ * each phi join (in the block) in order to avoid successor blocks depending on phi values
+ * begin screwed, if the phi value is updated at the end of the block....
+ */
+private class Slot(val slot: Int, val joinPhiSlot: Int?)
+
+private fun createWastefulSimpleRegisterMapping(max: AllocInfo) = Pass<Slot> {
 	max.count = graph.parameters.sumBy { it.type.width }
 
-	fun allocSlot(def: Def) = max.count.also {
+	fun allocSlot(def: Def, phi: Boolean = false): Slot {
+		val slot = max.count
 		max.count += def.type.width
 		max.allocs += def
+		return if (phi) { // One more for static.
+			val static = max.count
+			max.count += def.type.width
+			max.allocs += def
+			Slot(static, slot)
+		} else {
+			Slot(slot, null)
+		}
 	}
 
 	// Parameters are always stored in the first local slots.
@@ -49,7 +65,7 @@ private fun createWastefulSimpleRegisterMapping(max: AllocInfo) = Pass<Int> {
 				break
 			offset += parameter.type.width
 		}
-		offset
+		Slot(offset, null)
 	}
 
 	// Only alloc a register for non-void and if we actually need the result.
@@ -61,7 +77,7 @@ private fun createWastefulSimpleRegisterMapping(max: AllocInfo) = Pass<Int> {
 	}
 
 	visit<IrPhi> {
-		allocSlot(it)
+		allocSlot(it, phi = true)
 	}
 
 	visit<IrMutable> {
@@ -91,31 +107,39 @@ private fun loadConstant(const: Constant<*>, visitor: MethodVisitor) = when (con
 	else         -> visitor.visitLdcInsn(const.value)
 }
 
-private fun load(def: Def, mapping: Pass<Int>, visitor: MethodVisitor) = when {
+private fun getSlot(slot: Slot, alt: Boolean): Int {
+	return if (alt)
+		slot.joinPhiSlot ?: throw IllegalStateException("Trying to load empty phiJoin: $slot")
+	else
+		slot.slot
+}
+
+private fun load(def: Def, mapping: Pass<Slot>, visitor: MethodVisitor, alt: Boolean) = when {
 	def is Constant<*>    -> loadConstant(def, visitor)
-	def.type is Reference -> visitor.visitVarInsn(ALOAD, def.passValue(mapping))
-	def.type is Fp32      -> visitor.visitVarInsn(FLOAD, def.passValue(mapping))
-	def.type is Fp64      -> visitor.visitVarInsn(DLOAD, def.passValue(mapping))
-	def.type is Int64     -> visitor.visitVarInsn(LLOAD, def.passValue(mapping))
-	def.type is Int32     -> visitor.visitVarInsn(ILOAD, def.passValue(mapping))
+	def.type is Reference -> visitor.visitVarInsn(ALOAD, getSlot(def.passValue(mapping), alt))
+	def.type is Fp32      -> visitor.visitVarInsn(FLOAD, getSlot(def.passValue(mapping), alt))
+	def.type is Fp64      -> visitor.visitVarInsn(DLOAD, getSlot(def.passValue(mapping), alt))
+	def.type is Int64     -> visitor.visitVarInsn(LLOAD, getSlot(def.passValue(mapping), alt))
+	def.type is Int32     -> visitor.visitVarInsn(ILOAD, getSlot(def.passValue(mapping), alt))
 	else                  -> throw IllegalArgumentException()
 }
 
-private fun storeVarIfUsed(opcode: Int, x: Def, mapping: Pass<Int>, visitor: MethodVisitor) {
+private fun storeVarIfUsed(opcode: Int, x: Def, mapping: Pass<Slot>, visitor: MethodVisitor, alt: Boolean) {
 	val slot = x.passValueSafe(mapping)
-	if (slot != null)
-		visitor.visitVarInsn(opcode, slot)
-	else
+	if (slot != null) {
+		visitor.visitVarInsn(opcode, getSlot(slot, alt))
+	} else {
 		visitor.visitInsn(if (x.type.width == 1) POP else POP2)
+	}
 }
 
-private fun store(x: Def, mapping: Pass<Int>, visitor: MethodVisitor) = when (x.type) {
+private fun store(x: Def, mapping: Pass<Slot>, visitor: MethodVisitor, alt: Boolean) = when (x.type) {
 	is Constant<*> -> throw Error("Cannot store in constant.")
-	is Reference   -> storeVarIfUsed(ASTORE, x, mapping, visitor)
-	is Fp32        -> storeVarIfUsed(FSTORE, x, mapping, visitor)
-	is Fp64        -> storeVarIfUsed(DSTORE, x, mapping, visitor)
-	is Int64       -> storeVarIfUsed(LSTORE, x, mapping, visitor)
-	is Int32       -> storeVarIfUsed(ISTORE, x, mapping, visitor)
+	is Reference   -> storeVarIfUsed(ASTORE, x, mapping, visitor, alt)
+	is Fp32        -> storeVarIfUsed(FSTORE, x, mapping, visitor, alt)
+	is Fp64        -> storeVarIfUsed(DSTORE, x, mapping, visitor, alt)
+	is Int64       -> storeVarIfUsed(LSTORE, x, mapping, visitor, alt)
+	is Int32       -> storeVarIfUsed(ISTORE, x, mapping, visitor, alt)
 	VOID           -> throw IllegalArgumentException()
 }
 
@@ -127,15 +151,15 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 	val max = AllocInfo()
 	val mapping = graph.execute(createWastefulSimpleRegisterMapping(max))
 
-	fun load(def: Def) = load(def, mapping, visitor)
-	fun store(def: Def) = store(def, mapping, visitor)
+	fun load(def: Def, alt: Boolean = false) = load(def, mapping, visitor, alt)
+	fun store(def: Def, alt: Boolean = false) = store(def, mapping, visitor, alt)
 	fun Block.startLabel() = labels[this]!!.first
 	fun Block.endLabel() = labels[this]!!.second
 
 	// TODO 2019 - insert copies in each phi def? -- hmm med liste af phis i starten... og hvordan med co-dependen phis?
 
 	fun feedPhiDependers(block: Block) {
-		// Do this before phi swapping, so we get the correct value.
+		// Do this before phi swapping, so we get the correct value. -- doesn't matter with new change.
 		for (successor in block.terminal!!.successors) {
 			for (mut in successor.opcodes.filterIsInstance<IrMutable>()) {
 				val initial = mut.initial
@@ -147,7 +171,7 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 				// See visit<IrMutableWrite> -- same deal
 				for (phiTarget in mut.uses.filterIsInstance<IrPhi>()) {
 					load(initial)
-					store(phiTarget)
+					store(phiTarget, alt = true)
 				}
 			}
 		}
@@ -157,12 +181,10 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 		if (dependers.isNotEmpty()) {
 			visitor.visitInsn(NOP) // Just to indicate that we do phi stuff from here on.
 
-			// We have to load all defs on stack before saving to avoid overriding. Eg.:
-			// - x = phi(y, ...)
-			// - y = phi(x, ...)
-			// This is just a safe shotgun approach.
-			dependers.forEach { load(it.defs[block]!!) }
-			dependers.asReversed().forEach { store(it) }
+			for (depender in dependers) {
+				load(depender.defs[block]!!)
+				store(depender, alt = true)
+			}
 		}
 	}
 
@@ -209,6 +231,11 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 
 	for (block in blocks) {
 		visitor.visitLabel(block.startLabel())
+
+		for (phi in block.opcodes.filterIsInstance<IrPhi>()) {
+			load(phi, alt = true)
+			store(phi)
+		}
 
 		block.execute(Pass<Unit> {
 
@@ -314,13 +341,17 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 				// -> Since we directly copy each write into depending phis.
 				for (phiTarget in it.target.uses.filterIsInstance<IrPhi>()) {
 					load(it.value)
-					store(phiTarget)
+					store(phiTarget, alt = true)
 				}
 			}
 		})
 	}
 	visitor.visitLabel(blocks.last().endLabel())
-	for (alloc in max.allocs)
-		visitor.visitLocalVariable(alloc.name, alloc.type.descriptor, null, blocks.first().startLabel(), blocks.last().endLabel(), alloc.passValue(mapping))
+	for (alloc in max.allocs) {
+		val slot = alloc.passValue(mapping)
+		visitor.visitLocalVariable(alloc.name, alloc.type.descriptor, null, blocks.first().startLabel(), blocks.last().endLabel(), slot.slot)
+		if (slot.joinPhiSlot != null)
+			visitor.visitLocalVariable(alloc.name, alloc.type.descriptor, null, blocks.first().startLabel(), blocks.last().endLabel(), slot.joinPhiSlot)
+	}
 	visitor.visitMaxs(15, max.count)
 }

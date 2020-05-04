@@ -69,4 +69,17 @@ public class JavaTests {
 			return someString;
 		}
 	}
+
+	@Test
+	public void testTreeMapPutBug() {
+		String t = "hej";
+		String parent;
+		do {
+			parent = t;
+			t = null;
+
+		} while (t != null);
+
+		trace(parent);
+	}
 }
