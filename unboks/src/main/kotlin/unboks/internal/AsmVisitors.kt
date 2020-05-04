@@ -1,10 +1,7 @@
 package unboks.internal
 
-import org.objectweb.asm.Handle
-import org.objectweb.asm.Label
-import org.objectweb.asm.MethodVisitor
+import org.objectweb.asm.*
 import org.objectweb.asm.Opcodes.*
-import org.objectweb.asm.Type
 import unboks.*
 import unboks.invocation.*
 import unboks.pass.builtin.createPhiPruningPass
@@ -301,6 +298,26 @@ internal class FlowGraphVisitor(
 			if (parameter.type.width == 2)
 				this[slot++] = WideDef
 		}
+	}
+
+	override fun visitInsnAnnotation(typeRef: Int, typePath: TypePath?, descriptor: String?, visible: Boolean): AnnotationVisitor? {
+		return null
+	}
+
+	override fun visitTryCatchAnnotation(typeRef: Int, typePath: TypePath?, descriptor: String?, visible: Boolean): AnnotationVisitor? {
+		return null
+	}
+
+	override fun visitLocalVariableAnnotation(typeRef: Int, typePath: TypePath?, start: Array<out Label>?, end: Array<out Label>?, index: IntArray?, descriptor: String?, visible: Boolean): AnnotationVisitor? {
+		return null
+	}
+
+	override fun visitLineNumber(line: Int, start: Label?) {
+
+	}
+
+	override fun visitMaxs(maxStack: Int, maxLocals: Int) {
+
 	}
 
 	//
