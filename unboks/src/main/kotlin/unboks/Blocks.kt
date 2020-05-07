@@ -32,6 +32,12 @@ sealed class Block(val flow: FlowGraph) : DependencySource(), Nameable, PassType
 			val repr = type?.internal ?: "*"
 			sb.append(" [$repr -> ${handler.name}]")
 		}
+
+		if (predecessors.isNotEmpty()){
+			val preds = predecessors.joinToString(prefix = "   preds: ") { it.name }
+			sb.append(preds)
+		}
+
 		return sb.toString()
 	}
 

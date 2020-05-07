@@ -2,6 +2,8 @@ package unboks.passthrough
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import unboks.reconstruct.Main
+import unboks.reconstruct.dbn
 import unboks.util.Ints
 import unboks.util.PassthroughAssertExtension
 import unboks.util.PassthroughAssertExtension.Companion.trace
@@ -130,5 +132,29 @@ class ExceptionTests {
 		} catch (e: RuntimeException) {
 			trace(value)
 		}
+	}
+
+	@PermutationTest
+	fun testWeirdThing(@Ints(0, 1, 2, 3) input: Int) {
+		try {
+			throwWhenEqual(1, input)
+			throwWhenEqual(3, input)
+		} catch (e: Throwable) {
+			trace("ex1")
+			trace(input)
+		}
+		try {
+			throwWhenEqual(2, input)
+			throwWhenEqual(3, input)
+		} catch (e: Throwable) {
+			trace("ex2")
+			trace(input)
+		}
+		trace(input)
+	}
+
+	private fun throwWhenEqual(a: Int, b: Int) {
+		if (a == b)
+			throw RuntimeException()
 	}
 }

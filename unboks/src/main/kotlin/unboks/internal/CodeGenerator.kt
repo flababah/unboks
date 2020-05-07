@@ -38,7 +38,15 @@ private class AllocInfo(var count: Int = 0, val allocs: MutableSet<Def> = mutabl
  * each phi join (in the block) in order to avoid successor blocks depending on phi values
  * begin screwed, if the phi value is updated at the end of the block....
  */
-private class Slot(val slot: Int, val joinPhiSlot: Int?)
+private class Slot(val slot: Int, val joinPhiSlot: Int?) {
+
+	override fun toString(): String {
+		return if (joinPhiSlot != null)
+			"$slot (phi $joinPhiSlot)"
+		else
+			"$slot"
+	}
+}
 
 private fun createWastefulSimpleRegisterMapping(max: AllocInfo) = Pass<Slot> {
 	max.count = graph.parameters.sumBy { it.type.width }
@@ -160,13 +168,26 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 
 	fun feedPhiDependers(block: Block) {
 		// Do this before phi swapping, so we get the correct value. -- doesn't matter with new change.
-		for (successor in block.terminal!!.successors) {
+
+		val successors = block.terminal!!.successors + block.exceptions.map { it.handler }
+
+		for (successor in successors) {
 			for (mut in successor.opcodes.filterIsInstance<IrMutable>()) {
-				val initial = mut.initial
-				if (initial !is IrPhi) {
-					load(initial)
-					store(mut)
+				// For initial phi:
+				// B3 [java/lang/Throwable -> H0]   preds: H1, B2
+				// - phi0 = PHI(123 in B2, mut0 in H1)
+				// - mut1 = MUT initial phi0
+				//
+				// mut1 is used in H0, thous mut1 should be initialize in predecessors.
+
+				val mutInitial = mut.initial
+				val initial = if (mutInitial is IrPhi) {
+					mutInitial.defs[block]!! // We are predecessor, so we can find the value of phi here.
+				} else {
+					mutInitial
 				}
+				load(initial)
+				store(mut)
 
 				// See visit<IrMutableWrite> -- same deal
 				for (phiTarget in mut.uses.filterIsInstance<IrPhi>()) {
@@ -203,31 +224,31 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 	// ThreadDeath.
 	//
 	// Round 2 --> Still some things need to be fixed. Pass through on Minecraft fails.
-	for (alloc in max.allocs) {
-		val checked = when (alloc.type) {
-			is Reference -> {
-				visitor.visitInsn(ACONST_NULL)
-				store(alloc)
-			}
-			is Int32 -> {
-				visitor.visitInsn(ICONST_0)
-				store(alloc)
-			}
-			is Int64 -> {
-				visitor.visitInsn(LCONST_0)
-				store(alloc)
-			}
-			is Fp32 -> {
-				visitor.visitInsn(FCONST_0)
-				store(alloc)
-			}
-			is Fp64 -> {
-				visitor.visitInsn(DCONST_0)
-				store(alloc)
-			}
-			VOID -> throw IllegalArgumentException()
-		}
-	}
+//	for (alloc in max.allocs) {
+//		val checked = when (alloc.type) {
+//			is Reference -> {
+//				visitor.visitInsn(ACONST_NULL)
+//				store(alloc)
+//			}
+//			is Int32 -> {
+//				visitor.visitInsn(ICONST_0)
+//				store(alloc)
+//			}
+//			is Int64 -> {
+//				visitor.visitInsn(LCONST_0)
+//				store(alloc)
+//			}
+//			is Fp32 -> {
+//				visitor.visitInsn(FCONST_0)
+//				store(alloc)
+//			}
+//			is Fp64 -> {
+//				visitor.visitInsn(DCONST_0)
+//				store(alloc)
+//			}
+//			VOID -> throw IllegalArgumentException()
+//		}
+//	}
 
 	for (block in blocks) {
 		visitor.visitLabel(block.startLabel())
@@ -328,7 +349,9 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 					store(it)
 			}
 
-			visit<IrMutable> { // TODO Bør ske uden for watched block -- men hvad hvis initial IKKE kan komme ude fra -- f.eks. hvis initial er (Exception e)? i en watched handler? er det overhovedet lovligt?
+			// Why is this needed? Initial should be filled by predecessors.
+			// Used because block 2 just depends on stuff from the previous block, if we got here without exceptions in the first block.
+			visit<IrMutable> {
 				load(it.initial)
 				store(it)
 			}
