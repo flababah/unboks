@@ -82,7 +82,7 @@ fun createPhiPruningPass() = Pass<Unit> {
 
 		if (defs.size == 1) {
 			val source = defs.first()
-			val d = Dominance(it.flow)
+			val d = Dominance(it.graph)
 
 			if (!d.dom(source.block, it.block, strict = true))
 				throw InconsistencyException("The source ($source) in short-circuit does not dominate phi ($it).")

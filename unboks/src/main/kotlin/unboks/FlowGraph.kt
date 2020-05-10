@@ -30,7 +30,7 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 	var root: BasicBlock
 		get() = _root ?: throw IllegalStateException("No root")
 		set(value) {
-			if (value.flow !== this)
+			if (value.graph !== this)
 				throw IllegalArgumentException("Foreign flow") // XXX ext function
 			_root = value
 		}

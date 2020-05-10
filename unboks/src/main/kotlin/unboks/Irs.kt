@@ -39,7 +39,7 @@ enum class Cmp(val repr: String) { // TODO Figure something out...
 
 sealed class Ir(val block: Block) : DependencySource(), PassType {
 
-	val flow get() = block.flow // TODO rename to graph
+	val graph get() = block.graph
 
 	val index: Int get() = block.opcodes.indexOf(this)
 
@@ -52,7 +52,7 @@ sealed class Ir(val block: Block) : DependencySource(), PassType {
 	override fun detachFromParent() {
 		block.detachIr(this)
 		if (this is Nameable)
-			flow.unregisterAutoName(this)
+			graph.unregisterAutoName(this)
 	}
 
 	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
@@ -114,7 +114,7 @@ class IrGoto internal constructor(block: Block, target: BasicBlock)
 class IrInvoke internal constructor(block: Block, val spec: Invocation, arguments: List<Def>)
 		: Ir(block), Def, Use {
 
-	override var name by flow.registerAutoName(this, "inv")
+	override var name by graph.registerAutoName(this, "inv")
 
 	override val uses = RefCount<Use>()
 	override val type get() = spec.returnType
@@ -152,7 +152,7 @@ class IrInvoke internal constructor(block: Block, val spec: Invocation, argument
 class IrPhi internal constructor(block: Block, private val explicitType: Thing?)
 		: Ir(block), Def, Use {
 
-	override var name by flow.registerAutoName(this, "phi")
+	override var name by graph.registerAutoName(this, "phi")
 
 	override val defs: DependencyMapValues<Block, Def> = dependencyMap(phiReferences, defUses)
 
@@ -227,7 +227,7 @@ class IrMutable internal constructor(block: Block, initial: Def)
 
 	override val defs: DependencySingleton<Def> = dependencyProperty(defUses, initial)
 
-	override var name by flow.registerAutoName(this, "mut")
+	override var name by graph.registerAutoName(this, "mut")
 
 	override val uses = RefCount<Use>()
 

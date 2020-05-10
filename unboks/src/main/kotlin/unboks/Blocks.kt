@@ -5,7 +5,7 @@ import unboks.internal.handlerUses
 import unboks.pass.Pass
 import unboks.pass.PassType
 
-sealed class Block(val flow: FlowGraph) : DependencySource(), Nameable, PassType {
+sealed class Block(val graph: FlowGraph) : DependencySource(), Nameable, PassType {
 	private val _opcodes = mutableListOf<Ir>()
 	val opcodes: List<Ir> get() = _opcodes
 
@@ -46,8 +46,8 @@ sealed class Block(val flow: FlowGraph) : DependencySource(), Nameable, PassType
 	override fun traverseChildren(): Sequence<DependencySource> = _opcodes.asSequence()
 
 	override fun detachFromParent() {
-		flow.detachBlock(this)
-		flow.unregisterAutoName(this)
+		graph.detachBlock(this)
+		graph.unregisterAutoName(this)
 	}
 
 	internal fun executeInitial(visitor: Pass<*>.InitialVisitor) {
@@ -58,7 +58,7 @@ sealed class Block(val flow: FlowGraph) : DependencySource(), Nameable, PassType
 	/**
 	 * Execute a pass on this block.
 	 */
-	fun <R> execute(pass: Pass<R>): Pass<R> = pass.execute(flow) {
+	fun <R> execute(pass: Pass<R>): Pass<R> = pass.execute(graph) {
 		executeInitial(it)
 	}
 
@@ -93,9 +93,9 @@ class BasicBlock internal constructor(flow: FlowGraph) : Block(flow) {
 	override var name by flow.registerAutoName(this, "B")
 
 	override var root
-		get() = flow.root === this
+		get() = graph.root === this
 		set(value) {
-			flow.root =
+			graph.root =
 					if (value) this
 					else throw IllegalArgumentException("Cannot unset root")
 		}
