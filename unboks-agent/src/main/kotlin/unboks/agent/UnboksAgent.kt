@@ -10,6 +10,7 @@ import java.lang.instrument.Instrumentation
 import java.security.ProtectionDomain
 
 class UnboksAgent private constructor(): ClassFileTransformer {
+	private val resolver = CommonSuperClassResolver()
 
 	companion object {
 
@@ -36,16 +37,17 @@ class UnboksAgent private constructor(): ClassFileTransformer {
 		val t = System.currentTimeMillis()
 		var error = ""
 
-		if (className.startsWith("java/"))
-			return null
-		if (className.startsWith("com/google/")) // Attempted dup def
-			return null
-		if (className.startsWith("org/apache/")) // Attempted dup def
-			return null
+		if (className == "org/lwjgl/opengl/GLCapabilities") // <init>
+			return null // Generated code is currently too large (MethodTooLargeException).
 
 		try {
 			val reader = ClassReader(classfileBuffer, 0, classfileBuffer.size)
-			val writer = ClassWriter(ClassWriter.COMPUTE_FRAMES)
+			val writer = object : ClassWriter(COMPUTE_FRAMES) {
+
+				override fun getCommonSuperClass(type1: String, type2: String): String {
+					return resolver.findLcaClass(loader, type1, type2)
+				}
+			}
 			val visitor = PassThroughClassVisitor(writer) { _, _ ->
 				createPass()
 			}

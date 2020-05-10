@@ -39,7 +39,7 @@ enum class Cmp(val repr: String) { // TODO Figure something out...
 
 sealed class Ir(val block: Block) : DependencySource(), PassType {
 
-	val flow get() = block.flow
+	val flow get() = block.flow // TODO rename to graph
 
 	val index: Int get() = block.opcodes.indexOf(this)
 

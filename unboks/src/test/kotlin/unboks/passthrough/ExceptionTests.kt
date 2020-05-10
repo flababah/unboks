@@ -2,8 +2,6 @@ package unboks.passthrough
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
-import unboks.reconstruct.Main
-import unboks.reconstruct.dbn
 import unboks.util.Ints
 import unboks.util.PassthroughAssertExtension
 import unboks.util.PassthroughAssertExtension.Companion.trace
