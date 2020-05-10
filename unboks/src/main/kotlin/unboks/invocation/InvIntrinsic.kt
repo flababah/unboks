@@ -45,20 +45,20 @@ enum class InvIntrinsic(
 	 */
 	IDIV(INT, INT, INT, safe = false),
 	LDIV(LONG, LONG, LONG, safe = false),
-//	int FDIV = 110; // -
+	FDIV(FLOAT, FLOAT, FLOAT), // Is safe, NaN is used instead of exception.
 	DDIV(DOUBLE, DOUBLE, DOUBLE), // Is safe, NaN is used instead of exception.
 	IREM(INT, INT, INT, safe = false), // ArithmeticException
 	LREM(LONG, LONG, LONG, safe = false), // ArithmeticException
-//	int FREM = 114; // -
-//	int DREM = 115; // -
+	FREM(FLOAT, FLOAT, FLOAT), // Is safe, NaN is used instead of exception.
+	DREM(DOUBLE, DOUBLE, DOUBLE), // Is safe, NaN is used instead of exception.
 	INEG(INT, INT),
 	LNEG(LONG, LONG),
-//	int FNEG = 118; // -
-//	int DNEG = 119; // -
+	FNEG(FLOAT, FLOAT),
+	DNEG(DOUBLE, DOUBLE),
 	ISHL(INT, INT, INT),
 	LSHL(LONG, LONG, INT),
 	ISHR(INT, INT, INT),
-//	int LSHR = 123; // -
+	LSHR(LONG, LONG, INT),
 	IUSHR(INT, INT, INT),
 	LUSHR(LONG, LONG, INT),
 	IAND(INT, INT, INT),
@@ -66,6 +66,7 @@ enum class InvIntrinsic(
 	IOR(INT, INT, INT),
 	LOR(LONG, LONG, LONG),
 	IXOR(INT, INT, INT),
+	LXOR(LONG, LONG, LONG),
 	I2L(LONG, INT),
 	I2F(FLOAT, INT),
 	I2D(DOUBLE, INT),
@@ -92,15 +93,8 @@ enum class InvIntrinsic(
 	DCMPG(INT, DOUBLE, DOUBLE),
 	ARRAYLENGTH(INT, ARRAY),
 
-//	ATHROW(OBJECT, OBJECT), // Now Ir.
-
-//	int INSTANCEOF = 193; // - TODO Nope har object med
-
-
 	MONITORENTER(VOID, OBJECT, safe = false),
 	MONITOREXIT(VOID, OBJECT, safe = false),
-
-
 	;
 
 /*
