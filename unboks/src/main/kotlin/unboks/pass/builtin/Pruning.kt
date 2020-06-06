@@ -47,20 +47,12 @@ fun createPhiPruningPass() = Pass<Unit> {
 				for (use in node.uses) {
 					if (use is IrPhi) {
 						acc(use)
-					} else if (use is IrMutable) {
-						acc(use)
-					} else if (use is IrMutableWrite) {
-						acc(use.target)
 					} else {
 						val msg = "Empty phi chain has real usage: $use uses $node (starts as $this)"
 						throw InconsistencyException(msg)
 					}
 
 				}
-			}
-			for (def in chain) {
-				if (def is IrMutable)
-					def.writes.forEach { it.remove() }
 			}
 			it.remove(chain as Set<DependencySource>) // TODO Fix this shit.
 		}

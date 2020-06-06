@@ -88,10 +88,6 @@ private fun createWastefulSimpleRegisterMapping(max: AllocInfo) = Pass<Slot> {
 		allocSlot(it, phi = true)
 	}
 
-	visit<IrMutable> {
-		allocSlot(it)
-	}
-
 	visit<HandlerBlock> {
 		allocSlot(it)
 	}
@@ -164,46 +160,12 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 	fun Block.startLabel() = labels[this]!!.first
 	fun Block.endLabel() = labels[this]!!.second
 
-	// TODO 2019 - insert copies in each phi def? -- hmm med liste af phis i starten... og hvordan med co-dependen phis?
-
-	fun feedPhiDependers(block: Block) {
-		// Do this before phi swapping, so we get the correct value. -- doesn't matter with new change.
-
-		val successors = block.terminal!!.successors + block.exceptions.map { it.handler }
-
-		for (successor in successors) {
-			for (mut in successor.opcodes.filterIsInstance<IrMutable>()) {
-				// For initial phi:
-				// B3 [java/lang/Throwable -> H0]   preds: H1, B2
-				// - phi0 = PHI(123 in B2, mut0 in H1)
-				// - mut1 = MUT initial phi0
-				//
-				// mut1 is used in H0, thous mut1 should be initialize in predecessors.
-
-				val mutInitial = mut.initial
-				val initial = if (mutInitial is IrPhi && mut.block == mutInitial.block) {
-					mutInitial.defs[block]!! // We are predecessor, so we can find the value of phi here.
-				} else {
-					mutInitial
-				}
-				load(initial)
-				store(mut)
-
-				// See visit<IrMutableWrite> -- same deal
-				for (phiTarget in mut.uses.filterIsInstance<IrPhi>()) {
-					load(initial)
-					store(phiTarget, alt = true)
-				}
-			}
-		}
-
-		// The def that is assigned in this block from the phi's perspective.
+	fun tryFeedPhiDependersWithLocalDef(block: Block, def: Def) {
 		val dependers = block.phiReferences.toList()
-		if (dependers.isNotEmpty()) {
-			visitor.visitInsn(NOP) // Just to indicate that we do phi stuff from here on.
-
-			for (depender in dependers) {
-				load(depender.defs[block]!!)
+		for (depender in dependers) {
+			val dependsOn = depender.defs[block]!!
+			if (dependsOn == def) {
+				load(dependsOn)
 				store(depender, alt = true)
 			}
 		}
@@ -222,20 +184,28 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 	for (block in blocks) {
 		visitor.visitLabel(block.startLabel())
 
+		if (block is HandlerBlock)
+			store(block)
+
+		// Put "unstable" part of phi in the real phi def, so we can use it.
 		for (phi in block.opcodes.filterIsInstance<IrPhi>()) {
 			load(phi, alt = true)
 			store(phi)
 		}
 
+		// Feed phi dependers for definitions that are not made in this block.
+		val dependers = block.phiReferences.toList()
+		for (depender in dependers) {
+			val def = depender.defs[block]!!
+			if (def !is IrInvoke || def.block != block) {
+				load(def)
+				store(depender, alt = true)
+			}
+		}
+
 		block.execute(Pass<Unit> {
 
-			visit<HandlerBlock> {
-				store(it)
-			}
-
 			visit<IrCmp1> {
-				feedPhiDependers(block)
-
 				load(it.op)
 				val opcode = when (it.cmp) {
 					Cmp.EQ -> IFEQ
@@ -253,8 +223,6 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 			}
 
 			visit<IrCmp2> {
-				feedPhiDependers(block)
-
 				load(it.op1)
 				load(it.op2)
 				val reference = it.op1.type is Reference
@@ -273,7 +241,6 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 			}
 
 			visit<IrGoto> {
-				feedPhiDependers(block)
 				visitor.visitJumpInsn(GOTO, it.target.startLabel())
 			}
 
@@ -293,8 +260,6 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 			}
 
 			visit<IrSwitch> {
-				feedPhiDependers(block)
-
 				val cases = it.cases.entries
 						.sortedBy { it.first }
 						.toList()
@@ -314,26 +279,9 @@ internal fun codeGenerate(graph: FlowGraph, visitor: MethodVisitor, returnType: 
 				for (def in it.defs)
 					load(def)
 				it.spec.visit(visitor)
-				if (it.spec.returnType != VOID)
+				if (it.spec.returnType != VOID) {
 					store(it)
-			}
-
-			// Why is this needed? Initial should be filled by predecessors.
-			// Used because block 2 just depends on stuff from the previous block, if we got here without exceptions in the first block.
-			visit<IrMutable> {
-				load(it.initial)
-				store(it)
-			}
-
-			visit<IrMutableWrite> {
-				load(it.value)
-				store(it.target)
-
-				// XXX The register allocator can optimize the itMut itself away if only phis depend on it, right?
-				// -> Since we directly copy each write into depending phis.
-				for (phiTarget in it.target.uses.filterIsInstance<IrPhi>()) {
-					load(it.value)
-					store(phiTarget, alt = true)
+					tryFeedPhiDependersWithLocalDef(block, it)
 				}
 			}
 		})

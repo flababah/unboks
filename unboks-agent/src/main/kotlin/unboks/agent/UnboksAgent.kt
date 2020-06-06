@@ -37,7 +37,11 @@ class UnboksAgent private constructor(): ClassFileTransformer {
 		val t = System.currentTimeMillis()
 		var error = ""
 
-		if (className == "org/lwjgl/opengl/GLCapabilities") // <init>
+//		if (className == "io/netty/util/internal/ThreadLocalRandom") {
+//			Files.write(File("C:\\dump\\dump.class").toPath(), classfileBuffer)
+//		}
+
+		if (className == "org/lwjgl/opengl/GLCapabilities" || className == "bpi" || className == "acy")
 			return null // Generated code is currently too large (MethodTooLargeException).
 
 		try {

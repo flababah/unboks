@@ -65,7 +65,7 @@ class TypeConst internal constructor(graph: FlowGraph, value: Thing)
 class NullConst internal constructor(graph: FlowGraph)
 	: Constant<Reference>(graph, OBJECT, OBJECT) {
 
-	init {
-		name = "null"
-	}
+	override var name: String
+		get() = "null"
+		set(_) { }
 }

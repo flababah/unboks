@@ -13,8 +13,6 @@ internal val phiReferences = TargetSpecification<IrPhi, Block> { it.phiReference
 
 internal val defUses = TargetSpecification<Use, Def> { it.uses }
 
-internal val mutableWrites = TargetSpecification<IrMutableWrite, IrMutable> { it.writes }
-
 // TODO constant values. (IrConstant)
 
 // TODO class hierarchy. and shit...

@@ -8,6 +8,7 @@ import unboks.pass.builtin.createPhiPruningPass
 
 private val asmGraphBasicSpec = TargetSpecification<AsmBlock<*>, AsmBlock.Basic> { it.predecessors }
 private val asmGraphHandlerSpec = TargetSpecification<AsmBlock<*>, AsmBlock.Handler> { it.predecessors }
+private val asmGraphSuccessorHandlerSpec = TargetSpecification<AsmBlock<*>, AsmBlock.Handler> { it.predecessors }
 
 private fun panic(reason: String = "Fail"): Nothing {
 	throw InternalUnboksError(reason)
@@ -30,7 +31,28 @@ internal class FlowGraphVisitor(
 	private val slotIndex = SlotIndexMap(graph.parameters)
 	private lateinit var state: State
 
-	private fun defer(terminal: Terminal = Terminal.No, rw: Pair<Rw, Int>? = null, f: DeferredOp) {
+	/**
+	 * Convenience method for [defer].
+	 */
+	private fun deferInvocation(spec: Invocation) {
+		defer(Deferred.Inv(spec))
+	}
+
+	/**
+	 * Convenience method for [defer].
+	 */
+	private fun deferTerminal(jumps: Set<Label> = emptySet(), fallthrough: Boolean = false, f: DeferContext.() -> Unit) {
+		defer(Deferred.Terminal(jumps, fallthrough, f))
+	}
+
+	/**
+	 * Convenience method for [defer].
+	 */
+	private fun deferOther(rw: Pair<Rw, Int>? = null, f: DeferContext.() -> Unit) {
+		defer(Deferred.Other(rw, f))
+	}
+
+	private fun defer(f: Deferred) {
 		state.mutate {
 			when (it) {
 				is Expecting.NewBlock -> {
@@ -54,21 +76,11 @@ internal class FlowGraphVisitor(
 			}
 			val current = blocks.last()
 			current.operations += f
-
-			if (terminal != Terminal.No) {
-				current.terminal = terminal
-				targetLabels += terminal.jumps
-			}
-
-			if (rw != null) {
-				val (op, slot) = rw
-				current.rw[slot] += op
-			}
-
+			f.updateState(this)
 			when {
 				// No labels associated here, since this split was caused by encountering
 				// a terminal op, not by a visiting a label.
-				terminal != Terminal.No -> Expecting.NewBlock()
+				f is Deferred.Terminal -> Expecting.NewBlock()
 				it != Expecting.Any -> Expecting.Any
 				else -> it
 			}
@@ -136,7 +148,6 @@ internal class FlowGraphVisitor(
 				is AsmBlock.Handler -> AsmBlock.Handler(unionLabels, exceptions, type)
 			}
 			merged.operations += operations + with.operations
-			merged.terminal = with.terminal
 			merged.rw.putAll(rw)
 			for ((slot, op) in with.rw)
 				merged.rw.compute(slot) { _, current -> current + op }
@@ -147,7 +158,7 @@ internal class FlowGraphVisitor(
 			val currentUsed = current.labels.any { it in state.targetLabels }
 			val sameExceptions = previous.exceptions == current.exceptions
 
-			if (previous.terminal == Terminal.No && !currentUsed && sameExceptions)
+			if (previous.terminal == null && !currentUsed && sameExceptions)
 				// It's OK to cast block to Basic because Handler blocks are created
 				// based on entries in the exception table, ie they are never unused.
 				previous.merge(current as AsmBlock.Basic)
@@ -156,134 +167,33 @@ internal class FlowGraphVisitor(
 		}
 	}
 
-	private fun <T : Block> reify(block: AsmBlock<T>, pred: Block?, predLocals: LocalsMap, predStack: StackMap): T {
-		val backing = block.create(graph)
-		val appender = backing.append()
-		val reads = block.rw.asSequence()
-				.filter { it.value.reads }
-				.map { it.key }
-				.toList()
-
-		val locals: Map<Int, Def>
-		val stack: List<Def>
-
-		// Number of distinct predecessors. For multiple predecessors from the same block
-		// (eg. lookup switch), but only a single predecessor block, we shouldn't phi join.
-		if (block.predecessors.size > 1) {
-			val checkedPred = pred ?: panic("Joining in root block")
-			val stackJoin: List<IrPhi>?
-
-			if (backing is HandlerBlock) {
-				stack = listOf(backing)
-				stackJoin = null
-			} else {
-				stack = predStack.map { appender.newPhi(it.type) }
-				stackJoin = stack
-				predStack.mergeInto(stack, checkedPred)
-			}
-
-			// We need to insert a phi join for every read.
-			locals = reads.asSequence()
-					.map { it to appender.newPhi(predLocals[it].type) }
-					.toMap()
-
-			predLocals.mergeInto(locals, checkedPred, backing is HandlerBlock)
-			block.reification = Reification(backing, Join(locals, stackJoin))
-
-		} else {
-			// No need for joining predecessor paths since there is only one.
-			// Just use previous state directly. We just need to make sure we use
-			// the mutables in case this is a handler block.
-			if (backing is HandlerBlock) {
-				val muts = predLocals.mutables ?: panic("No mutables for direct handler")
-				locals = reads.asSequence()
-						.map { it to (muts.map[it] ?: panic("Bad mutable read")) }
-						.toMap()
-				// When an exception handler is invoked after an exception was caught, the
-				// exception magically appears as the only stack entry.
-				stack = listOf(backing)
-			} else {
-				locals = reads.asSequence()
-						.map { it to predLocals[it] }
-						.toMap()
-				stack = predStack.toList()
-			}
-			block.reification = Reification(backing, null)
-		}
-
-		val context = object : DeferContext {
-			override val locals = createLocalsWithMutablesIfNecessary(block, locals, appender)
-			override val stack = StackMap(stack)
-			override val appender = appender
-
-			override fun resolveSuccessor(): BasicBlock {
-				val next = block.next ?: panic("No successor")
-				return joinOrReifySuccessor(next) as BasicBlock
-			}
-
-			private fun <T : Block, A : AsmBlock<T>> resolve(set: DependencySet<A>, label: Label): T {
-				val successor = set.find { label in it.labels }
-				return joinOrReifySuccessor(successor ?: panic("Unknown target label"))
-			}
-
-			override fun resolveBlock(label: Label): BasicBlock = resolve(block.branches, label)
-
-			fun resolveHandler(label: Label): HandlerBlock = resolve(block.handlers, label)
-
-			fun <T : Block> joinOrReifySuccessor(successor: AsmBlock<T>): T {
-				val reification = successor.reification
-				return if (reification != null) {
-					val (target, join) = reification
-					if (join != null) {
-						// Successor has already been reified. We just need to add phi joins.
-						// We might add input to a successor that already has inputs from this block.
-						// There is no harm in this, just some redundancy.
-						this.locals.mergeInto(join.locals, backing, target is HandlerBlock)
-						if (join.stack != null) // The successor is a basic block.
-							this.stack.mergeInto(join.stack, backing)
-
-					} else if (successor.predecessors != setOf(block)) {
-						// OK to have multiple inputs but no joins as long as all the predecessors
-						// are from one single block, eg. table switch.
-						panic("No joins (eg. single entrance) but reached via" +
-								"another predecessor than the creator?")
-					}
-					target
-				} else {
-					// Recursively reify successor block.
-					reify(successor, backing, this.locals, this.stack)
-				}
-			}
-		}
-
-		// Add deferred operations.
-		block.operations.forEach { context.it() }
-
-		// Visit handlers since that didn't happen as a part adding deferred operations.
-		for ((label, type) in block.exceptions) {
-			val handler = context.resolveHandler(label)
-			backing.exceptions.add(ExceptionEntry(handler, type))
-		}
-
-		return backing
-	}
-
 	override fun visitEnd() {
-		val blocks = createMergedBlocks()
-		if (blocks.isEmpty())
+		val mergedBlocks = createMergedBlocks()
+		if (mergedBlocks.isEmpty())
 			throw ParseException("Empty method body")
+
+		// Simplify thing by always adding an empty root, regardless of whether it's
+		// needed or not. Currently two cases call for a pseudo root:
+		//
+		// 1. If the root has read states and multiple predecessors, we need a phi join
+		//    from the initial input to root which has to be a concrete basic block.
+		// 2. If the root block has an exception handler and that handler reads a parameter
+		//    that is redefined in somewhere in root. In that case the handler needs a phi
+		//    join from the indirect predecessor (eg. predecessor of root).
+		val pseudoRoot = AsmBlock.Basic(emptySet(), emptyList())
+		val blocks = listOf(pseudoRoot) + mergedBlocks
 
 		// Phase 1 ends.
 		// Phase 2 (and propagate initial rw states).
 		addGraphEdges(blocks)
+		addSuccessorHandlerEdges(blocks)
 		propagateReadStates(blocks)
-		val rootedBlocks = addPseudoRootIfNecessary(blocks)
-		addFallthroughOperations(rootedBlocks)
+		addFallthroughOperations(blocks)
 
 		// Phase 3.
 		val locals = LocalsMap(createInitialLocalsMap())
 		val stack = StackMap(emptyList())
-		reify(rootedBlocks.first(), null, locals, stack)
+		reify(graph, pseudoRoot, null, locals, stack)
 
 		graph.execute(createPhiPruningPass())
 		graph.compactNames()
@@ -325,147 +235,141 @@ internal class FlowGraphVisitor(
 	//
 
 	override fun visitInsn(opcode: Int) {
-		val type = when (opcode) {
-			ATHROW, IRETURN, LRETURN, FRETURN, DRETURN, ARETURN, RETURN -> Terminal.Yes()
-			else -> Terminal.No
-		}
-		defer(terminal = type) {
-			when (opcode) {
-				NOP -> { }
+		val intrinsic = InvIntrinsic.fromJvmOpcode(opcode)
 
-				ATHROW -> appender.newThrow(stack.pop<Reference>())
+		when {
+			intrinsic != null -> deferInvocation(intrinsic)
 
-				ACONST_NULL -> stack.push(graph.constant(null))
+			opcode == ATHROW -> deferTerminal {
+				appender.newThrow(stack.pop<Reference>())
+			}
 
-				ICONST_M1,
-				ICONST_0,
-				ICONST_1,
-				ICONST_2,
-				ICONST_3,
-				ICONST_4,
-				ICONST_5 -> stack.push(graph.constant(opcode - ICONST_0))
+			opcode in IRETURN .. RETURN -> deferTerminal {
+				when (opcode) {
+					IRETURN -> appender.newReturn(stack.pop<Int32>())
+					LRETURN -> appender.newReturn(stack.pop<Int64>())
+					FRETURN -> appender.newReturn(stack.pop<Fp32>())
+					DRETURN -> appender.newReturn(stack.pop<Fp64>())
+					ARETURN -> appender.newReturn(stack.pop<Reference>())
+					RETURN  -> appender.newReturn()
+				}
+			}
 
-				LCONST_0,
-				LCONST_1 -> stack.push(graph.constant(opcode - LCONST_0.toLong()))
+			else -> deferOther {
+				when (opcode) {
+					NOP -> { }
 
-				FCONST_0 -> stack.push(graph.constant(0f))
-				FCONST_1 -> stack.push(graph.constant(1f))
-				FCONST_2 -> stack.push(graph.constant(2f))
+					ACONST_NULL -> stack.push(graph.nullConst)
 
-				DCONST_0 -> stack.push(graph.constant(0.0))
-				DCONST_1 -> stack.push(graph.constant(1.0))
+					ICONST_M1,
+					ICONST_0,
+					ICONST_1,
+					ICONST_2,
+					ICONST_3,
+					ICONST_4,
+					ICONST_5 -> stack.push(graph.constant(opcode - ICONST_0))
 
-				DUP -> stack.push(stack.peek<T32>())
+					LCONST_0,
+					LCONST_1 -> stack.push(graph.constant(opcode - LCONST_0.toLong()))
 
-				DUP2 -> {
-					val top = stack.peek<Thing>()
-					if (top.type.width == 2) {
-						stack.push(top)
-					} else {
-						val under = stack.peek<T32>(1)
-						stack.push(under, top)
+					FCONST_0 -> stack.push(graph.constant(0f))
+					FCONST_1 -> stack.push(graph.constant(1f))
+					FCONST_2 -> stack.push(graph.constant(2f))
+
+					DCONST_0 -> stack.push(graph.constant(0.0))
+					DCONST_1 -> stack.push(graph.constant(1.0))
+
+					DUP -> stack.push(stack.peek<T32>())
+
+					DUP2 -> {
+						val top = stack.peek<Thing>()
+						if (top.type.width == 2) {
+							stack.push(top)
+						} else {
+							val under = stack.peek<T32>(1)
+							stack.push(under, top)
+						}
 					}
-				}
 
-				POP -> stack.pop<T32>()
+					POP -> stack.pop<T32>()
 
-				POP2 -> {
-					val top = stack.pop<Thing>()
-					if (top.type.width == 1)
-						stack.pop<T32>()
-				}
+					POP2 -> {
+						val top = stack.pop<Thing>()
+						if (top.type.width == 1)
+							stack.pop<T32>()
+					}
 
-				SWAP -> {
-					val (under, top) = stack.popPair<T32>()
-					stack.push(top, under)
-				}
+					SWAP -> {
+						val (under, top) = stack.popPair<T32>()
+						stack.push(top, under)
+					}
 
-				DUP_X1 -> {
-					val (under, top) = stack.popPair<T32>()
-					stack.push(top, under, top)
-				}
-
-				DUP_X2 -> {
-					val top = stack.pop<T32>()
-					val under = stack.pop<Thing>()
-					if (under.type.width == 1) { // Form 1
-						val under2 = stack.pop<T32>()
-						stack.push(top, under2, under, top)
-					} else { // Form 2
+					DUP_X1 -> {
+						val (under, top) = stack.popPair<T32>()
 						stack.push(top, under, top)
 					}
-				}
 
-				DUP2_X1 -> {
-					val s1 = stack.pop<Thing>()
-					if (s1.type.width == 1) { // Form 1.
-						val (s3, s2) = stack.popPair<T32>()
-						stack.push(s2, s1, s3, s2, s1)
-					} else { // Form 2.
-						val s2 = stack.pop<T32>()
-						stack.push(s1, s2, s1)
-					}
-				}
-
-				DUP2_X2 -> {
-					// Form 1: 4  3  2  1 -> 2  1 - 4  3  2  1
-					// Form 2: 3  2  11   ->   11 - 3  2  11
-					// Form 3: 33 2  1    -> 2  1 - 33 2  1
-					// Form 4: 22 11      ->   11 - 22 11
-					val s1 = stack.pop<Thing>()
-					if (s1.type.width == 1) { // 1 or 3.
-						val s2 = stack.pop<T32>()
-						val s3 = stack.pop<Thing>()
-						if (s3.type.width == 1) { // 1.
-							val s4 = stack.pop<T32>()
-							stack.push(s2, s1, s4, s3, s2, s1)
-						} else { // 3.
-							stack.push(s2, s1, s3, s2, s1)
+					DUP_X2 -> {
+						val top = stack.pop<T32>()
+						val under = stack.pop<Thing>()
+						if (under.type.width == 1) { // Form 1
+							val under2 = stack.pop<T32>()
+							stack.push(top, under2, under, top)
+						} else { // Form 2
+							stack.push(top, under, top)
 						}
-					} else { // 2 or 4.
-						val s2 = stack.pop<Thing>()
-						if (s2.type.width == 1) { // 2.
-							val s3 = stack.pop<T32>()
-							stack.push(s1, s3, s2, s1)
-						} else { // 4.
+					}
+
+					DUP2_X1 -> {
+						val s1 = stack.pop<Thing>()
+						if (s1.type.width == 1) { // Form 1.
+							val (s3, s2) = stack.popPair<T32>()
+							stack.push(s2, s1, s3, s2, s1)
+						} else { // Form 2.
+							val s2 = stack.pop<T32>()
 							stack.push(s1, s2, s1)
 						}
 					}
-				}
 
-				IRETURN -> appender.newReturn(stack.pop<Int32>())
-				LRETURN -> appender.newReturn(stack.pop<Int64>())
-				FRETURN -> appender.newReturn(stack.pop<Fp32>())
-				DRETURN -> appender.newReturn(stack.pop<Fp64>())
-				ARETURN -> appender.newReturn(stack.pop<Reference>())
-				RETURN  -> appender.newReturn()
-
-
-				else -> {
-					val intrinsic = InvIntrinsic.fromJvmOpcode(opcode)
-					if (intrinsic == null) {
-						TODO("todo $opcode")
+					DUP2_X2 -> {
+						// Form 1: 4  3  2  1 -> 2  1 - 4  3  2  1
+						// Form 2: 3  2  11   ->   11 - 3  2  11
+						// Form 3: 33 2  1    -> 2  1 - 33 2  1
+						// Form 4: 22 11      ->   11 - 22 11
+						val s1 = stack.pop<Thing>()
+						if (s1.type.width == 1) { // 1 or 3.
+							val s2 = stack.pop<T32>()
+							val s3 = stack.pop<Thing>()
+							if (s3.type.width == 1) { // 1.
+								val s4 = stack.pop<T32>()
+								stack.push(s2, s1, s4, s3, s2, s1)
+							} else { // 3.
+								stack.push(s2, s1, s3, s2, s1)
+							}
+						} else { // 2 or 4.
+							val s2 = stack.pop<Thing>()
+							if (s2.type.width == 1) { // 2.
+								val s3 = stack.pop<T32>()
+								stack.push(s1, s3, s2, s1)
+							} else { // 4.
+								stack.push(s1, s2, s1)
+							}
+						}
 					}
-					appendInvocation(intrinsic)
 				}
 			}
 		}
 	}
 
 	override fun visitJumpInsn(opcode: Int, label: Label) {
-		val type = if (opcode == GOTO)
-			Terminal.Yes(setOf(label))
-		else
-			Terminal.YesFallthrough(label)
-
-		defer(terminal = type) {
+		deferTerminal(jumps = setOf(label), fallthrough = opcode != GOTO) {
 
 			fun newCmp1(cmp: Cmp, op: Def) {
-				appender.newCmp(cmp, resolveBlock(label), resolveSuccessor(), op)
+				appender.newCmp(cmp, resolveBlock(label), resolveBlock(null), op)
 			}
 
 			fun newCmp2(cmp: Cmp, ops: Pair<Def, Def>) {
-				appender.newCmp(cmp, resolveBlock(label), resolveSuccessor(), ops.first, ops.second)
+				appender.newCmp(cmp, resolveBlock(label), resolveBlock(null), ops.first, ops.second)
 			}
 
 			when (opcode) {
@@ -496,7 +400,7 @@ internal class FlowGraphVisitor(
 	}
 
 	override fun visitTableSwitchInsn(min: Int, max: Int, dflt: Label, vararg labels: Label) {
-		defer(terminal = Terminal.Yes(setOf(*labels) + dflt)) {
+		deferTerminal(jumps = setOf(*labels) + dflt) {
 			if (labels.size + min - 1 != max)
 				throw ParseException("Wrong number of labels (${labels.size}) for $min..$max")
 
@@ -507,7 +411,7 @@ internal class FlowGraphVisitor(
 	}
 
 	override fun visitLookupSwitchInsn(dflt: Label, keys: IntArray, labels: Array<out Label>) {
-		defer(terminal = Terminal.Yes(setOf(*labels) + dflt)) {
+		deferTerminal(jumps = setOf(*labels) + dflt) {
 			if (labels.size != keys.size)
 				throw ParseException("Lookup switch key/label size mismatch")
 
@@ -518,111 +422,103 @@ internal class FlowGraphVisitor(
 	}
 
 	override fun visitIntInsn(opcode: Int, operand: Int) {
-		defer {
-			when (opcode) {
-				BIPUSH,
-				SIPUSH -> stack.push(graph.constant(operand))
-
-				NEWARRAY -> {
-					val type = when (operand) {
-						T_BOOLEAN -> BOOLEAN
-						T_CHAR -> CHAR
-						T_FLOAT -> unboks.FLOAT
-						T_DOUBLE -> unboks.DOUBLE
-						T_BYTE -> BYTE
-						T_SHORT -> SHORT
-						T_INT -> INT
-						T_LONG -> unboks.LONG
-						else -> throw ParseException("Bad operand for NEWARRAY: $operand")
-					}
-					appendInvocation(InvNewArray(ArrayReference(type), 1))
-				}
-				else -> throw ParseException("Illegal opcode: $opcode")
+		if (opcode == BIPUSH || opcode == SIPUSH) {
+			deferOther {
+				stack.push(graph.constant(operand))
 			}
+
+		} else if (opcode == NEWARRAY) {
+			val type = when (operand) {
+				T_BOOLEAN -> BOOLEAN
+				T_CHAR -> CHAR
+				T_FLOAT -> unboks.FLOAT
+				T_DOUBLE -> unboks.DOUBLE
+				T_BYTE -> BYTE
+				T_SHORT -> SHORT
+				T_INT -> INT
+				T_LONG -> unboks.LONG
+				else -> throw ParseException("Bad operand for NEWARRAY: $operand")
+			}
+			deferInvocation(InvNewArray(ArrayReference(type), 1))
+
+		} else {
+			throw ParseException("Illegal opcode: $opcode")
 		}
 	}
 
 	override fun visitVarInsn(opcode: Int, index: Int) {
-		val rw = when (opcode) {
-			ILOAD,  LLOAD,  FLOAD,  DLOAD,  ALOAD  -> Rw.READ to index
-			ISTORE, LSTORE, FSTORE, DSTORE, ASTORE -> Rw.WRITE to index
-			else -> null
-		}
-		if (opcode == RET)
-			throw ParseException("RET opcode not supported")
-
-		defer(rw = rw) {
-			when (opcode) {
-				LLOAD -> stack.push(locals.getTyped<LONG>(index))
-				DLOAD -> stack.push(locals.getTyped<DOUBLE>(index))
-				ILOAD -> stack.push(locals.getTyped<Int32>(index))
-				FLOAD -> stack.push(locals.getTyped<FLOAT>(index))
-				ALOAD -> stack.push(locals.getTyped<Reference>(index))
-
-				LSTORE -> locals[index] = stack.pop<LONG>()
-				DSTORE -> locals[index] = stack.pop<DOUBLE>()
-				ISTORE -> locals[index] = stack.pop<Int32>()
-				FSTORE -> locals[index] = stack.pop<FLOAT>()
-				ASTORE -> locals[index] = stack.pop<Reference>()
+		when (opcode) {
+			in ILOAD .. ALOAD -> deferOther(rw = Rw.READ to index) {
+				when (opcode) {
+					ILOAD -> stack.push(locals.getTyped<Int32>(index))
+					LLOAD -> stack.push(locals.getTyped<LONG>(index))
+					FLOAD -> stack.push(locals.getTyped<FLOAT>(index))
+					DLOAD -> stack.push(locals.getTyped<DOUBLE>(index))
+					ALOAD -> stack.push(locals.getTyped<Reference>(index))
+				}
 			}
+			in ISTORE .. ASTORE -> deferOther(rw = Rw.WRITE to index) {
+				when (opcode) {
+					ISTORE -> locals[index] = stack.pop<Int32>()
+					LSTORE -> locals[index] = stack.pop<LONG>()
+					FSTORE -> locals[index] = stack.pop<FLOAT>()
+					DSTORE -> locals[index] = stack.pop<DOUBLE>()
+					ASTORE -> locals[index] = stack.pop<Reference>()
+				}
+			}
+			RET -> throw ParseException("RET opcode not supported")
+			else -> throw ParseException("Illegal opcode: $opcode")
 		}
 	}
 
 	override fun visitTypeInsn(opcode: Int, type: String) {
-		defer {
-			val ownerType = Reference.create(type)
-			val inv = when (opcode) {
-				NEW        -> InvType.New(ownerType)
-				ANEWARRAY  -> InvNewArray(ArrayReference(ownerType), 1)
-				CHECKCAST  -> InvType.Checkcast(ownerType)
-				INSTANCEOF -> InvType.Instanceof(ownerType)
-				else       -> throw ParseException("Illegal opcode: $opcode")
-			}
-			appendInvocation(inv)
+		val ownerType = Reference.create(type)
+		val inv = when (opcode) {
+			NEW        -> InvType.New(ownerType)
+			ANEWARRAY  -> InvNewArray(ArrayReference(ownerType), 1)
+			CHECKCAST  -> InvType.Checkcast(ownerType)
+			INSTANCEOF -> InvType.Instanceof(ownerType)
+			else       -> throw ParseException("Illegal opcode: $opcode")
 		}
+		deferInvocation(inv)
 	}
 
 	override fun visitFieldInsn(opcode: Int, owner: String, name: String, descriptor: String) {
-		defer { // Real quick and dirty.
-			val type = Thing.create(descriptor)
-			val ownerType = Reference.create(owner)
-			val params = when (opcode) {
-				GETFIELD -> listOf(ownerType)
-				PUTFIELD -> listOf(ownerType, type)
-				GETSTATIC -> listOf()
-				PUTSTATIC -> listOf(type)
-				else -> throw ParseException("unknown field opcode")
-			}
-			val ret = when (opcode) {
-				GETSTATIC, GETFIELD -> type
-				else -> VOID
-			}
-			appendInvocation(InvField(opcode, ownerType, name, ret, type, params))
+		// Real quick and dirty.
+		val type = Thing.create(descriptor)
+		val ownerType = Reference.create(owner)
+		val params = when (opcode) {
+			GETFIELD -> listOf(ownerType)
+			PUTFIELD -> listOf(ownerType, type)
+			GETSTATIC -> listOf()
+			PUTSTATIC -> listOf(type)
+			else -> throw ParseException("unknown field opcode")
 		}
+		val ret = when (opcode) {
+			GETSTATIC, GETFIELD -> type
+			else -> VOID
+		}
+		deferInvocation(InvField(opcode, ownerType, name, ret, type, params))
 	}
 
 	override fun visitMethodInsn(opcode: Int, owner: String, name: String, desc: String, itf: Boolean) {
-		defer {
-			val ownerReference = Reference.create(owner)
-			appendInvocation(when(opcode) {
-				INVOKEVIRTUAL   -> InvMethod.Virtual(ownerReference, name, desc, itf)
-				INVOKESPECIAL   -> InvMethod.Special(ownerReference, name, desc, itf)
-				INVOKESTATIC    -> InvMethod.Static(ownerReference, name, desc, itf)
-				INVOKEINTERFACE -> InvMethod.Interface(ownerReference, name, desc, itf)
-
-				else -> throw ParseException("Illegal opcode: $opcode")
-			})
+		val ownerReference = Reference.create(owner)
+		val inv = when(opcode) {
+			INVOKEVIRTUAL   -> InvMethod.Virtual(ownerReference, name, desc, itf)
+			INVOKESPECIAL   -> InvMethod.Special(ownerReference, name, desc, itf)
+			INVOKESTATIC    -> InvMethod.Static(ownerReference, name, desc, itf)
+			INVOKEINTERFACE -> InvMethod.Interface(ownerReference, name, desc, itf)
+			else -> throw ParseException("Illegal opcode: $opcode")
 		}
+		deferInvocation(inv)
 	}
 
 	override fun visitInvokeDynamicInsn(name: String, descriptor: String, handle: Handle, vararg bma: Any) {
-		defer {
-			appendInvocation(InvDynamic(name, descriptor, handle, bma))
-		}
+		deferInvocation(InvDynamic(name, descriptor, handle, bma))
 	}
 
 	override fun visitLdcInsn(value: Any?) {
-		defer {
+		deferOther {
 			val const = when (value) {
 				is String -> graph.constant(value)
 				is Int -> graph.constant(value)
@@ -643,8 +539,9 @@ internal class FlowGraphVisitor(
 		}
 	}
 
+	// Technically an invocation, but we know it's safe, so treat it as the other store/loads.
 	override fun visitIincInsn(varId: Int, increment: Int) {
-		defer(rw = Rw.READ_BEFORE_WRITE to varId) {
+		deferOther(rw = Rw.READ_BEFORE_WRITE to varId) {
 			// IINC doesn't exist in our internal representation. Lower it into IADD.
 			locals[varId] = appender.newInvoke(InvIntrinsic.IADD,
 					locals.getTyped<INT>(varId), // JVMS 6.5: "The local variable at index must contain an int"
@@ -653,13 +550,11 @@ internal class FlowGraphVisitor(
 	}
 
 	override fun visitMultiANewArrayInsn(descriptor: String, dims: Int) {
-		defer {
-			val type = Thing.create(descriptor)
-			if (type !is ArrayReference || type.dimensions != dims)
-				throw ParseException("Bad descriptor '$descriptor' for order $dims array")
+		val type = Thing.create(descriptor)
+		if (type !is ArrayReference || type.dimensions != dims)
+			throw ParseException("Bad descriptor '$descriptor' for order $dims array")
 
-			appendInvocation(InvNewArray(type, dims))
-		}
+		deferInvocation(InvNewArray(type, dims))
 	}
 }
 
@@ -667,7 +562,7 @@ private class State {
 
 	/**
 	 * Labels that are jumped to (either normal jump instructions or exception handlers)
-	 * but NOT used as markers for exception bounds.
+	 * but NOT used as markers for exception bounds or by fallthrough.
 	 */
 	val targetLabels = mutableSetOf<Label>()
 
@@ -684,10 +579,215 @@ private class State {
 	}
 }
 
+private sealed class Deferred {
+
+	abstract fun updateState(state: State)
+
+	class Inv(val spec: Invocation) : Deferred() {
+		override fun updateState(state: State) { }
+	}
+
+	class Terminal(val jumps: Set<Label> = emptySet(), val fallthrough: Boolean = false, val f: DeferContext.() -> Unit) : Deferred() {
+		override fun updateState(state: State) {
+			state.targetLabels += jumps
+		}
+	}
+
+	class Other(val rw: Pair<Rw, Int>? = null, val f: DeferContext.() -> Unit) : Deferred() {
+		override fun updateState(state: State) {
+			if (rw != null) {
+				val current = state.blocks.last()
+				val (op, slot) = rw
+				current.rw[slot] += op
+			}
+		}
+	}
+}
+
+private class DeferContext(
+		private val block: AsmBlock<*>,
+		private val reification: Reification<*>,
+		val locals: LocalsMap,
+		val stack: StackMap) {
+
+	val appender get() = reification.lastBacking.append()
+
+	// Exceptions should be not be handled by deferred operations, hench this returns BB.
+	// The locals and stacks must not be mutated after calling this.
+	// If [label] is null, the fallthrough block is resolved.
+	fun resolveBlock(label: Label?): BasicBlock {
+		if (label == null) { // Fallthrough.
+			val next = block.next ?: panic("No successor")
+			return joinOrReifySuccessor(next) as BasicBlock
+		}
+		return resolve(block.branches, label)
+	}
+
+	fun resolveHandler(label: Label): HandlerBlock = resolve(block.handlers, label)
+
+	fun <T : Block> joinOrReifySuccessor(successor: AsmBlock<T>): T {
+		val successorReification = successor.reification
+		val backing = reification.lastBacking
+
+		return if (successorReification != null) {
+			val (target, join) = successorReification
+			if (join != null) {
+				// Successor has already been reified. We just need to add phi joins.
+				// We might add input to a successor that already has inputs from this block.
+				// There is no harm in this, just some redundancy.
+				this.locals.mergeInto(join.locals, backing)
+
+				if (join.stack != null) // The successor is a basic block.
+					this.stack.mergeInto(join.stack, backing)
+
+			} else if (successor.predecessors != setOf(block)) {
+				// OK to have multiple inputs but no joins as long as all the predecessors
+				// are from one single block, eg. table switch.
+				panic("No joins (eg. single entrance) but reached via" +
+						"another predecessor than the creator?")
+			}
+			target
+		} else {
+			// Recursively reify successor block.
+			reify(backing.graph, successor, backing, this.locals, this.stack)
+		}
+	}
+
+	private fun <T : Block, A : AsmBlock<T>> resolve(set: DependencySet<A>, label: Label): T {
+		val successor = set.find { label in it.labels }
+		return joinOrReifySuccessor(successor ?: panic("Unknown target label"))
+	}
+}
+
+private fun handlerReadDependencies(block: AsmBlock<*>): Set<Int> {
+	val handlerReads = mutableSetOf<Int>()
+	for (handler in block.handlers) {
+		for ((slot, rw) in handler.rw) {
+			if (rw.reads)
+				handlerReads += slot
+		}
+	}
+	return handlerReads
+}
+
+private fun <T : Block> reify(graph: FlowGraph, block: AsmBlock<T>, pred: Block?, predLocals: LocalsMap, predStack: StackMap): T {
+	val backing = block.create(graph)
+	val appender = backing.append()
+	val reads = block.rw.asSequence()
+			.filter { it.value.reads }
+			.map { it.key }
+			.toList()
+
+	val locals: Map<Int, Def>
+	val stack: List<Def>
+
+	// Number of distinct predecessors. For multiple predecessors from the same block
+	// (eg. lookup switch), but only a single predecessor block, we shouldn't phi join.
+	val reification = if (block.predecessors.size > 1) {
+		val checkedPred = pred ?: panic("Joining in root block")
+		val stackJoin: List<IrPhi>?
+
+		if (backing is HandlerBlock) {
+			stack = listOf(backing)
+			stackJoin = null
+		} else {
+			stack = predStack.map { appender.newPhi(it.type) }
+			stackJoin = stack
+			predStack.mergeInto(stack, checkedPred)
+		}
+
+		// We need to insert a phi join for every read.
+		locals = reads.asSequence()
+				.map { it to appender.newPhi(predLocals[it].type) }
+				.toMap()
+
+		predLocals.mergeInto(locals, checkedPred)
+		Reification(backing, Join(locals, stackJoin))
+
+	} else {
+		// No need for joining predecessor paths since there is only one.
+		// Just use previous state directly.
+		locals = reads.asSequence()
+				.map { it to predLocals[it] }
+				.toMap()
+
+
+		stack = if (backing is HandlerBlock) {
+			// When an exception handler is invoked after an exception was caught, the
+			// exception magically appears as the only stack entry.
+			listOf(backing)
+		} else {
+			predStack.toList()
+		}
+		Reification(backing, null)
+	}
+
+	// Need to assign this before running deferred operations since we might end up here recursively.
+	block.reification = reification
+
+	val context = DeferContext(
+			block,
+			reification,
+			LocalsMap(locals),
+			StackMap(stack))
+
+	val handlerDependencies = handlerReadDependencies(block)
+	var unsafe = false
+
+	for (operation in block.operations) {
+		when (operation) {
+			is Deferred.Inv -> {
+				val spec = operation.spec
+				if (!spec.safe)
+					unsafe = true
+
+				val arguments = context.stack.pop(spec.parameterTypes.size)
+				val retValue = context.appender.newInvoke(spec, arguments)
+
+				if (spec.returnType != VOID)
+					context.stack.push(retValue)
+			}
+
+			is Deferred.Terminal -> {
+				operation.f(context)
+			}
+
+			is Deferred.Other -> {
+				val rw = operation.rw
+				if (unsafe && rw != null && rw.second in handlerDependencies) {
+
+					// Join current locals for the current last block.
+					for (handler in block.handlers)
+						context.joinOrReifySuccessor(handler)
+
+					reification.split()
+					unsafe = false
+				}
+				operation.f(context)
+			}
+		}
+	}
+
+	// Join stuff for the last backing block and add exception entries to backing.
+	for ((label, type) in block.exceptions) {
+		val handler = context.resolveHandler(label)
+		val entry = ExceptionEntry(handler, type)
+		backing.exceptions.add(entry)
+		for (split in reification.splits)
+			split.exceptions.add(entry)
+	}
+
+	// Feed the initial handler dependencies.
+	for (handler in block.successorHandlers)
+		context.joinOrReifySuccessor(handler)
+
+	return backing
+}
+
 private fun addFallthroughOperations(blocks: List<AsmBlock<*>>) {
 	for (block in blocks) {
-		if (block.terminal == Terminal.No)
-			block.operations += { appender.newGoto(resolveSuccessor()) }
+		if (block.terminal == null)
+			block.operations += Deferred.Terminal { appender.newGoto(resolveBlock(null)) }
 	}
 }
 
@@ -721,22 +821,45 @@ private fun addGraphEdges(blocks: List<AsmBlock<*>>) {
 
 	var previous: AsmBlock<*>? = null
 	for (block in blocks) {
-		for (branch in block.terminal.jumps)
-			block.branches.add(check(resolve(branch)))
-
+		val terminal = block.terminal
+		if (terminal != null) {
+			for (branch in terminal.jumps)
+				block.branches.add(check(resolve(branch)))
+		}
 		for (exception in block.exceptions)
 			block.handlers.add(check(resolve(exception.handler)))
 
 		if (previous != null) {
 			previous.next = block
 
-			if (previous.terminal !is Terminal.Yes) // Add any fallthrough.
+			val prevTerminal = previous.terminal
+			if (prevTerminal == null || prevTerminal.fallthrough) // Add any fallthrough.
 				previous.branches.add(check(block))
 		}
 		previous = block
 	}
-	if (blocks.last().terminal !is Terminal.Yes)
+	val terminal = blocks.last().terminal
+	if (terminal == null || terminal.fallthrough)
 		throw ParseException("Fallthrough from last block")
+}
+
+// TODO We can probably do better if we had read state info --> no need to add phi joins if no reads in the handler.
+//  Probably cleaner to leave as is and prune in a pass?
+private fun addSuccessorHandlerEdges(block: AsmBlock<*>) {
+	val predecessorHandlers = block.handlers
+
+	(block.branches.asSequence() + block.handlers.asSequence())
+			.flatMap { it.handlers.asSequence() }
+			.filter { it !in predecessorHandlers }
+			.forEach { block.successorHandlers.add(it) }
+}
+
+/**
+ * Initializes [AsmBlock.handlers]
+ */
+private fun addSuccessorHandlerEdges(blocks: List<AsmBlock<*>>) {
+	for (block in blocks)
+		addSuccessorHandlerEdges(block)
 }
 
 private fun propagateReadStates(blocks: List<AsmBlock<*>>) {
@@ -745,9 +868,9 @@ private fun propagateReadStates(blocks: List<AsmBlock<*>>) {
 	/**
 	 * @param block the current block being visited (propagating from one of its successors)
 	 * @param reads the reads the successor depends on
-	 * @param handlerSuccessor true if the successor is a handler block (see [Rw.HANDLER_READ])
+	 * @param handlerSuccessorRead true if the successor is a handler block (see [Rw.HANDLER_READ])
 	 */
-	fun rec(block: AsmBlock<*>, reads: List<Int>, handlerSuccessor: Boolean) {
+	fun rec(block: AsmBlock<*>, reads: List<Int>, handlerSuccessorRead: Boolean) {
 		val propagate = mutableListOf<Int>()
 		val visited = visitedMap.computeIfAbsent(block) {
 			val localReads = block.rw.asSequence()
@@ -763,54 +886,26 @@ private fun propagateReadStates(blocks: List<AsmBlock<*>>) {
 
 			// We only terminate the read propagation if this block writes.
 			val rw = block.rw[read]
-			if (rw == null || !rw.writes || handlerSuccessor) {
-				val readType = if (handlerSuccessor) Rw.HANDLER_READ else Rw.READ
+			if (rw == null || !rw.writes || handlerSuccessorRead) {
+				// TODO For the handler case, if we have a write here, re should only read-propagate
+				//  if we actually split the block.
+				val readType = if (handlerSuccessorRead) Rw.HANDLER_READ else Rw.READ
 				block.rw[read] = rw + readType
 				visited += read
 				propagate += read
 			}
 		}
 		if (propagate.isNotEmpty()) {
-			for (predecessor in block.predecessors)
-				rec(predecessor, propagate, block is AsmBlock.Handler)
+			for (predecessor in block.predecessors) {
+				// We should ONLY do HANDLER_READs on the predecessor if the predecessor might come here
+				// do to an exception being thrown. "Indirect" aka. initial aka. whatever values are
+				// normal reads.
+				val handlerRead = block is AsmBlock.Handler && block in predecessor.handlers
+				rec(predecessor, propagate, handlerRead)
+			}
 		}
 	}
 	blocks.forEach { rec(it, emptyList(), false) }
-}
-
-private fun addPseudoRootIfNecessary(blocks: List<AsmBlock<*>>): List<AsmBlock<*>> {
-	val root = check<AsmBlock.Basic>(blocks.first())
-	val rootReads = root.rw.any { it.value.reads }
-
-	if ((root.predecessors.isEmpty() && root.handlers.isEmpty()) || !rootReads)
-		// If no other predecessors than the input exists, we're good since
-		// we don't have to do any joins. If the root block doesn't read anything
-		// we don't need to join either. Nor do we have to worry about joining the stack.
-		// If this is the root block, the stack should be empty and any predecessor with
-		// a non-empty stack entry cannot pass bytecode validation.
-
-		// Also, if the root block is watched and also reads we must insert a pseudo root.
-		// The root might say "mut = arg0" and the handler depending on that. Initial mut
-		// values need to be written in the predecessor which is only possible if we insert
-		// a pseudo root.
-		return blocks
-
-	val pseudo = AsmBlock.Basic(emptySet(), emptyList()).apply {
-		for ((slot, op) in root.rw) {
-			if (op.reads)
-				rw[slot] = Rw.READ
-		}
-		terminal = Terminal.No // Fall through to real root.
-		next = root
-		branches.add(root)
-	}
-	return listOf(pseudo) + blocks
-}
-
-private sealed class Terminal(val jumps: Set<Label>) {
-	object No : Terminal(emptySet())
-	class Yes(branches: Set<Label> = emptySet()) : Terminal(branches)
-	class YesFallthrough(branch: Label) : Terminal(setOf(branch))
 }
 
 private enum class Rw(val reads: Boolean, val writes: Boolean) {
@@ -858,7 +953,7 @@ private enum class Rw(val reads: Boolean, val writes: Boolean) {
 	 * when updating existing RW with a read from a handler block. Most interesting is the
 	 * WRITE -> HANDLER_READ situation, since we cannot depend ONLY only the value written by the
 	 * watched block. The block might throw before the write, so we need to propagate a read
-	 * (for some initial value) even though the write is enough to stop read-propagation
+	 * for the block's part in the handler phi even though the write is enough to stop read-propagation
 	 * under normal circumstances (since it would be the ONLY possible value).
 	 */
 	HANDLER_READ(true, false) {
@@ -875,32 +970,6 @@ private enum class Rw(val reads: Boolean, val writes: Boolean) {
  * Transition this state into another. If we're null use the right-hand state as the result.
  */
 private operator fun Rw?.plus(other: Rw): Rw = this?.update(other) ?: other
-
-private typealias DeferredOp = DeferContext.() -> Unit
-
-private interface DeferContext {
-
-	val locals: LocalsMap
-
-	val stack: StackMap
-
-	val appender: IrFactory
-
-	// The locals and stacks must not be mutated after calling this.
-	fun resolveSuccessor(): BasicBlock
-
-	// Exceptions should be not be handled by deferred operations, hench this returns BB.
-	// The locals and stacks must not be mutated after calling this.
-	fun resolveBlock(label: Label): BasicBlock
-
-	fun appendInvocation(spec: Invocation) {
-		val arguments = stack.pop(spec.parameterTypes.size)
-		val invocation = appender.newInvoke(spec, arguments)
-
-		if (spec.returnType != VOID)
-			stack.push(invocation)
-	}
-}
 
 private class SlotIndexMap(parameters: Iterable<Def>) {
 	private val map: Map<Int, Int> = mutableMapOf<Int, Int>().apply {
@@ -920,16 +989,23 @@ private sealed class AsmBlock<T : Block>(val labels: Set<Label>, val exceptions:
 		: BaseDependencySource() {
 
 	// Phase 1 - Build info during the ASM visit.
-	val operations = mutableListOf<DeferredOp>()
-	var terminal: Terminal = Terminal.No
+	val operations = mutableListOf<Deferred>()
 	val rw = mutableMapOf<Int, Rw>()
+
+	val terminal: Deferred.Terminal? get() = operations.let {
+		if (it.isEmpty())
+			return null
+
+		val last = it.last()
+		return if (last is Deferred.Terminal) last else null
+	}
 
 	// Phase 2 - Merge blocks and create graph.
 	var next: AsmBlock<*>? = null
 	val predecessors = RefCount<AsmBlock<*>>() // Of branches and handlers.
 	val branches = dependencySet(asmGraphBasicSpec)
 	val handlers = dependencySet(asmGraphHandlerSpec)
-	val successors get() = branches.asSequence() + handlers.asSequence()
+	val successorHandlers = dependencySet(asmGraphSuccessorHandlerSpec)
 
 	// Phase 3 - Build the actual internal representation.
 	var reification: Reification<T>? = null
@@ -955,7 +1031,33 @@ private sealed class AsmBlock<T : Block>(val labels: Set<Label>, val exceptions:
  */
 private class Join(val locals: Map<Int, IrPhi>, val stack: List<IrPhi>?)
 
-private data class Reification<T : Block>(val backing: T, val join: Join?)
+private data class Reification<T : Block>(val backing: T, val join: Join?) {
+
+	/**
+	 * Contains fragments of a watched block that has been split in multiple parts
+	 * since a handler depends on a local variable that is redefined inside this block.
+	 * In that case a phi join in the handler is needed (which as usual need a def
+	 * from each predecessor). This is in lieu of a mutable variable type which the
+	 * handler can depend on -- variable defs go against the concept of SSA.
+	 *
+	 * [backing] contains the first fragment, and [splits] the remaining.
+	 */
+	val splits = mutableListOf<BasicBlock>()
+
+	/**
+	 * Returns the last block in case the block is split into multiple fragments.
+	 * See [splits].
+	 */
+	val lastBacking get() = if (splits.isEmpty()) backing else splits.last()
+
+	fun split(): BasicBlock {
+		val current = lastBacking
+		val tail = current.graph.newBasicBlock()
+		splits.add(tail)
+		current.append().newGoto(tail)
+		return tail
+	}
+}
 
 private sealed class Expecting {
 	class NewBlock(val labels: Set<Label> = emptySet()) : Expecting()
@@ -1005,29 +1107,6 @@ private object WideDef : Def {
 	override var name: String = "Wide"
 }
 
-private class MutableLocals(val map: Map<Int, IrMutable>, val appender: IrFactory)
-
-/**
- * Creates [IrMutable]s for the union of dependent reads in exception handler blocks.
- */
-private fun createLocalsWithMutablesIfNecessary(block: AsmBlock<*>, input: Map<Int, Def>, appender: IrFactory): LocalsMap {
-	if (block.handlers.isEmpty())
-		return LocalsMap(input, null)
-
-	val map = mutableMapOf<Int, IrMutable>()
-	for (handler in block.handlers) {
-		for ((slot, rw) in handler.rw) {
-			if (rw.reads) {
-				map.computeIfAbsent(slot) {
-					val initial = input[slot] ?: panic("Bad read: $slot")
-					appender.newMutable(initial)
-				}
-			}
-		}
-	}
-	return LocalsMap(input, MutableLocals(map, appender))
-}
-
 private fun addPhiInput(phi: IrPhi, def: Def, definedIn: Block) {
 	val current = phi.defs[definedIn]
 	if (current != null) {
@@ -1038,7 +1117,7 @@ private fun addPhiInput(phi: IrPhi, def: Def, definedIn: Block) {
 	}
 }
 
-private class LocalsMap(predecessor: Map<Int, Def>, val mutables: MutableLocals? = null) {
+private class LocalsMap(predecessor: Map<Int, Def>) {
 	private val map = predecessor.toMutableMap()
 
 	inline fun <reified T : Thing> getTyped(index: Int): Def {
@@ -1056,36 +1135,16 @@ private class LocalsMap(predecessor: Map<Int, Def>, val mutables: MutableLocals?
 		map[index] = def
 		if (def.type.width == 2)
 			map[index + 1] = WideDef
-
-		if (mutables != null) {
-			val mut = mutables.map[index]
-
-			// A mutable only exists if there is a handler that depends on that write.
-			if (mut != null)
-				// We don't check if the def is wide here, and thus a handler block could try
-				// to read it. This case probably won't pass the bytecode verification...
-				mutables.appender.newMutableWrite(mut, def)
-		}
 	}
 
-	fun mergeInto(phis: Map<Int, IrPhi>, definedIn: Block, handlerTarget: Boolean) {
-		for ((slot, phi) in phis) {
-			if (handlerTarget) {
-				val muts = mutables ?: panic("No mutables for watched block $definedIn")
-				val def = muts.map[slot] ?: panic("No mutable for slot $slot")
-				addPhiInput(phi, def, definedIn)
-			} else {
-				addPhiInput(phi, this[slot], definedIn)
-			}
-		}
+	fun mergeInto(phis: Map<Int, IrPhi>, definedIn: Block) {
+		for ((slot, phi) in phis)
+			addPhiInput(phi, this[slot], definedIn)
 	}
 
 	private fun repr(slot: Int): String {
 		val def = map[slot] ?: panic()
-		return if (mutables != null && mutables.map[slot] != null)
-			"MUT$slot: ${def.name}"
-		else
-			"$slot: ${def.name}"
+		return "$slot: ${def.name}"
 	}
 
 	override fun toString(): String {

@@ -22,7 +22,21 @@ sealed class Block(val graph: FlowGraph) : DependencySource(), Nameable, PassTyp
 
 	val exceptions: DependencyList<ExceptionEntry> = dependencyList(handlerUses) { it.handler }
 
-	inline fun <reified T : Ir> filter(): Sequence<T> = opcodes.asSequence().filterIsInstance<T>()
+	// TODO Improve.
+	fun getPredecessors(explicit: Boolean, implicit: Boolean): Set<Block> {
+		val union = mutableSetOf<Block>()
+
+		if (explicit)
+			union += predecessors
+
+		if (implicit && this is HandlerBlock) {
+			union += predecessors.asSequence()
+					.flatMap { it.predecessors.asSequence() }
+					.filter { it !in predecessors }
+					.toSet()
+		}
+		return union
+	}
 
 	override fun toString(): String {
 		val sb = StringBuilder(name)
@@ -36,6 +50,12 @@ sealed class Block(val graph: FlowGraph) : DependencySource(), Nameable, PassTyp
 		if (predecessors.isNotEmpty()){
 			val preds = predecessors.joinToString(prefix = "   preds: ") { it.name }
 			sb.append(preds)
+
+			val implicits = getPredecessors(explicit = false, implicit = true)
+			if (implicits.isNotEmpty()) {
+				val implicitPreds = implicits.joinToString(prefix = " (", postfix = ")") { it.name }
+				sb.append(implicitPreds)
+			}
 		}
 
 		return sb.toString()

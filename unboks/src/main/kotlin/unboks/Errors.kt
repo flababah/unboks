@@ -26,8 +26,6 @@ sealed class Objection(val reason: String) {
 
 	class BlockIsRoot(val block: BasicBlock) : Objection("${block.name} is root")
 
-	class MutableHasWrite(val mutable: IrMutable, val write: IrMutableWrite) : Objection("${mutable.name} has write ${write.value}")
-
 
 	// Making the specific objections data classes overrides the toString method.
 	// XXX Make a better comparison/printing solution in the future.

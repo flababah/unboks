@@ -155,4 +155,46 @@ class ExceptionTests {
 		if (a == b)
 			throw RuntimeException()
 	}
+
+	@PermutationTest
+	fun testRedefine1(@Ints(0, 1, 2) input: Int) {
+		var x = 1
+		try {
+			x = 2
+			throwWhenEqual(0, input)
+			x = 3
+			throwWhenEqual(1, input)
+			x = 4
+			throwWhenEqual(2, input)
+			x = 5
+		} catch (e: Throwable) {
+			trace("exception")
+			trace(x)
+		} finally {
+			trace("finally")
+			trace(x)
+		}
+		trace("after)")
+		trace(x)
+	}
+
+	@PermutationTest
+	fun testRedefine2(@Ints(0, 1, 2) input: Int) {
+		var x = 1
+		try {
+			throwWhenEqual(0, input)
+			x = 2
+			throwWhenEqual(1, input)
+			x = 3
+			throwWhenEqual(2, input)
+		} catch (e: Throwable) {
+			trace("exception")
+			trace(x)
+		} finally {
+			trace("finally")
+			trace(x)
+		}
+		trace("after)")
+		trace(x)
+	}
 }

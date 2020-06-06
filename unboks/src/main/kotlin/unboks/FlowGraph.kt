@@ -17,7 +17,7 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 	private val _blocks = mutableSetOf<Block>()
 	val blocks: Set<Block> get() = _blocks
 
-	private val nullConst = NullConst(this)
+	val nullConst = NullConst(this)
 
 	/**
 	 * Gives the set of constants in use in the given [FlowGraph].
@@ -97,16 +97,6 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 	fun constant(value: Double): DoubleConst = reuseConstant(DoubleConst(this, value))
 	fun constant(value: String): StringConst = reuseConstant(StringConst(this, value))
 	fun constant(value: Thing): TypeConst = reuseConstant(TypeConst(this, value))
-
-	fun constant(value: Any?): Constant<*> = when (value) {
-		is Int    -> constant(value)
-		is Long   -> constant(value)
-		is Float  -> constant(value)
-		is String -> constant(value)
-		is Thing  -> constant(value)
-		null      -> nullConst
-		else -> throw IllegalArgumentException("Unsupported constant type: ${value::class}}")
-	}
 
 	/**
 	 * Prints simple text representation of the flow.

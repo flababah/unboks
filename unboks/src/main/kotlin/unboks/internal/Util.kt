@@ -29,12 +29,9 @@ internal fun <T> consolidateList(input: List<T>, f: (T, T) -> T?): List<T> = whe
 	}
 }
 
-/**
- *
- */
-internal fun <T> traverseGraph(seed: T, visitor: (T, (T) -> Unit) -> Unit): Set<T> {
-	val seen = mutableSetOf(seed)
-	val work = mutableListOf(seed)
+internal fun <T> traverseGraph(seeds: Set<T>, visitor: (T, (T) -> Unit) -> Unit): Set<T> {
+	val seen = seeds.toMutableSet()
+	val work = seeds.toMutableList()
 
 	while (work.isNotEmpty()) {
 		val current = work.removeAt(work.size - 1)
@@ -44,6 +41,10 @@ internal fun <T> traverseGraph(seed: T, visitor: (T, (T) -> Unit) -> Unit): Set<
 		}
 	}
 	return seen
+}
+
+internal fun <T> traverseGraph(seed: T, visitor: (T, (T) -> Unit) -> Unit): Set<T> {
+	return traverseGraph(setOf(seed), visitor)
 }
 
 /**

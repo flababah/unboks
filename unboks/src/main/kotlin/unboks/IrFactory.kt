@@ -34,12 +34,6 @@ class IrFactory internal constructor(private val block: Block, private val offse
 	fun newThrow(exception: Def): IrThrow =
 			register(IrThrow(block, exception))
 
-	fun newMutable(initial: Def): IrMutable =
-			register(IrMutable(block, initial))
-
-	fun newMutableWrite(target: IrMutable, def: Def): IrMutableWrite =
-			register(IrMutableWrite(block, target, def))
-
 	internal sealed class Offset {
 		class Before(val at: Ir) : Offset()
 		class Replace(val at: Ir) : Offset()

@@ -2,7 +2,9 @@ package unboks.pass.builtin
 
 import unboks.*
 import unboks.analysis.Dominance
+import unboks.internal.traverseGraph
 import unboks.pass.Pass
+import unboks.util.handlerSafeDef
 
 class InconsistencyException(msg: String) : IllegalStateException(msg)
 
@@ -11,9 +13,7 @@ class InconsistencyException(msg: String) : IllegalStateException(msg)
  */
 private val irTypeOccurrenceOrder = mapOf(
 	IrPhi::class          to   0, // IrPhi first.
-	IrMutable::class      to   1, // IrMutable second.
 	IrInvoke::class       to  10, // Non-terminals.
-	IrMutableWrite::class to  10,
 	IrCmp1::class         to 100, // Terminals.
 	IrCmp2::class         to 100,
 	IrGoto::class         to 100,
@@ -42,58 +42,12 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 	}
 
 	// +---------------------------------------------------------------------------
-	// |  IrMutable
-	// +---------------------------------------------------------------------------
-
-	// Only exception-watched blocks may use IrMutable.
-	//
-	// This is an artificial limitation. There is nothing restricting us from using IrMutables
-	// everywhere, but their use is intended for "watched" blocks where an exception handler
-	// depends on a value defined therein. This goes against SSA form, which is why it should only
-	// be used where nothing else suffices.
-	visit<IrMutable> {
-		if (it.block.exceptions.isEmpty())
-			fail("Unwatched block ${it.block.name} contains an IrMutable: $it")
-	}
-
-	// XXX Temporary limitation.
-	//
-	// In order to satisfy the JVM bytecode verification the initial value must be stored
-	// by a predecessor. This means we should only depend on:
-	// - IrPhis defined in same block (or predecessor)
-	// - Normal defs defined in predecessor (following normal def-dominates-uses rules)
-	// IrMutables are grouped, so without the restriction we could have on mutable depend
-	// on another in the same block. This could be made to work -- just requires extra logic
-	// in the code generator -> XXX implement later.
-	visit<IrMutable> {
-		val initial = it.initial
-		if (initial !is IrPhi && initial.block == it.block)
-			fail("IrMutable ${it.name} depends on local def $initial for its initial value")
-	}
-
-	// +---------------------------------------------------------------------------
-	// |  IrMutableWrite
-	// +---------------------------------------------------------------------------
-
-	// Writes to an IrMutable should only happen in the block where the mutable is defined.
-	//
-	// Another artificial limitation. This is simply placed to restrict the use of mutables.
-	visit<IrMutableWrite> {
-		val mut = it.target
-		if (it.block != mut.block)
-			fail("Mutable write $it (${it.block.name}) to $mut in different block ${mut.block.name}")
-	}
-
-	// +---------------------------------------------------------------------------
 	// |  General rules
 	// +---------------------------------------------------------------------------
 
-	// Instruction order: IrPhi, IrMutable, Non-terminal Ir, Terminal Ir.
+	// Instruction order: IrPhi, Non-terminal Ir, Terminal Ir.
 	//
 	// - IrPhi must come first so it's possible to depend on them for other [Use]s in the block.
-	// - IrMutable must come before everything else. Otherwise it would be possible to depend on
-	//     an IrMutable from a handler block where the watched block might have thrown before the
-	//     IrMutable was declared.
 	// - None-terminal Irs.
 	// - Single terminal last.
 	visit<Block> {
@@ -114,6 +68,39 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 		val terminals = it.opcodes.count { ir -> ir is IrTerminal }
 		if (terminals != 1)
 			fail("Block ${it.name} does not have a single terminal, but $terminals")
+	}
+
+	// Disallow use of unsafe def from handler blocks (and successors of handlers)
+	//
+	// It's not possible to depend on a value defined in an unsafe method invocation from a
+	// handler that catches the exception the invocation might throw. More generally, it's not
+	// possible to depend on a def that is defined after (or is itself) an unsafe method
+	// invocation.
+	visit<Def> { def ->
+		if (!handlerSafeDef(def)) {
+			val defBlock = def.block
+
+			for (use in def.uses) {
+				val useBlocks = if (use is IrPhi)
+					// TODO Redo: useBlock of irphi? Why not? disabllow below comment.
+					use.defs.entries
+							.filter { (_, d) -> d == def } // TODO Test handler with phi depends on unsafe def in the block that defines def --> disallowed.
+							.map { it.first }
+							.toSet()
+				else
+					setOf(use.block)
+
+				// Assumes normal def-use already is OK.
+				traverseGraph<Block>(useBlocks) { block, visit ->
+					if (block != defBlock) {
+						if (block is HandlerBlock && defBlock in block.predecessors)
+							fail("Unsafe def use") // TODO
+						for (pred in block.predecessors)
+							visit(pred)
+					}
+				}
+			}
+		}
 	}
 
 
@@ -163,18 +150,12 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 	 * - Check that all predecessors are used in this phi.
 	 * - ...and no more than that.
 	 * - Check that all types used in the phi matches -- reference types do not strictly need to match.
-	 * TODO exception handling.
-	 */
-
-	/**
-	 * - Check that all predecessors are used in this phi.
-	 * - ...and no more than that.
-	 * - Check that all types used in the phi matches -- reference types do not strictly need to match.
-	 * TODO exception handling.
 	 */
 	visit<IrPhi> {
+		val allPredecessors = it.block.getPredecessors(explicit = true, implicit = true)
+
 		var firstType: Thing? = null
-		for (predecessor in it.block.predecessors) {
+		for (predecessor in allPredecessors) {
 			val def = it.defs[predecessor] ?: fail("$it does not cover predecessor $predecessor")
 
 			if (firstType == null)
@@ -183,7 +164,7 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 				fail("Phi defs type mismatch: $firstType vs ${def.type}")
 		}
 		for ((assignedIn, def) in it.defs.entries) {
-			if (assignedIn !in it.block.predecessors) {
+			if (assignedIn !in allPredecessors) {
 				fail("$def (in $assignedIn) is not assigned in a predecessor")
 			}
 		}

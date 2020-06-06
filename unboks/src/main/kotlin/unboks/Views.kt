@@ -69,6 +69,10 @@ class DependencySet<V> internal constructor(
 			false
 		}
 	}
+
+	operator fun contains(item: V): Boolean {
+		return item in container
+	}
 }
 
 class DependencyNullableSingleton<V : Any> internal constructor(
