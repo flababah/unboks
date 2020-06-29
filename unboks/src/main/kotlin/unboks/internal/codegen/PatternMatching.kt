@@ -3,11 +3,20 @@ package unboks.internal.codegen
 import java.util.*
 import kotlin.collections.ArrayList
 
-internal interface FsmState<T> {
+/**
+ * Represents a state in a Aho-Corasick FSM pattern matcher.
+ */
+internal class FsmState<T>(private val delta: Array<FsmState<T>?>,
 
-	fun matches(): List<T>?
+	/**
+	 * Contains the patterns that were matched when arriving at this state.
+	 */
+	val matches: Collection<T>) {
 
-	fun transition(symbol: Int): FsmState<T>
+	/**
+	 * Transition the FSM into the next state given [symbol].
+	 */
+	fun transition(symbol: Int): FsmState<T> = delta[symbol]!!
 }
 
 /**
@@ -19,71 +28,62 @@ internal interface FsmState<T> {
  * @return root state
  */
 internal fun <T> buildPatternMatcher(universe: Int, dict: Iterable<Pair<IntArray, T>>): FsmState<T> {
-	val queue = ArrayDeque<FsmStateImpl<T>>()
-	val root = FsmStateImpl<T>(universe)
+	val queue = ArrayDeque<ConstructionState<T>>()
+	val root = ConstructionState<T>(universe)
 
 	// Build trie (goto and output).
 	for ((word, output) in dict) {
 		var state = root
 		for (symbol in word) {
-			state = state.goto[symbol] ?: FsmStateImpl<T>(universe).apply {
+			state = state.goto[symbol] ?: ConstructionState<T>(universe).apply {
 				state.goto[symbol] = this
 			}
 		}
-		state.getInitedOutput() += output
+		state.output += output
 	}
 
 	// Set all unused branches of root to root and seed queue.
 	for ((i, branch) in root.goto.withIndex()) {
-		if (branch == null) {
-			root.goto[i] = root
-		} else {
-			queue.push(branch)
+		if (branch != null) {
+			queue.addLast(branch)
 			branch.failure = root
+		} else {
+			root.goto[i] = root
 		}
 	}
 
 	// Build failure function.
 	while (queue.isNotEmpty()) {
-		val r = queue.pop()
+		val r = queue.removeFirst()
 		for ((a, s) in r.goto.withIndex()) {
 			if (s != null) {
-				queue.push(s)
+				queue.addLast(s)
 
-				val failure = r.failure.transition(a)
+				val failure = r.failure.transitionUsingFailureLink(a)
 				s.failure = failure
-
-				failure.output?.apply {
-					s.getInitedOutput().addAll(this)
-				}
+				s.output += failure.output
+			} else {
+				r.goto[a] = r.failure.goto[a] // goto is also used as the delta-function.
 			}
 		}
 	}
-	return root
+
+	// Convert structure to leaner representation.
+	return root.reifyFront()
 }
 
 /**
- * Impl class in order to not expose members that are only relevant when building the structure.
+ * State type used when constructing the FSM. Contains information that is not
+ * needed after the FSM has been built.
  */
-private class FsmStateImpl<T>(universe: Int) : FsmState<T> {
-	val goto = Array<FsmStateImpl<T>?>(universe) { null }
-	lateinit var failure: FsmStateImpl<T>
-	var output: MutableList<T>? = null
+private class ConstructionState<T>(universe: Int) {
+	val goto = Array<ConstructionState<T>?>(universe) { null }
+	val output = ArrayList<T>()
+	lateinit var failure: ConstructionState<T>
 
-	val delta = Array<FsmStateImpl<T>?>(universe) { null }
+	var front: FsmState<T>? = null
 
-	fun getInitedOutput(): MutableList<T> {
-		return output ?: ArrayList<T>().apply {
-			output = this
-		}
-	}
-
-	override fun matches(): List<T>? {
-		return output
-	}
-
-	override fun transition(symbol: Int): FsmStateImpl<T> {
-		// TODO Implement algorithm 4.
+	fun transitionUsingFailureLink(symbol: Int): ConstructionState<T> {
 		var state = this
 		while (true) {
 			val next = state.goto[symbol]
@@ -92,5 +92,20 @@ private class FsmStateImpl<T>(universe: Int) : FsmState<T> {
 			else
 				state = state.failure
 		}
+	}
+
+	fun reifyFront(): FsmState<T> {
+		val reified = front
+		if (reified != null)
+			return reified
+
+		val delta = Array<FsmState<T>?>(goto.size) { null }
+		val new = FsmState(delta, if (output.isEmpty()) emptyList() else output)
+		front = new // Careful to set instance before resolving branches to avoid endless rec.
+
+		for ((symbol, branch) in goto.withIndex())
+			delta[symbol] = branch!!.reifyFront()
+
+		return new
 	}
 }
