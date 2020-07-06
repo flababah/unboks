@@ -77,7 +77,7 @@ internal fun <T> buildPatternMatcher(universe: Int, dict: Iterable<Pair<IntArray
  * needed after the FSM has been built.
  */
 private class ConstructionState<T>(universe: Int) {
-	val goto = Array<ConstructionState<T>?>(universe) { null }
+	val goto = arrayOfNulls<ConstructionState<T>>(universe)
 	val output = ArrayList<T>()
 	lateinit var failure: ConstructionState<T>
 
@@ -99,7 +99,7 @@ private class ConstructionState<T>(universe: Int) {
 		if (reified != null)
 			return reified
 
-		val delta = Array<FsmState<T>?>(goto.size) { null }
+		val delta = arrayOfNulls<FsmState<T>>(goto.size)
 		val new = FsmState(delta, if (output.isEmpty()) emptyList() else output)
 		front = new // Careful to set instance before resolving branches to avoid endless rec.
 
