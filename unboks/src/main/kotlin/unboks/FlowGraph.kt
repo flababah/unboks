@@ -3,7 +3,7 @@ package unboks
 import org.objectweb.asm.MethodVisitor
 import unboks.internal.FlowGraphVisitor
 import unboks.internal.NameRegistry
-import unboks.internal.codeGenerate
+import unboks.internal.codegen.generate
 import unboks.pass.Pass
 import unboks.pass.PassType
 import unboks.pass.builtin.createConsistencyCheckPass
@@ -74,7 +74,7 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 	 */
 	fun generate(receiver: MethodVisitor, returnType: Thing) {
 		execute(createConsistencyCheckPass(this))
-		codeGenerate(this, receiver, returnType)
+		generate(this, receiver)
 	}
 
 	/**

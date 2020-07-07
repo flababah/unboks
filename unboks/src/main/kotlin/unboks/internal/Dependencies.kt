@@ -54,7 +54,7 @@ internal fun <R : BaseDependencySource, B, X> R.dependencyList(
  */
 internal fun <R : BaseDependencySource, K, V> R.dependencyMap(
 		keySpec: TargetSpecification<in R, K>,
-		valueSpec: TargetSpecification<in R, V>
+		valueSpec: TargetSpecification<in R, V> // TODO Nullable keyspec, valuespec, "proxy" = this -- remove proxy version
 ): DependencyMapValues<K, V> = DependencyMapValues(this) {
 	val (key, value) = it.item
 	when (it) {

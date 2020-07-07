@@ -97,6 +97,9 @@ class PassthroughLoader(
 		if (name.startsWith("jdk.internal.reflect."))
 			throw ClassNotFoundException(name)
 
+		if (name == "sun.misc.Unsafe")
+			throw ClassNotFoundException(name)
+
 		val bytecode = getDefinitionBytecode(name.replace(".", "/")) ?: throw ClassNotFoundException(name)
 
 		println("Defining class '$name' with depth ${getPassthroughParentCount()}.")

@@ -1,5 +1,7 @@
 package unboks.internal
 
+import sun.misc.Unsafe
+
 /**
  * Allows merging specific pairs in an [input].
  *
@@ -85,4 +87,9 @@ internal inline fun <A, B> zipIterators(a: Iterator<A>, b: Iterator<B>, f: (A, B
 			break
 		f(a.next(), b.next())
 	}
+}
+
+internal val unsafe = Unsafe::class.java.getDeclaredField("theUnsafe").run {
+	isAccessible = true
+	get(null) as Unsafe
 }
