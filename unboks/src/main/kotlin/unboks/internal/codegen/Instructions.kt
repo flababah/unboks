@@ -9,27 +9,23 @@ import unboks.internal.TargetSpecification
 import unboks.internal.dependencyProperty
 import unboks.internal.dependencyProxyMapValues
 import unboks.invocation.Invocation
-import java.lang.StringBuilder
 
 internal const val MAX_INST_ORDINAL = 11
 
-internal val regReader = TargetSpecification<Inst, JvmRegisterOrConst> { it.readers }
+internal val regReader = TargetSpecification<Inst, JvmRegister> { it.readers }
 internal val regWriter = TargetSpecification<Inst, JvmRegister> { it.writers }
 internal val branches = TargetSpecification<Inst, InstLabel> { it.brancheSources }
 internal val exceptions = TargetSpecification<ExceptionTableEntry, InstLabel> { it.exceptionUsages }
 
-internal sealed class JvmRegisterOrConst {
-	abstract val readers: RefCount<Inst>
-}
+internal sealed class JvmRegisterOrConst
 
 internal class JvmConstant(val value: Any?) : JvmRegisterOrConst() {
-	override val readers get() = RefCount.noOp<Inst>()
 
 	override fun toString() = "const $value"
 }
 
 internal class JvmRegister(val type: Thing, private val irName: String?) : JvmRegisterOrConst() {
-	override val readers = RefCount<Inst>()
+	val readers = RefCount<Inst>()
 	val writers = RefCount<Inst>()
 	var jvmSlot = -1
 
@@ -174,20 +170,19 @@ internal class InstLabel(val handlerBlock: Boolean, private val irName: String?)
 	override fun emit(mv: MethodVisitor) = mv.visitLabel(label)
 }
 
-private fun emitLoad(source: JvmRegisterOrConst, mv: MethodVisitor) = when (source) {
-	is JvmConstant -> when (source.value) {
-		is Thing     -> mv.visitLdcInsn(Type.getType(source.value.descriptor))
-		null         -> mv.visitInsn(ACONST_NULL)
-		else         -> mv.visitLdcInsn(source.value)
-	}
-	is JvmRegister -> when (source.type) {
-		is Reference -> mv.visitVarInsn(ALOAD, source.jvmSlot)
-		is Fp32      -> mv.visitVarInsn(FLOAD, source.jvmSlot)
-		is Fp64      -> mv.visitVarInsn(DLOAD, source.jvmSlot)
-		is Int64     -> mv.visitVarInsn(LLOAD, source.jvmSlot)
-		is Int32     -> mv.visitVarInsn(ILOAD, source.jvmSlot)
-		else         -> throw IllegalArgumentException()
-	}
+private fun emitLoad(source: JvmConstant, mv: MethodVisitor) =  when (source.value) {
+	is Thing     -> mv.visitLdcInsn(Type.getType(source.value.descriptor))
+	null         -> mv.visitInsn(ACONST_NULL)
+	else         -> mv.visitLdcInsn(source.value)
+}
+
+private fun emitLoad(source: JvmRegister, mv: MethodVisitor) = when (source.type) {
+	is Reference -> mv.visitVarInsn(ALOAD, source.jvmSlot)
+	is Fp32      -> mv.visitVarInsn(FLOAD, source.jvmSlot)
+	is Fp64      -> mv.visitVarInsn(DLOAD, source.jvmSlot)
+	is Int64     -> mv.visitVarInsn(LLOAD, source.jvmSlot)
+	is Int32     -> mv.visitVarInsn(ILOAD, source.jvmSlot)
+	else         -> throw IllegalArgumentException()
 }
 
 private fun emitStore(target: JvmRegister, mv: MethodVisitor) = when (target.type) {
