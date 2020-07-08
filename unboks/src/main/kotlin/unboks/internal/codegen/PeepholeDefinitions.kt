@@ -9,23 +9,6 @@ internal val peepholes = PeepholeMatcher {
 	// +---------------------------------------------------------------------------
 
 	/**
-	 * Redundant goto. Remove because of natural fallthrough.
-	 */
-	pattern<InstGoto, InstLabel> { goto, label ->
-		if (goto.target == label) {
-			goto.destroy()
-			if (label.unused) {
-				label.destroy()
-				arrayOf()
-			} else {
-				arrayOf(label)
-			}
-		} else {
-			null
-		}
-	}
-
-	/**
 	 * Unused label.
 	 */
 	pattern<InstLabel> { label ->
@@ -38,7 +21,7 @@ internal val peepholes = PeepholeMatcher {
 	}
 
 	/**
-	 * Exception handler on empty span
+	 * Exception handler on empty span -- note that ASM might fail without folding this pattern.
 	 */
 	pattern<InstLabel, InstLabel> { l0, l1 ->
 		val remove = ArrayList<ExceptionTableEntry>()
@@ -84,6 +67,23 @@ internal val peepholes = PeepholeMatcher {
 	// +---------------------------------------------------------------------------
 
 	/**
+	 * Redundant goto. Remove because of natural fallthrough.
+	 */
+	pattern<InstGoto, InstLabel> { goto, label ->
+		if (goto.target == label) {
+			goto.destroy()
+			if (label.unused) {
+				label.destroy()
+				arrayOf()
+			} else {
+				arrayOf(label)
+			}
+		} else {
+			null
+		}
+	}
+
+	/**
 	 * Invert CMP if the branch returns immediately.
 	 */
 	pattern<InstCmp, InstGoto, InstLabel, InstReturn, InstLabel> {
@@ -104,10 +104,13 @@ internal val peepholes = PeepholeMatcher {
 			goto.destroy()
 			cmp.opcode = invertCmpOpcode(cmp.opcode)
 			cmp.branch = afterLabel
-			if (retLabel.unused)
+
+			if (retLabel.unused) {
+				retLabel.destroy()
 				arrayOf(cmp, ret, afterLabel)
-			else
+			} else {
 				arrayOf(cmp, retLabel, ret, afterLabel)
+			}
 		} else {
 			null
 		}
