@@ -6,8 +6,8 @@ import org.objectweb.asm.Opcodes.*
 import org.objectweb.asm.Type
 import unboks.*
 import unboks.internal.TargetSpecification
+import unboks.internal.dependencyMapValues
 import unboks.internal.dependencyProperty
-import unboks.internal.dependencyProxyMapValues
 import unboks.invocation.Invocation
 
 internal const val MAX_INST_ORDINAL = 11
@@ -110,7 +110,7 @@ internal class InstGoto(target: InstLabel) : Inst() {
 }
 
 internal class InstSwitch(cases: Map<Int, InstLabel>, default: InstLabel) : Inst() {
-	val cases: DependencyMapValues<Int, InstLabel> = dependencyProxyMapValues(branches, this) // TODO Confusing that this is using proxy.
+	val cases: DependencyMapValues<Int, InstLabel> = dependencyMapValues(value = branches)
 	var default by dependencyProperty(branches, default)
 
 	init {

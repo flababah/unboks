@@ -50,35 +50,36 @@ internal fun <R : BaseDependencySource, B, X> R.dependencyList(
 // +---------------------------------------------------------------------------
 
 /**
- * A map where both keys and values have depedencies.
+ * A dependency map. Both key and value types can be part of a dependency specification.
+ * Note that the value part is the one used in the [DependencyView].
  */
-internal fun <R : BaseDependencySource, K, V> R.dependencyMap(
-		keySpec: TargetSpecification<in R, K>,
-		valueSpec: TargetSpecification<in R, V> // TODO Nullable keyspec, valuespec, "proxy" = this -- remove proxy version
-): DependencyMapValues<K, V> = DependencyMapValues(this) {
-	val (key, value) = it.item
-	when (it) {
-		is MutationEvent.Add -> {
-			keySpec.accessor(key) inc this
-			valueSpec.accessor(value) inc this
-		}
-		is MutationEvent.Remove -> {
-			keySpec.accessor(key) dec this
-			valueSpec.accessor(value) dec this
-		}
-	}
-}
+internal fun <R : BaseDependencySource, K, V> R.dependencyMapValues(
+		key: TargetSpecification<in R, K>? = null,
+		value: TargetSpecification<in R, V>? = null
+): DependencyMapValues<K, V> = dependencyProxyMapValues(this, key, value)
 
 /**
- * A map where only the values and have depedencies.
+ * Similar to [dependencyMapValues] but allows using a proxy source.
  */
 internal fun <R : BaseDependencySource, A : Any, K, V> R.dependencyProxyMapValues(
-		valueSpec: TargetSpecification<in A, V>,
-		source: A
+		source: A,
+		key: TargetSpecification<in A, K>? = null,
+		value: TargetSpecification<in A, V>? = null
 ): DependencyMapValues<K, V> = DependencyMapValues(this) {
+	val (k, v) = it.item
 	when (it) {
-		is MutationEvent.Add -> valueSpec.accessor(it.item.second) inc source
-		is MutationEvent.Remove -> valueSpec.accessor(it.item.second) dec source
+		is MutationEvent.Add -> {
+			if (key != null)
+				key.accessor(k) inc source
+			if (value != null)
+				value.accessor(v) inc source
+		}
+		is MutationEvent.Remove -> {
+			if (key != null)
+				key.accessor(k) dec source
+			if (value != null)
+				value.accessor(v) dec source
+		}
 	}
 }
 
@@ -99,12 +100,7 @@ internal fun <R : BaseDependencySource, B : Any> R.dependencyNullableProperty(
 internal fun <R : BaseDependencySource, B : Any> R.dependencyProperty(
 		spec: TargetSpecification<in R, B>,
 		initial: B
-): DependencySingleton<B> = DependencySingleton(this, initial) {
-	when (it) {
-		is MutationEvent.Add -> spec.accessor(it.item) inc this
-		is MutationEvent.Remove -> spec.accessor(it.item) dec this
-	}
-}
+): DependencySingleton<B> = dependencyProxyProperty(spec, this, initial)
 
 internal fun <R : BaseDependencySource, A : Any, B : Any> R.dependencyProxyProperty(
 		spec: TargetSpecification<in A, B>,

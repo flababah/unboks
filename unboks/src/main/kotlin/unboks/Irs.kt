@@ -154,7 +154,9 @@ class IrPhi internal constructor(block: Block, private val explicitType: Thing?)
 
 	override var name by graph.registerAutoName(this, "phi")
 
-	override val defs: DependencyMapValues<Block, Def> = dependencyMap(phiReferences, defUses)
+	override val defs: DependencyMapValues<Block, Def> = dependencyMapValues(
+			key   = phiReferences,
+			value = defUses)
 
 	override val uses = RefCount<Use>()
 
@@ -201,7 +203,7 @@ class IrSwitch internal constructor(block: Block, key: Def, default: BasicBlock)
 
 	var key: Def by defs
 
-	val cases: DependencyMapValues<Int, BasicBlock> = dependencyProxyMapValues(blockInputs, block)
+	val cases: DependencyMapValues<Int, BasicBlock> = dependencyProxyMapValues(block, value = blockInputs)
 
 	override fun toString() = "SWITCH"
 }
