@@ -84,7 +84,7 @@ internal val peepholes = PeepholeMatcher {
 	}
 
 	/**
-	 * Invert CMP if the branch returns immediately.
+	 * Invert CMP if the branch returns immediately (void).
 	 */
 	pattern<InstCmp, InstGoto, InstLabel, InstReturn, InstLabel> {
 		cmp, // --> retLabel
@@ -110,6 +110,64 @@ internal val peepholes = PeepholeMatcher {
 				arrayOf(cmp, ret, afterLabel)
 			} else {
 				arrayOf(cmp, retLabel, ret, afterLabel)
+			}
+		} else {
+			null
+		}
+	}
+
+	/**
+	 * Invert CMP if the branch returns immediately (register).
+	 */
+	pattern<InstCmp, InstGoto, InstLabel, InstStackAssignReg, InstReturn, InstLabel> {
+		cmp,
+		goto,
+		retLabel,
+		load,
+		ret,
+		afterLabel ->
+
+		if (cmp.branch == retLabel && goto.target == afterLabel) {
+
+			// Destroying is not strictly necessary, but here for completeness.
+			goto.destroy()
+			cmp.opcode = invertCmpOpcode(cmp.opcode)
+			cmp.branch = afterLabel
+
+			if (retLabel.unused) {
+				retLabel.destroy()
+				arrayOf(cmp, load, ret, afterLabel)
+			} else {
+				arrayOf(cmp, retLabel, load, ret, afterLabel)
+			}
+		} else {
+			null
+		}
+	}
+
+	/**
+	 * Invert CMP if the branch returns immediately (constant).
+	 */
+	pattern<InstCmp, InstGoto, InstLabel, InstStackAssignConst, InstReturn, InstLabel> {
+		cmp,
+		goto,
+		retLabel,
+		const,
+		ret,
+		afterLabel ->
+
+		if (cmp.branch == retLabel && goto.target == afterLabel) {
+
+			// Destroying is not strictly necessary, but here for completeness.
+			goto.destroy()
+			cmp.opcode = invertCmpOpcode(cmp.opcode)
+			cmp.branch = afterLabel
+
+			if (retLabel.unused) {
+				retLabel.destroy()
+				arrayOf(cmp, const, ret, afterLabel)
+			} else {
+				arrayOf(cmp, retLabel, const, ret, afterLabel)
 			}
 		} else {
 			null
