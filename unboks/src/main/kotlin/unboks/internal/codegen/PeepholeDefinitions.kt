@@ -89,27 +89,25 @@ internal val peepholes = PeepholeMatcher {
 	pattern<InstCmp, InstGoto, InstLabel, InstReturn, InstLabel> {
 		cmp, // --> retLabel
 		goto, // --> afterLabel
-		retLabel, // If only "cmp" as predecessor
+		retLabel,
 		ret,
 		afterLabel ->
 
 		// Can be replaced with
 		// - !cmp --> afterLabel
+		// - (retLabel)
 		// - ret
 		// - afterLabel
-		if (
-				afterLabel == goto.target &&
-				retLabel == cmp.branch &&
-				retLabel.brancheSources.count == 1 &&
-				retLabel.exceptionUsages.count == 0) {
+		if (cmp.branch == retLabel && goto.target == afterLabel) {
 
 			// Destroying is not strictly necessary, but here for completeness.
 			goto.destroy()
-			retLabel.destroy()
-
 			cmp.opcode = invertCmpOpcode(cmp.opcode)
 			cmp.branch = afterLabel
-			arrayOf(cmp, ret, afterLabel)
+			if (retLabel.unused)
+				arrayOf(cmp, ret, afterLabel)
+			else
+				arrayOf(cmp, retLabel, ret, afterLabel)
 		} else {
 			null
 		}

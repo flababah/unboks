@@ -87,7 +87,7 @@ internal class InstCmp(var opcode: Int, branch: InstLabel) : Inst() {
 	var branch by dependencyProperty(branches, branch)
 
 	override val ordinal get() = 1
-	override fun toString() = "CMP"
+	override fun toString() = "CMP --> $branch"
 	override fun emit(mv: MethodVisitor) = mv.visitJumpInsn(opcode, branch.label)
 }
 
