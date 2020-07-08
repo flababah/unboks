@@ -1,29 +1,56 @@
 package unboks
 
+import java.lang.reflect.Field
+
+private val dependencyViewFields = object : ClassValue<Array<Field>>() {
+
+	private fun collectFields(type: Class<*>, acc: MutableSet<Field>) {
+		val superClass = type.superclass
+		if (superClass != null)
+			collectFields(superClass, acc)
+
+		for (field in type.declaredFields) {
+			if (DependencyView::class.java.isAssignableFrom(field.type)) {
+				field.isAccessible = true
+				acc += field
+			}
+		}
+	}
+
+	override fun computeValue(type: Class<*>): Array<Field> {
+		val dependencyFields = HashSet<Field>()
+		collectFields(type, dependencyFields)
+		return dependencyFields.toTypedArray()
+	}
+}
+
+/**
+ * Generic source to reference dependencies.
+ */
 abstract class BaseDependencySource internal constructor() {
-	// TODO Make this list and check for duplicate insert if asserts are enabled.
-	private val dependencyCleaners = mutableListOf<() -> Unit>()
 	private var _detached = false
 
 	/**
-	 * Once detached a [BaseDependencySource] can never become attached again.
+	 * Once detached, a [BaseDependencySource] can never become attached again.
 	 */
 	val detached: Boolean get() = _detached
 
-	protected fun markDetached() {
+	internal fun destroy() {
+		val fields = dependencyViewFields.get(this::class.java)
+		val destroyedInstances = HashSet<DependencyView<*, *>>()
+
+		for (field in fields) {
+			val instance = field.get(this) as DependencyView<*, *>
+
+			// In case of multiple delegated properties using the same instance, Kotlin
+			// will create a field for each property where the instance is then stored
+			// multiple times.
+			// Keep track of destroyed instances to avoid do so more than once. Strictly
+			// not needed at the moment since all views destroy in an idempotent way...
+			if (destroyedInstances.add(instance))
+				instance.destroy()
+		}
 		_detached = true
-	}
-
-	protected fun cleanup() {
-		dependencyCleaners.forEach { it() }
-		dependencyCleaners.clear()
-	}
-
-	/**
-	 * Should only be called by dependency views, and creating new instances.
-	 */
-	internal fun register(cleaner: () -> Unit) {
-		dependencyCleaners += cleaner
 	}
 }
 
@@ -32,7 +59,6 @@ abstract class BaseDependencySource internal constructor() {
  *
  * @See Ir
  * @see Block
- * // TODO class, field, method at some point... Think about invocation usages...
  */
 abstract class DependencySource : BaseDependencySource() {
 
@@ -72,9 +98,8 @@ abstract class DependencySource : BaseDependencySource() {
 				return objections
 		}
 		for (source in hierarchy) {
-			source.cleanup()
 			source.detachFromParent()
-			source.markDetached()
+			source.destroy()
 		}
 		return emptySet()
 	}

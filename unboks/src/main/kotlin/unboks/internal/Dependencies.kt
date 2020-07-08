@@ -11,7 +11,7 @@ import kotlin.reflect.KProperty
 internal fun <R : BaseDependencySource, B> R.dependencyArray(
 		spec: TargetSpecification<in R, B>,
 		vararg init: B
-): DependencyArray<B> = DependencyArray(this, *init) {
+): DependencyArray<B> = DependencyArray(*init) {
 	when (it) {
 		is MutationEvent.Add -> spec.accessor(it.item) inc this
 		is MutationEvent.Remove -> spec.accessor(it.item) dec this
@@ -37,7 +37,7 @@ internal fun <R : BaseDependencySource, B> R.dependencyArray(
 internal fun <R : BaseDependencySource, B, X> R.dependencyList(
 		spec: TargetSpecification<in R, B>,
 		extractor: (X) -> B
-): DependencyList<X> = DependencyList(this) {
+): DependencyList<X> = DependencyList {
 	val elm = extractor(it.item)
 	when (it) {
 		is MutationEvent.Add -> spec.accessor(elm) inc this
@@ -65,7 +65,7 @@ internal fun <R : BaseDependencySource, A : Any, K, V> R.dependencyProxyMapValue
 		source: A,
 		key: TargetSpecification<in A, K>? = null,
 		value: TargetSpecification<in A, V>? = null
-): DependencyMapValues<K, V> = DependencyMapValues(this) {
+): DependencyMapValues<K, V> = DependencyMapValues {
 	val (k, v) = it.item
 	when (it) {
 		is MutationEvent.Add -> {
@@ -90,7 +90,7 @@ internal fun <R : BaseDependencySource, A : Any, K, V> R.dependencyProxyMapValue
 internal fun <R : BaseDependencySource, B : Any> R.dependencyNullableProperty(
 		spec: TargetSpecification<in R, B>,
 		initial: B? = null
-): DependencyNullableSingleton<B> = DependencyNullableSingleton(this, initial) {
+): DependencyNullableSingleton<B> = DependencyNullableSingleton(initial) {
 	when (it) {
 		is MutationEvent.Add -> spec.accessor(it.item) inc this
 		is MutationEvent.Remove -> spec.accessor(it.item) dec this
@@ -106,7 +106,7 @@ internal fun <R : BaseDependencySource, A : Any, B : Any> R.dependencyProxyPrope
 		spec: TargetSpecification<in A, B>,
 		source: A,
 		initial: B
-): DependencySingleton<B> = DependencySingleton(this, initial) {
+): DependencySingleton<B> = DependencySingleton(initial) {
 	when (it) {
 		is MutationEvent.Add -> spec.accessor(it.item) inc source
 		is MutationEvent.Remove -> spec.accessor(it.item) dec source
@@ -120,7 +120,7 @@ internal fun <R : BaseDependencySource, A : Any, B : Any> R.dependencyProxyPrope
 
 internal fun <R : BaseDependencySource, B> R.dependencySet(
 		spec: TargetSpecification<in R, B>
-): DependencySet<B> = DependencySet(this) {
+): DependencySet<B> = DependencySet {
 	when (it) {
 		is MutationEvent.Add -> spec.accessor(it.item) inc this
 		is MutationEvent.Remove -> spec.accessor(it.item) dec this

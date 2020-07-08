@@ -59,11 +59,6 @@ internal class ExceptionTableEntry(
 	val start by dependencyProperty(exceptions, start)
 	val end by dependencyProperty(exceptions, end)
 	val handler by dependencyProperty(exceptions, handler)
-
-	fun destroy() {
-		cleanup()
-		markDetached()
-	}
 }
 
 /**
@@ -76,11 +71,6 @@ internal sealed class Inst : BaseDependencySource() {
 	abstract val ordinal: Int
 
 	abstract fun emit(mv: MethodVisitor)
-
-	fun destroy() {
-		cleanup()
-		markDetached()
-	}
 }
 
 // +---------------------------------------------------------------------------

@@ -10,6 +10,12 @@ import kotlin.test.assertTrue
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class DependencySourceGenericTest {
 
+	private companion object {
+		val propertySpec = TargetSpecification<TestNode, TestNode> { it.propInputs }
+		val listSpec = TargetSpecification<TestNode, TestNode> { it.listInputs }
+		val whateverSpec = TargetSpecification<SuperNode, TargetDummy> { it.ref }
+	}
+
 	private class TestNode : DependencySource() {
 		override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) { }
 		override fun traverseChildren(): Sequence<DependencySource> = emptySequence()
@@ -67,8 +73,33 @@ class DependencySourceGenericTest {
 		assertTrue(a.detached)
 	}
 
-	private companion object {
-		val propertySpec = TargetSpecification<TestNode, TestNode> { it.propInputs }
-		val listSpec = TargetSpecification<TestNode, TestNode> { it.listInputs }
+	private class TargetDummy {
+		val ref = RefCount<SuperNode>()
+	}
+
+	private open class SuperNode(target: TargetDummy) : BaseDependencySource() { // Has 5 fields, 3 distinct.
+		val publicProp by dependencyProperty(whateverSpec, target)
+		private val privateProp by dependencyProperty(whateverSpec, target)
+
+		private val shared = dependencyProperty(whateverSpec, target)
+		val reuse by shared
+		private val privateReuse by shared
+
+		val unrelatedProp = "hello"
+	}
+
+	private class SubNode(target: TargetDummy) : SuperNode(target) { // Has 2 fields, 2 distinct.
+		val publicChildProp by dependencyProperty(whateverSpec, target)
+		private val privateChildProp by dependencyProperty(whateverSpec, target)
+	}
+
+	@Test
+	fun testCleanup() {
+		val target = TargetDummy()
+		val source = SubNode(target)
+		assertEquals(5, target.ref.count)
+
+		source.destroy()
+		assertEquals(0, target.ref.count)
 	}
 }

@@ -15,35 +15,32 @@ import kotlin.reflect.KProperty
  * @see DependencyList
  * @see DependencyMapValues
  */
-interface DependencyView<V, C> : Iterable<V> {
+sealed class DependencyView<V, C> : Iterable<V> {
 
-	val size: Int
+	abstract val size: Int
 
 	fun isEmpty() = size == 0
 
 	/**
 	 * Solidify the view into an immutable instance.
 	 */
-	fun toImmutable(): C
+	abstract fun toImmutable(): C
 
-	fun replace(old: V, new: V): Int
+	abstract fun replace(old: V, new: V): Int
+
+	/**
+	 * Cleanup this view. De-reference all references.
+	 */
+	internal abstract fun destroy()
 }
 
 class DependencySet<V> internal constructor(
-		source: BaseDependencySource,
 		private val listener: (MutationEvent<V>) -> Unit
-) : DependencyView<V, Set<V>> {
+) : DependencyView<V, Set<V>>() {
 
-	private val container = mutableSetOf<V>()
+	private val container = HashSet<V>()
 
 	override val size get() = container.size
-
-	init {
-		source.register {
-			container.forEach { listener(MutationEvent.Remove(it)) }
-			container.clear()
-		}
-	}
 
 	override fun iterator() = container.iterator()
 
@@ -73,13 +70,17 @@ class DependencySet<V> internal constructor(
 	operator fun contains(item: V): Boolean {
 		return item in container
 	}
+
+	override fun destroy() {
+		container.forEach { listener(MutationEvent.Remove(it)) }
+		container.clear()
+	}
 }
 
 class DependencyNullableSingleton<V : Any> internal constructor(
-		source: BaseDependencySource,
 		private var element: V? = null,
 		private val listener: (MutationEvent<V>) -> Unit
-) : DependencyView<V, V?>, ReadWriteProperty<Any, V?> {
+) : DependencyView<V, V?>(), ReadWriteProperty<Any, V?> {
 
 	var value: V?
 		set(value) {
@@ -104,9 +105,6 @@ class DependencyNullableSingleton<V : Any> internal constructor(
 			checkAttached(this)
 			listener(MutationEvent.Add(this))
 		}
-		source.register {
-			value = null
-		}
 	}
 
 	override fun toImmutable(): V? = value
@@ -129,13 +127,16 @@ class DependencyNullableSingleton<V : Any> internal constructor(
 	override fun setValue(thisRef: Any, property: KProperty<*>, value: V?) {
 		this@DependencyNullableSingleton.value = value
 	}
+
+	override fun destroy() {
+		value = null
+	}
 }
 
 class DependencySingleton<V : Any> internal constructor(
-		source: BaseDependencySource,
 		initial: V,
 		private val listener: (MutationEvent<V>) -> Unit
-) : DependencyView<V, V>, ReadWriteProperty<Any, V> {
+) : DependencyView<V, V>(), ReadWriteProperty<Any, V> {
 
 	private var element: V? = initial
 
@@ -157,11 +158,6 @@ class DependencySingleton<V : Any> internal constructor(
 	init {
 		checkAttached(initial)
 		listener(MutationEvent.Add(initial))
-
-		source.register {
-			element?.apply { listener(MutationEvent.Remove(this)) }
-			element = null
-		}
 	}
 
 	override fun toImmutable(): V = value
@@ -180,13 +176,17 @@ class DependencySingleton<V : Any> internal constructor(
 	override fun setValue(thisRef: Any, property: KProperty<*>, value: V) {
 		this@DependencySingleton.value = value
 	}
+
+	override fun destroy() {
+		element?.apply { listener(MutationEvent.Remove(this)) }
+		element = null
+	}
 }
 
 sealed class DependencyArrayLike<V> (
-		source: BaseDependencySource,
 		vararg init: V,
 		internal val listener: (MutationEvent<V>) -> Unit
-) : DependencyView<V, List<V>> {
+) : DependencyView<V, List<V>>() {
 
 	protected val container = mutableListOf<V>()
 
@@ -196,12 +196,6 @@ sealed class DependencyArrayLike<V> (
 		init.forEach { checkAttached(it) }
 		container.addAll(init)
 		container.forEach { listener(MutationEvent.Add(it)) }
-		source.register { clearContainer() }
-	}
-
-	protected fun clearContainer() {
-		container.forEach { listener(MutationEvent.Remove(it)) }
-		container.clear()
 	}
 
 	override fun iterator() = container.iterator()
@@ -241,13 +235,17 @@ sealed class DependencyArrayLike<V> (
 			false
 		}
 	}
+
+	override fun destroy() {
+		container.forEach { listener(MutationEvent.Remove(it)) }
+		container.clear()
+	}
 }
 
 class DependencyArray<V> internal constructor(
-		source: BaseDependencySource,
 		vararg init: V,
 		listener: (MutationEvent<V>) -> Unit
-) : DependencyArrayLike<V>(source, *init, listener = listener) { // TODO Mut should be Array<V>
+) : DependencyArrayLike<V>(*init, listener = listener) { // TODO Mut should be Array<V>
 
 	/**
 	 * Property that is backed by some element in a fixed dependency list.
@@ -264,9 +262,8 @@ class DependencyArray<V> internal constructor(
 }
 
 class DependencyList<V> internal constructor(
-		source: BaseDependencySource,
 		listener: (MutationEvent<V>) -> Unit
-) : DependencyArrayLike<V>(source, listener = listener) {
+) : DependencyArrayLike<V>(listener = listener) {
 
 	fun add(item: V) {
 		checkAttached(item)
@@ -274,16 +271,15 @@ class DependencyList<V> internal constructor(
 		container += item
 	}
 
-	fun clear() = clearContainer()
+	fun clear() = destroy()
 }
 
 /**
  * Note that the values are used in DependencyView.
  */
 class DependencyMapValues<K, V> internal constructor(
-		source: BaseDependencySource,
 		private val listener: (MutationEvent<Pair<K, V>>) -> Unit
-) : DependencyView<V, Map<K, V>> {
+) : DependencyView<V, Map<K, V>>() {
 
 	private val container = mutableMapOf<K, V>()
 
@@ -292,13 +288,6 @@ class DependencyMapValues<K, V> internal constructor(
 	val entries get() = container.entries
 			.asSequence()
 			.map { it.toPair() }
-
-	init {
-		source.register {
-			container.forEach { listener(MutationEvent.Remove(it.toPair())) }
-			container.clear()
-		}
-	}
 
 	override fun iterator() = container.values.iterator()
 
@@ -344,6 +333,11 @@ class DependencyMapValues<K, V> internal constructor(
 			}
 		}
 		return keys
+	}
+
+	override fun destroy() {
+		container.forEach { listener(MutationEvent.Remove(it.toPair())) }
+		container.clear()
 	}
 
 //	fun remove(key: K): V? = container.remove(key)?.apply {
