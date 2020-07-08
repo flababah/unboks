@@ -83,7 +83,7 @@ internal class InstInvoke(val spec: Invocation) : Inst() {
 	override fun emit(mv: MethodVisitor) = spec.visit(mv)
 }
 
-internal class InstCmp(val opcode: Int, branch: InstLabel) : Inst() {
+internal class InstCmp(var opcode: Int, branch: InstLabel) : Inst() {
 	var branch by dependencyProperty(branches, branch)
 
 	override val ordinal get() = 1

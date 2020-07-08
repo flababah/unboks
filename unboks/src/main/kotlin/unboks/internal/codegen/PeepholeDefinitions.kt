@@ -1,5 +1,7 @@
 package unboks.internal.codegen
 
+import org.objectweb.asm.Opcodes.*
+
 internal val peepholes = PeepholeMatcher {
 
 	// +---------------------------------------------------------------------------
@@ -75,6 +77,43 @@ internal val peepholes = PeepholeMatcher {
 	dce<InstSwitch>()
 	dce<InstReturn>()
 	dce<InstThrow>()
+
+
+	// +---------------------------------------------------------------------------
+	// |  Branch optimization
+	// +---------------------------------------------------------------------------
+
+	/**
+	 * Invert CMP if the branch returns immediately.
+	 */
+	pattern<InstCmp, InstGoto, InstLabel, InstReturn, InstLabel> {
+		cmp, // --> retLabel
+		goto, // --> afterLabel
+		retLabel, // If only "cmp" as predecessor
+		ret,
+		afterLabel ->
+
+		// Can be replaced with
+		// - !cmp --> afterLabel
+		// - ret
+		// - afterLabel
+		if (
+				afterLabel == goto.target &&
+				retLabel == cmp.branch &&
+				retLabel.brancheSources.count == 1 &&
+				retLabel.exceptionUsages.count == 0) {
+
+			// Destroying is not strictly necessary, but here for completeness.
+			goto.destroy()
+			retLabel.destroy()
+
+			cmp.opcode = invertCmpOpcode(cmp.opcode)
+			cmp.branch = afterLabel
+			arrayOf(cmp, ret, afterLabel)
+		} else {
+			null
+		}
+	}
 }
 
 // +---------------------------------------------------------------------------
@@ -100,4 +139,24 @@ private inline fun <reified T : Inst> PeepholeMatcher.Builder.dce() {
 	dceOp<T, InstRegAssignStack>()
 	dceOp<T, InstStackAssignReg>()
 	dceOp<T, InstStackAssignConst>()
+}
+
+private fun invertCmpOpcode(opcode: Int) = when (opcode) {
+	IFEQ -> IFNE
+	IFNE -> IFEQ
+	IFLT -> IFGE
+	IFGE -> IFLT
+	IFGT -> IFLE
+	IFLE -> IFGT
+	IF_ICMPEQ -> IF_ICMPNE
+	IF_ICMPNE -> IF_ICMPEQ
+	IF_ICMPLT -> IF_ICMPGE
+	IF_ICMPGE -> IF_ICMPLT
+	IF_ICMPGT -> IF_ICMPLE
+	IF_ICMPLE -> IF_ICMPGT
+	IF_ACMPEQ -> IF_ACMPNE
+	IF_ACMPNE -> IF_ACMPEQ
+	IFNULL -> IFNONNULL
+	IFNONNULL -> IFNULL
+	else -> throw IllegalArgumentException("Bad compare opcode: $opcode")
 }

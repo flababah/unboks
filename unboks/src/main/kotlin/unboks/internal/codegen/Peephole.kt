@@ -85,6 +85,30 @@ internal class PeepholeMatcher(init: Builder.() -> Unit) {
 						f(window[-2] as M1, window[-1] as M2, window[0] as M3)
 			}
 		}
+
+		/**
+		 * Add pattern matching four instructions.
+		 */
+		inline fun <reified M1:Inst, reified M2:Inst, reified M3:Inst, reified M4:Inst>
+				pattern(crossinline f: (M1, M2, M3, M4) -> Fold) {
+			acc += ordinalsOf(M1::class, M2::class, M3::class, M4::class) to object : Pattern {
+				override val length = 4
+				override fun invoke(window: FoldWindow) =
+						f(window[-3] as M1, window[-2] as M2, window[-1] as M3, window[0] as M4)
+			}
+		}
+
+		/**
+		 * Add pattern matching five instructions.
+		 */
+		inline fun <reified M1:Inst, reified M2:Inst, reified M3:Inst, reified M4:Inst, reified M5:Inst>
+				pattern(crossinline f: (M1, M2, M3, M4, M5) -> Fold) {
+			acc += ordinalsOf(M1::class, M2::class, M3::class, M4::class, M5::class) to object : Pattern {
+				override val length = 5
+				override fun invoke(window: FoldWindow) =
+						f(window[-4] as M1, window[-3] as M2, window[-2] as M3, window[-1] as M4, window[0] as M5)
+			}
+		}
 	}
 
 	/**
