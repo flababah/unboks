@@ -198,8 +198,12 @@ private fun createInstRepresentation(graph: FlowGraph): InstructionsUnit {
 
 		// If the block is a handler block store the exception reference in the expected register.
 		if (block is HandlerBlock) {
-			val e = map.resolveDef(block) as JvmRegister
-			instructions.add(InstRegAssignStack(e))
+			if (block.uses.count > 0) {
+				val e = map.resolveDef(block) as JvmRegister
+				instructions.add(InstRegAssignStack(e))
+			} else {
+				instructions.add(InstStackPop(false))
+			}
 		}
 
 		val phiCount = phiCount(block)
