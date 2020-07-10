@@ -238,15 +238,20 @@ private fun createInstRepresentation(graph: FlowGraph): InstructionsUnit {
 
 					instructions.add(InstInvoke(ir.spec))
 
-					val ret = map.resolveInvoke(ir)
-					if (ret != null) {
-						instructions.add(InstRegAssignStack(ret))
+					if (ir.uses.count > 0) {
+						val ret = map.resolveInvoke(ir)
+						if (ret != null) {
+							instructions.add(InstRegAssignStack(ret))
 
-						val dependencies = delayedPhiFeeds[ir]
-						if (dependencies != null) { // TODO Peephole for this or improve here?
-							for (dep in dependencies)
-								instructions.add(InstRegAssignReg(dep, ret))
+							val dependencies = delayedPhiFeeds[ir]
+							if (dependencies != null) { // TODO Peephole for this or improve here?
+								for (dep in dependencies)
+									instructions.add(InstRegAssignReg(dep, ret))
+							}
 						}
+					} else if (ir.type != VOID) {
+						// Don't require register if no one uses the return value.
+						instructions.add(InstStackPop(ir.type.width == 2))
 					}
 				}
 
@@ -305,6 +310,11 @@ private fun allocateRegisters(instUnit: InstructionsUnit, offset: Int): Int {
 	// TODO This is about as simple as it gets... Y'all need some linear scan soon!
 	var slot = offset
 	for (register in instUnit.registers) {
+		if (register.readers.count == 0) {
+			if (register.writers.count > 0)
+				throw IllegalStateException("No readers of register, but writes are not pruned") // TODO Maybe look for register in inst list instead...
+			continue
+		}
 		if (register.jvmSlot == -1) {
 			register.jvmSlot = slot
 			slot += register.type.width

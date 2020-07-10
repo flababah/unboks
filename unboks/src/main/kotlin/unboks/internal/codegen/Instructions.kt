@@ -10,7 +10,7 @@ import unboks.internal.dependencyMapValues
 import unboks.internal.dependencyProperty
 import unboks.invocation.Invocation
 
-internal const val MAX_INST_ORDINAL = 11
+internal const val MAX_INST_ORDINAL = 12
 
 internal val regReader = TargetSpecification<Inst, JvmRegister> { it.readers }
 internal val regWriter = TargetSpecification<Inst, JvmRegister> { it.writers }
@@ -227,4 +227,10 @@ internal class InstStackAssignConst(val source: JvmConstant) : Inst() {
 	override val ordinal get() = 11
 	override fun toString() = "LOAD $source"
 	override fun emit(mv: MethodVisitor) = emitLoad(source, mv)
+}
+
+internal class InstStackPop(val dual: Boolean) : Inst() {
+	override val ordinal get() = 12
+	override fun toString() = "POP"
+	override fun emit(mv: MethodVisitor) = mv.visitInsn(if (dual) POP2 else POP)
 }
