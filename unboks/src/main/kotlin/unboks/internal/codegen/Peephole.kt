@@ -9,6 +9,8 @@ import kotlin.reflect.KClass
 
 private typealias Fold = Array<out Inst>?
 
+internal val emptyFold = emptyArray<Inst>()
+
 /**
  * FSM based pattern matcher.
  */

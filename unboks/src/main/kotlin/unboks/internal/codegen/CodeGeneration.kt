@@ -3,6 +3,7 @@ package unboks.internal.codegen
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes.*
 import unboks.*
+import unboks.internal.codegen.opt.peepholes
 
 internal fun generate(graph: FlowGraph, target: MethodVisitor) {
 	val insts = createInstRepresentation(graph)
@@ -12,6 +13,7 @@ internal fun generate(graph: FlowGraph, target: MethodVisitor) {
 	emitAsmInstructions(insts, locals, target)
 
 	// TODO Do register coalescing after normal peephole pass (look for InstRegAssignReg)
+	//   Register alloc first. is more thorough in coalescing phi and phi_mut
 }
 
 private fun parameterSlotEnd(graph: FlowGraph): Int {

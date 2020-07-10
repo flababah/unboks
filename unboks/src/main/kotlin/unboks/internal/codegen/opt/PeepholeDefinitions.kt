@@ -1,6 +1,22 @@
-package unboks.internal.codegen
+package unboks.internal.codegen.opt
 
 import org.objectweb.asm.Opcodes.*
+import unboks.internal.codegen.*
+import unboks.internal.codegen.ExceptionTableEntry
+import unboks.internal.codegen.Inst
+import unboks.internal.codegen.InstCmp
+import unboks.internal.codegen.InstGoto
+import unboks.internal.codegen.InstInvoke
+import unboks.internal.codegen.InstLabel
+import unboks.internal.codegen.InstRegAssignConst
+import unboks.internal.codegen.InstRegAssignReg
+import unboks.internal.codegen.InstRegAssignStack
+import unboks.internal.codegen.InstReturn
+import unboks.internal.codegen.InstStackAssignConst
+import unboks.internal.codegen.InstStackAssignReg
+import unboks.internal.codegen.InstSwitch
+import unboks.internal.codegen.InstThrow
+import unboks.internal.codegen.PeepholeMatcher
 
 internal val peepholes = PeepholeMatcher {
 
@@ -14,7 +30,7 @@ internal val peepholes = PeepholeMatcher {
 	pattern<InstLabel> { label ->
 		if (label.unused) {
 			label.destroy()
-			arrayOf()
+			emptyFold
 		} else {
 			null
 		}
@@ -33,13 +49,25 @@ internal val peepholes = PeepholeMatcher {
 		val l0Unused = l0.unused
 		val l1Unused = l1.unused
 		if (l0Unused && l1Unused)
-			emptyArray()
+			emptyFold
 		else if (l0Unused)
 			arrayOf(l1)
 		else if (l1Unused)
 			arrayOf(l0)
 		else
 			null
+	}
+
+	/**
+	 * Prunes copy operations after register coalescing.
+	 */
+	pattern<InstRegAssignReg> { copy ->
+		if (copy.target.readers.count == 0) {
+			copy.destroy()
+			emptyFold
+		} else {
+			null
+		}
 	}
 
 	// +---------------------------------------------------------------------------
@@ -74,7 +102,7 @@ internal val peepholes = PeepholeMatcher {
 			goto.destroy()
 			if (label.unused) {
 				label.destroy()
-				arrayOf()
+				emptyFold
 			} else {
 				arrayOf(label)
 			}
