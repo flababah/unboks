@@ -226,6 +226,7 @@ private inline fun <reified T : Inst> PeepholeMatcher.Builder.dce() {
 	dceOp<T, InstRegAssignStack>()
 	dceOp<T, InstStackAssignReg>()
 	dceOp<T, InstStackAssignConst>()
+	dceOp<T, InstStackPop>()
 }
 
 private fun invertCmpOpcode(opcode: Int) = when (opcode) {
