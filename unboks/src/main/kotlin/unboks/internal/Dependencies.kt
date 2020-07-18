@@ -97,6 +97,26 @@ internal fun <R : BaseDependencySource, B : Any> R.dependencyNullableProperty(
 	}
 }
 
+/**
+ * The property value being referenced in two specifications.
+ */
+internal fun <R : BaseDependencySource, B : Any> R.dependencyProperty(
+		spec1: TargetSpecification<in R, B>,
+		spec2: TargetSpecification<in R, B>,
+		initial: B
+): DependencySingleton<B> = DependencySingleton(initial) {
+	when (it) {
+		is MutationEvent.Add -> {
+			spec1.accessor(it.item) inc this
+			spec2.accessor(it.item) inc this
+		}
+		is MutationEvent.Remove -> {
+			spec1.accessor(it.item) dec this
+			spec2.accessor(it.item) dec this
+		}
+	}
+}
+
 internal fun <R : BaseDependencySource, B : Any> R.dependencyProperty(
 		spec: TargetSpecification<in R, B>,
 		initial: B

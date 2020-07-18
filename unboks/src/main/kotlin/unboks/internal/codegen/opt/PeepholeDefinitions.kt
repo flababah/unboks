@@ -17,6 +17,7 @@ import unboks.internal.codegen.InstStackAssignReg
 import unboks.internal.codegen.InstSwitch
 import unboks.internal.codegen.InstThrow
 import unboks.internal.codegen.PeepholeMatcher
+import unboks.invocation.InvIntrinsic
 
 internal val peepholes = PeepholeMatcher {
 
@@ -62,6 +63,30 @@ internal val peepholes = PeepholeMatcher {
 	 * Prunes copy operations after register coalescing.
 	 */
 	pattern<InstRegAssignReg> { copy ->
+		if (copy.target.readers.count == 0) {
+			copy.destroy()
+			emptyFold
+		} else {
+			null
+		}
+	}
+
+	/**
+	 * Remove store operation if register is never read.
+	 */
+	pattern<InstRegAssignConst> { copy ->
+		if (copy.target.readers.count == 0) {
+			copy.destroy()
+			emptyFold
+		} else {
+			null
+		}
+	}
+
+	/**
+	 * Remove store operation if register is never read.
+	 */
+	pattern<InstRegAssignStack> { copy ->
 		if (copy.target.readers.count == 0) {
 			copy.destroy()
 			emptyFold
@@ -201,11 +226,59 @@ internal val peepholes = PeepholeMatcher {
 			null
 		}
 	}
+
+	// +---------------------------------------------------------------------------
+	// |  Post-allocation/coalescing
+	// +---------------------------------------------------------------------------
+
+	// Fold redundant copies and use IINC if possible, see RegisterCoalescingHints.kt.
+	pattern<InstStackAssignReg, InstStackAssignConst, InstInvoke, InstRegAssignStack> {
+		srcInst,
+		incInst,
+		invokeInst,
+		tgtInst ->
+
+		val inc = incInst.source.value
+		val source = srcInst.source
+		val target = tgtInst.target
+		if (
+				sameSlot(target, source) &&
+				invokeInst.spec == InvIntrinsic.IADD &&
+				inc is Int &&
+				inc >= Short.MIN_VALUE &&
+				inc <= Short.MAX_VALUE) {
+
+			srcInst.destroy()
+			incInst.destroy()
+			invokeInst.destroy()
+			tgtInst.destroy()
+			arrayOf(InstIinc(target, inc.toShort()))
+		} else {
+			null
+		}
+	}
+
+	pattern<InstRegAssignReg> { copy ->
+		val target = copy.target
+		val source = copy.source
+
+		if (sameSlot(target, source)) {
+			copy.destroy()
+			emptyFold
+		} else {
+			null
+		}
+	}
+
 }
 
 // +---------------------------------------------------------------------------
 // |  Helpers
 // +---------------------------------------------------------------------------
+
+private fun sameSlot(a: JvmRegister, b: JvmRegister): Boolean {
+	return a.jvmSlot != -1 && a.jvmSlot == b.jvmSlot
+}
 
 private inline fun <reified T : Inst, reified Op : Inst> PeepholeMatcher.Builder.dceOp() {
 	pattern<T, Op> { terminal, op ->
@@ -227,6 +300,7 @@ private inline fun <reified T : Inst> PeepholeMatcher.Builder.dce() {
 	dceOp<T, InstStackAssignReg>()
 	dceOp<T, InstStackAssignConst>()
 	dceOp<T, InstStackPop>()
+	dceOp<T, InstIinc>()
 }
 
 private fun invertCmpOpcode(opcode: Int) = when (opcode) {

@@ -3,17 +3,30 @@ package unboks.internal.codegen
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes.*
 import unboks.*
+import unboks.internal.codegen.opt.coalesceRegisters
 import unboks.internal.codegen.opt.peepholes
 
 internal fun generate(graph: FlowGraph, target: MethodVisitor) {
-	val insts = createInstRepresentation(graph)
-	val folded = peepholes.execute(insts.instructions)
-	val locals = allocateRegisters(insts, parameterSlotEnd(graph))
-	insts.instructions = folded
-	emitAsmInstructions(insts, locals, target)
+	val (instructions, exceptionTable) = createInstRepresentation(graph)
+	val foldedPreAllocation = peepholes.execute(instructions)
+	computeRegisterLiveness(foldedPreAllocation)
+	coalesceRegisters(foldedPreAllocation)
 
-	// TODO Do register coalescing after normal peephole pass (look for InstRegAssignReg)
-	//   Register alloc first. is more thorough in coalescing phi and phi_mut
+	val locals = allocateRegisters(foldedPreAllocation, parameterSlotEnd(graph))
+	val foldedPostAllocation = peepholes.execute(foldedPreAllocation)
+
+
+	// Emit code.
+	target.visitCode()
+	for (entry in exceptionTable) {
+		if (!entry.detached)
+			target.visitTryCatchBlock(entry.start.label, entry.end.label, entry.handler.label, entry.type?.internal)
+	}
+
+	for (instruction in foldedPostAllocation)
+		instruction.emit(target)
+
+	target.visitMaxs(15, locals) // TODO Simulate stack.
 }
 
 private fun parameterSlotEnd(graph: FlowGraph): Int {
@@ -73,17 +86,18 @@ private class IrToInstMapping {
 	}
 
 	fun resolvePhiAlt(phi: IrPhi): JvmRegister {
-		return phiAlts.computeIfAbsent(phi) { JvmRegister(phi.type, "${phi.name}_PHI") }
+		return phiAlts.computeIfAbsent(phi) {
+			val reg = JvmRegister(phi.type, "${phi.name}_PHI")
+			reg.isVolatilePhi = true
+			reg
+		}
 	}
 
 	fun registerParameter(parameter: Parameter, slot: Int) {
 		val register = JvmRegister(parameter.type, parameter.name)
+		register.isParameter = true
 		register.jvmSlot = slot
 		registerMap[parameter] = register
-	}
-
-	fun getAllRegisters(): List<JvmRegister> {
-		return registerMap.values + phiAlts.values
 	}
 }
 
@@ -179,7 +193,7 @@ private fun mapExceptionTable(blocks: List<Block>, map: IrToInstMapping, endLabe
  * Builds a high-level linearized representation of a given [FlowGraph].
  * First step in the code generation stage. The graph must be in a consistent state.
  */
-private fun createInstRepresentation(graph: FlowGraph): InstructionsUnit {
+private fun createInstRepresentation(graph: FlowGraph): Pair<List<Inst>, List<ExceptionTableEntry>> {
 	val map = IrToInstMapping()
 
 	// Reserve slots for parameters.
@@ -250,7 +264,7 @@ private fun createInstRepresentation(graph: FlowGraph): InstructionsUnit {
 							instructions.add(InstRegAssignStack(ret))
 
 							val dependencies = delayedPhiFeeds[ir]
-							if (dependencies != null) { // TODO Peephole for this or improve here?
+							if (dependencies != null) {
 								for (dep in dependencies)
 									instructions.add(InstRegAssignReg(dep, ret))
 							}
@@ -309,16 +323,34 @@ private fun createInstRepresentation(graph: FlowGraph): InstructionsUnit {
 	if (!endLabel.unused)
 		instructions.add(endLabel)
 
-	return InstructionsUnit(instructions, exceptionTable, map.getAllRegisters())
+	return instructions to exceptionTable
 }
 
-private fun allocateRegisters(instUnit: InstructionsUnit, offset: Int): Int {
+internal fun extractRegistersInUse(instructions: List<Inst>): Collection<JvmRegister> {
+	val acc = HashSet<JvmRegister>()
+	for (inst in instructions) {
+		when (inst) {
+			is InstRegAssignReg -> {
+				acc += inst.source
+				acc += inst.target
+			}
+			is InstRegAssignConst -> acc += inst.target
+			is InstRegAssignStack -> acc += inst.target
+			is InstStackAssignReg -> acc += inst.source
+			is InstIinc -> acc += inst.mutable
+			else -> { } // Not reading or writing register.
+		}
+	}
+	return acc
+}
+
+private fun allocateRegisters(instructions: List<Inst>, offset: Int): Int {
 	// TODO This is about as simple as it gets... Y'all need some linear scan soon!
 	var slot = offset
-	for (register in instUnit.registers) {
+	for (register in extractRegistersInUse(instructions)) {
 		if (register.readers.count == 0) {
 			if (register.writers.count > 0)
-				throw IllegalStateException("No readers of register, but writes are not pruned") // TODO Maybe look for register in inst list instead...
+				throw IllegalStateException("No readers of register, but writes are not pruned")
 			continue
 		}
 		if (register.jvmSlot == -1) {
@@ -327,17 +359,4 @@ private fun allocateRegisters(instUnit: InstructionsUnit, offset: Int): Int {
 		}
 	}
 	return slot
-}
-
-private fun emitAsmInstructions(instUnit: InstructionsUnit, locals: Int, target: MethodVisitor) {
-	target.visitCode()
-	for (entry in instUnit.exceptions) {
-		if (!entry.detached)
-			target.visitTryCatchBlock(entry.start.label, entry.end.label, entry.handler.label, entry.type?.internal)
-	}
-
-	for (instruction in instUnit.instructions)
-		instruction.emit(target)
-
-	target.visitMaxs(15, locals) // TODO Simulate stack.
 }

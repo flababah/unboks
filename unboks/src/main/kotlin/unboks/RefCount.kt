@@ -3,7 +3,7 @@ package unboks
 class RefCount<T> private constructor(
 		private val refs: MutableMap<T, Int>) : Set<T> by refs.keys {
 
-	internal constructor() : this(hashMapOf())
+	internal constructor() : this(HashMap())
 
 	/**
 	 * Total number of uses. Note that this is not necessarily the same

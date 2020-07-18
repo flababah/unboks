@@ -10,7 +10,7 @@ import unboks.internal.dependencyMapValues
 import unboks.internal.dependencyProperty
 import unboks.invocation.Invocation
 
-internal const val MAX_INST_ORDINAL = 12
+internal const val MAX_INST_ORDINAL = 13
 
 internal val regReader = TargetSpecification<Inst, JvmRegister> { it.readers }
 internal val regWriter = TargetSpecification<Inst, JvmRegister> { it.writers }
@@ -27,7 +27,12 @@ internal class JvmConstant(val value: Any?) : JvmRegisterOrConst() {
 internal class JvmRegister(val type: Thing, private val irName: String?) : JvmRegisterOrConst() {
 	val readers = RefCount<Inst>()
 	val writers = RefCount<Inst>()
+
+	var isParameter = false
+	var isVolatilePhi = false
 	var jvmSlot = -1
+
+	var liveness: LiveRange? = null
 
 	override fun toString(): String {
 		val sb = StringBuilder()
@@ -44,11 +49,6 @@ internal class JvmRegister(val type: Thing, private val irName: String?) : JvmRe
 // +---------------------------------------------------------------------------
 // |  Instructions
 // +---------------------------------------------------------------------------
-
-internal class InstructionsUnit(
-		var instructions: List<Inst>,
-		val exceptions: List<ExceptionTableEntry>,
-		val registers: Collection<JvmRegister>)
 
 internal class ExceptionTableEntry(
 		val type: Reference?,
@@ -71,6 +71,17 @@ internal sealed class Inst : BaseDependencySource() {
 	abstract val ordinal: Int
 
 	abstract fun emit(mv: MethodVisitor)
+
+	/**
+	 * This instruction's offset in the list. Updated when needed so not guaranteed to
+	 * be in a consistent state. See [updateOffsets].
+	 */
+	var offset = -1
+}
+
+internal fun updateOffsets(instructions: List<Inst>) {
+	for ((i, inst) in instructions.withIndex())
+		inst.offset = i
 }
 
 // +---------------------------------------------------------------------------
@@ -233,4 +244,12 @@ internal class InstStackPop(val dual: Boolean) : Inst() {
 	override val ordinal get() = 12
 	override fun toString() = "POP"
 	override fun emit(mv: MethodVisitor) = mv.visitInsn(if (dual) POP2 else POP)
+}
+
+internal class InstIinc(mutable: JvmRegister, var inc: Short) : Inst() {
+	var mutable by dependencyProperty(regReader, regWriter, mutable)
+
+	override val ordinal get() = 13
+	override fun toString() = "IINC $mutable $inc"
+	override fun emit(mv: MethodVisitor) = mv.visitIincInsn(mutable.jvmSlot, inc.toInt())
 }
