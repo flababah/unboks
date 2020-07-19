@@ -1,8 +1,6 @@
 package unboks.internal
 
 import unboks.*
-import kotlin.properties.ReadWriteProperty
-import kotlin.reflect.KProperty
 
 // +---------------------------------------------------------------------------
 // |  Arrays
@@ -11,11 +9,9 @@ import kotlin.reflect.KProperty
 internal fun <R : BaseDependencySource, B> R.dependencyArray(
 		spec: TargetSpecification<in R, B>,
 		vararg init: B
-): DependencyArray<B> = DependencyArray(*init) {
-	when (it) {
-		is MutationEvent.Add -> spec.accessor(it.item) inc this
-		is MutationEvent.Remove -> spec.accessor(it.item) dec this
-	}
+): DependencyArray<B> = object : DependencyArray<B>(*init) {
+	override fun eventAdd(item: B)    = spec.accessor(item) inc this@dependencyArray
+	override fun eventRemove(item: B) = spec.accessor(item) dec this@dependencyArray
 }
 
 // +---------------------------------------------------------------------------
@@ -34,15 +30,12 @@ internal fun <R : BaseDependencySource, B> R.dependencyArray(
  * }
  * ```
  */
-internal fun <R : BaseDependencySource, B, X> R.dependencyList(
+internal inline fun <R : BaseDependencySource, B, X> R.dependencyList(
 		spec: TargetSpecification<in R, B>,
-		extractor: (X) -> B
-): DependencyList<X> = DependencyList {
-	val elm = extractor(it.item)
-	when (it) {
-		is MutationEvent.Add -> spec.accessor(elm) inc this
-		is MutationEvent.Remove -> spec.accessor(elm) dec this
-	}
+		crossinline extractor: (X) -> B
+): DependencyList<X> = object : DependencyList<X>() {
+	override fun eventAdd(item: X)    = spec.accessor(extractor(item)) inc this@dependencyList
+	override fun eventRemove(item: X) = spec.accessor(extractor(item)) dec this@dependencyList
 }
 
 // +---------------------------------------------------------------------------
@@ -65,21 +58,20 @@ internal fun <R : BaseDependencySource, A : Any, K, V> R.dependencyProxyMapValue
 		source: A,
 		key: TargetSpecification<in A, K>? = null,
 		value: TargetSpecification<in A, V>? = null
-): DependencyMapValues<K, V> = DependencyMapValues {
-	val (k, v) = it.item
-	when (it) {
-		is MutationEvent.Add -> {
-			if (key != null)
-				key.accessor(k) inc source
-			if (value != null)
-				value.accessor(v) inc source
-		}
-		is MutationEvent.Remove -> {
-			if (key != null)
-				key.accessor(k) dec source
-			if (value != null)
-				value.accessor(v) dec source
-		}
+): DependencyMapValues<K, V> = object : DependencyMapValues<K, V>() {
+
+	override fun eventAdd(k: K, v: V) {
+		if (key != null)
+			key.accessor(k) inc source
+		if (value != null)
+			value.accessor(v) inc source
+	}
+
+	override fun eventRemove(k: K, v: V) {
+		if (key != null)
+			key.accessor(k) dec source
+		if (value != null)
+			value.accessor(v) dec source
 	}
 }
 
@@ -90,11 +82,9 @@ internal fun <R : BaseDependencySource, A : Any, K, V> R.dependencyProxyMapValue
 internal fun <R : BaseDependencySource, B : Any> R.dependencyNullableProperty(
 		spec: TargetSpecification<in R, B>,
 		initial: B? = null
-): DependencyNullableSingleton<B> = DependencyNullableSingleton(initial) {
-	when (it) {
-		is MutationEvent.Add -> spec.accessor(it.item) inc this
-		is MutationEvent.Remove -> spec.accessor(it.item) dec this
-	}
+): DependencyNullableSingleton<B> = object : DependencyNullableSingleton<B>(initial) {
+	override fun eventAdd(item: B)    = spec.accessor(item) inc this@dependencyNullableProperty
+	override fun eventRemove(item: B) = spec.accessor(item) dec this@dependencyNullableProperty
 }
 
 /**
@@ -104,16 +94,15 @@ internal fun <R : BaseDependencySource, B : Any> R.dependencyProperty(
 		spec1: TargetSpecification<in R, B>,
 		spec2: TargetSpecification<in R, B>,
 		initial: B
-): DependencySingleton<B> = DependencySingleton(initial) {
-	when (it) {
-		is MutationEvent.Add -> {
-			spec1.accessor(it.item) inc this
-			spec2.accessor(it.item) inc this
-		}
-		is MutationEvent.Remove -> {
-			spec1.accessor(it.item) dec this
-			spec2.accessor(it.item) dec this
-		}
+): DependencySingleton<B> = object : DependencySingleton<B>(initial) {
+	override fun eventAdd(item: B) {
+		spec1.accessor(item) inc this@dependencyProperty
+		spec2.accessor(item) inc this@dependencyProperty
+	}
+
+	override fun eventRemove(item: B) {
+		spec1.accessor(item) dec this@dependencyProperty
+		spec2.accessor(item) dec this@dependencyProperty
 	}
 }
 
@@ -126,11 +115,9 @@ internal fun <R : BaseDependencySource, A : Any, B : Any> R.dependencyProxyPrope
 		spec: TargetSpecification<in A, B>,
 		source: A,
 		initial: B
-): DependencySingleton<B> = DependencySingleton(initial) {
-	when (it) {
-		is MutationEvent.Add -> spec.accessor(it.item) inc source
-		is MutationEvent.Remove -> spec.accessor(it.item) dec source
-	}
+): DependencySingleton<B> = object : DependencySingleton<B>(initial) {
+	override fun eventAdd(item: B)    = spec.accessor(item) inc source
+	override fun eventRemove(item: B) = spec.accessor(item) dec source
 }
 
 
@@ -140,62 +127,7 @@ internal fun <R : BaseDependencySource, A : Any, B : Any> R.dependencyProxyPrope
 
 internal fun <R : BaseDependencySource, B> R.dependencySet(
 		spec: TargetSpecification<in R, B>
-): DependencySet<B> = DependencySet {
-	when (it) {
-		is MutationEvent.Add -> spec.accessor(it.item) inc this
-		is MutationEvent.Remove -> spec.accessor(it.item) dec this
-	}
-}
-
-
-
-
-
-
-
-
-
-/**
- * TODO use this in crap in Views.
- *
- * A bit abusy towards the type system to support nullable and non-nullable targets
- * in the same class. [B_prop] is a potentially nullable version of [B]. [fetcher]
- * is needed to bridge the relationship between [B] and [B_prop]. For nullable types
- * it should just be the identity. Non-nullable types should throw if target is null.
- */
-private class InternalDependencyProperty<A : Any, B, B_prop : B?>(
-		spec: TargetSpecification<in A, B>,
-		private val source: A,
-		initial: B_prop,
-		private val fetcher: (B?) -> B_prop)
-: ReadWriteProperty<Any, B_prop> {
-
-	private val accessor = spec.accessor
-	private var target: B? = initial
-
-	init {
-		if (initial != null)
-			accessor(initial) inc source
-	}
-
-	override fun getValue(thisRef: Any, property: KProperty<*>): B_prop = fetcher(target)
-
-	override fun setValue(thisRef: Any, property: KProperty<*>, value: B_prop) {
-		val t = target
-		if (t != value) {
-			if (t != null)
-				accessor(t) dec source
-			if (value != null)
-				accessor(value) inc source
-			target = value
-		}
-	}
-
-//	override fun clear() {
-//		val t = target
-//		if (t != null) {
-//			accessor(t) dec source
-//			target = null
-//		}
-//	}
+): DependencySet<B> = object : DependencySet<B>() {
+	override fun eventAdd(item: B)    = spec.accessor(item) inc this@dependencySet
+	override fun eventRemove(item: B) = spec.accessor(item) dec this@dependencySet
 }

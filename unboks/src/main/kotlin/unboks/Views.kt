@@ -34,9 +34,7 @@ sealed class DependencyView<V, C> : Iterable<V> {
 	internal abstract fun destroy()
 }
 
-class DependencySet<V> internal constructor(
-		private val listener: (MutationEvent<V>) -> Unit
-) : DependencyView<V, Set<V>>() {
+abstract class DependencySet<V> : DependencyView<V, Set<V>>() {
 
 	private val container = HashSet<V>()
 
@@ -48,9 +46,9 @@ class DependencySet<V> internal constructor(
 
 	override fun replace(old: V, new: V): Int {
 		if (container.remove(old)) {
-			listener(MutationEvent.Remove(old))
+			eventRemove(old)
 			if (container.add(new)) {
-				listener(MutationEvent.Add(new))
+				eventAdd(old)
 				return 1
 			}
 		}
@@ -60,7 +58,7 @@ class DependencySet<V> internal constructor(
 	fun add(item: V): Boolean {
 		checkAttached(item)
 		return if (container.add(item)) {
-			listener(MutationEvent.Add(item))
+			eventAdd(item)
 			true
 		} else {
 			false
@@ -72,15 +70,16 @@ class DependencySet<V> internal constructor(
 	}
 
 	override fun destroy() {
-		container.forEach { listener(MutationEvent.Remove(it)) }
+		container.forEach { eventRemove(it) }
 		container.clear()
 	}
+
+	protected abstract fun eventAdd(item: V)
+	protected abstract fun eventRemove(item: V)
 }
 
-class DependencyNullableSingleton<V : Any> internal constructor(
-		private var element: V? = null,
-		private val listener: (MutationEvent<V>) -> Unit
-) : DependencyView<V, V?>(), ReadWriteProperty<Any, V?> {
+abstract class DependencyNullableSingleton<V : Any> (private var element: V? = null)
+	: DependencyView<V, V?>(), ReadWriteProperty<Any, V?> {
 
 	var value: V?
 		set(value) {
@@ -88,10 +87,10 @@ class DependencyNullableSingleton<V : Any> internal constructor(
 				checkAttached(value)
 
 				element?.apply {
-					listener(MutationEvent.Remove(this))
+					eventRemove(this)
 				}
 				value?.apply {
-					listener(MutationEvent.Add(this))
+					eventAdd(this)
 				}
 				element = value
 			}
@@ -103,7 +102,7 @@ class DependencyNullableSingleton<V : Any> internal constructor(
 	init {
 		element?.apply {
 			checkAttached(this)
-			listener(MutationEvent.Add(this))
+			eventAdd(this)
 		}
 	}
 
@@ -131,12 +130,13 @@ class DependencyNullableSingleton<V : Any> internal constructor(
 	override fun destroy() {
 		value = null
 	}
+
+	protected abstract fun eventAdd(item: V)
+	protected abstract fun eventRemove(item: V)
 }
 
-class DependencySingleton<V : Any> internal constructor(
-		initial: V,
-		private val listener: (MutationEvent<V>) -> Unit
-) : DependencyView<V, V>(), ReadWriteProperty<Any, V> {
+abstract class DependencySingleton<V : Any> (initial: V)
+	: DependencyView<V, V>(), ReadWriteProperty<Any, V> {
 
 	private var element: V? = initial
 
@@ -144,8 +144,8 @@ class DependencySingleton<V : Any> internal constructor(
 		set(value) {
 			if (value != element) {
 				checkAttached(value)
-				element?.apply { listener(MutationEvent.Remove(this)) }
-				listener(MutationEvent.Add(value))
+				element?.apply { eventRemove(this) }
+				eventAdd(value)
 				element = value
 			}
 		}
@@ -157,7 +157,7 @@ class DependencySingleton<V : Any> internal constructor(
 
 	init {
 		checkAttached(initial)
-		listener(MutationEvent.Add(initial))
+		eventAdd(initial)
 	}
 
 	override fun toImmutable(): V = value
@@ -178,15 +178,15 @@ class DependencySingleton<V : Any> internal constructor(
 	}
 
 	override fun destroy() {
-		element?.apply { listener(MutationEvent.Remove(this)) }
+		element?.apply { eventRemove(this) }
 		element = null
 	}
+
+	protected abstract fun eventAdd(item: V)
+	protected abstract fun eventRemove(item: V)
 }
 
-sealed class DependencyArrayLike<V> (
-		vararg init: V,
-		internal val listener: (MutationEvent<V>) -> Unit
-) : DependencyView<V, List<V>>() {
+sealed class DependencyArrayLike<V> (vararg init: V) : DependencyView<V, List<V>>() {
 
 	protected val container = mutableListOf<V>()
 
@@ -195,7 +195,7 @@ sealed class DependencyArrayLike<V> (
 	init {
 		init.forEach { checkAttached(it) }
 		container.addAll(init)
-		container.forEach { listener(MutationEvent.Add(it)) }
+		container.forEach { eventAdd(it) }
 	}
 
 	override fun iterator() = container.iterator()
@@ -207,8 +207,8 @@ sealed class DependencyArrayLike<V> (
 		var count = 0
 		container.replaceAll {
 			if (it == old) {
-				listener(MutationEvent.Remove(old))
-				listener(MutationEvent.Add(new))
+				eventRemove(old)
+				eventAdd(new)
 				count++
 				new
 			} else {
@@ -228,8 +228,8 @@ sealed class DependencyArrayLike<V> (
 		checkAttached(new)
 		val old = this[index]
 		return if (old != new) {
-			listener(MutationEvent.Remove(old))
-			listener(MutationEvent.Add(new))
+			eventRemove(old)
+			eventAdd(new)
 			true
 		} else {
 			false
@@ -237,15 +237,15 @@ sealed class DependencyArrayLike<V> (
 	}
 
 	override fun destroy() {
-		container.forEach { listener(MutationEvent.Remove(it)) }
+		container.forEach { eventRemove(it) }
 		container.clear()
 	}
+
+	protected abstract fun eventAdd(item: V)
+	protected abstract fun eventRemove(item: V)
 }
 
-class DependencyArray<V> internal constructor(
-		vararg init: V,
-		listener: (MutationEvent<V>) -> Unit
-) : DependencyArrayLike<V>(*init, listener = listener) { // TODO Mut should be Array<V>
+abstract class DependencyArray<V>(vararg init: V) : DependencyArrayLike<V>(*init) { // TODO Mut should be Array<V>
 
 	/**
 	 * Property that is backed by some element in a fixed dependency list.
@@ -261,13 +261,11 @@ class DependencyArray<V> internal constructor(
 	}
 }
 
-class DependencyList<V> internal constructor(
-		listener: (MutationEvent<V>) -> Unit
-) : DependencyArrayLike<V>(listener = listener) {
+abstract class DependencyList<V> : DependencyArrayLike<V>() {
 
 	fun add(item: V) {
 		checkAttached(item)
-		listener(MutationEvent.Add(item))
+		eventAdd(item)
 		container += item
 	}
 
@@ -277,9 +275,7 @@ class DependencyList<V> internal constructor(
 /**
  * Note that the values are used in DependencyView.
  */
-class DependencyMapValues<K, V> internal constructor(
-		private val listener: (MutationEvent<Pair<K, V>>) -> Unit
-) : DependencyView<V, Map<K, V>>() {
+abstract class DependencyMapValues<K, V> : DependencyView<V, Map<K, V>>() {
 
 	private val container = mutableMapOf<K, V>()
 
@@ -298,8 +294,8 @@ class DependencyMapValues<K, V> internal constructor(
 		var count = 0
 		container.replaceAll { key, value ->
 			if (value == old) {
-				listener(MutationEvent.Remove(key to old))
-				listener(MutationEvent.Add(key to new))
+				eventRemove(key, old)
+				eventAdd(key, new)
 				count++
 				new
 			} else {
@@ -315,9 +311,9 @@ class DependencyMapValues<K, V> internal constructor(
 		checkAttached(key)
 		checkAttached(value)
 		container.put(key, value)?.apply {
-			listener(MutationEvent.Remove(key to this))
+			eventRemove(key, this)
 		}
-		listener(MutationEvent.Add(key to value))
+		eventAdd(key, value)
 	}
 
 	fun remove(value: V): Set<K> {
@@ -325,7 +321,7 @@ class DependencyMapValues<K, V> internal constructor(
 		val keys = mutableSetOf<K>()
 		container.entries.removeIf {
 			if (it.value == value) {
-				listener(MutationEvent.Remove(it.toPair()))
+				eventRemove(it.key, it.value)
 				keys += it.key
 				true
 			} else {
@@ -336,13 +332,12 @@ class DependencyMapValues<K, V> internal constructor(
 	}
 
 	override fun destroy() {
-		container.forEach { listener(MutationEvent.Remove(it.toPair())) }
+		container.forEach { eventRemove(it.key, it.value) }
 		container.clear()
 	}
 
-//	fun remove(key: K): V? = container.remove(key)?.apply {
-//		listener(MutationEvent.Remove(key to this))
-//	}
+	protected abstract fun eventAdd(key: K, value: V)
+	protected abstract fun eventRemove(key: K, value: V)
 }
 
 /**
@@ -356,7 +351,3 @@ private fun checkAttached(item: Any?) {
 		throw IllegalArgumentException("Not allowed on detached dependence source")
 }
 
-internal sealed class MutationEvent<T>(val item: T) {
-	class Add<T>(item: T) : MutationEvent<T>(item)
-	class Remove<T>(item: T) : MutationEvent<T>(item)
-}
