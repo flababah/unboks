@@ -6,6 +6,8 @@ import java.util.*
  * non-empty ordered (by start) segments. Segments should not overlap or be coalescable.
  */
 internal class LiveRange private constructor(private val segments: IntArray) {
+	val start get() = segments[0]
+	val end get() = segments[segments.size - 1]
 
 	init {
 		// Sanity check.

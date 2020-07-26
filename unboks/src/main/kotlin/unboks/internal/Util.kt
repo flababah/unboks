@@ -2,6 +2,9 @@ package unboks.internal
 
 import sun.misc.Unsafe
 
+
+var debugJavaSlot = -1 // TODO Remove this.
+
 /**
  * Allows merging specific pairs in an [input].
  *

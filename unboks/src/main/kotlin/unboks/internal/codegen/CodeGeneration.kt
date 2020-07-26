@@ -343,20 +343,3 @@ internal fun extractRegistersInUse(instructions: List<Inst>): Collection<JvmRegi
 	}
 	return acc
 }
-
-private fun allocateRegisters(instructions: List<Inst>, offset: Int): Int {
-	// TODO This is about as simple as it gets... Y'all need some linear scan soon!
-	var slot = offset
-	for (register in extractRegistersInUse(instructions)) {
-		if (register.readers.count == 0) {
-			if (register.writers.count > 0)
-				throw IllegalStateException("No readers of register, but writes are not pruned")
-			continue
-		}
-		if (register.jvmSlot == -1) {
-			register.jvmSlot = slot
-			slot += register.type.width
-		}
-	}
-	return slot
-}

@@ -34,6 +34,12 @@ internal class JvmRegister(val type: Thing, private val irName: String?) : JvmRe
 
 	var liveness: LiveRange? = null
 
+	val dualWidth get() = when (type.width) {
+		1 -> false
+		2 -> true
+		else -> throw IllegalStateException("Unsupported register width: ${type.width}")
+	}
+
 	override fun toString(): String {
 		val sb = StringBuilder()
 		if (jvmSlot != -1)
