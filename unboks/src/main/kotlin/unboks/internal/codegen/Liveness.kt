@@ -1,29 +1,5 @@
 package unboks.internal.codegen
 
-import java.util.*
-import kotlin.collections.HashSet
-
-// TODO Make this more space-efficient.
-internal class LiveRange(expectedSegments: Int = 1) {
-	private val bitset = BitSet()
-
-	fun addSegment(start: Int, end: Int) {
-		for (i in start until end)
-			bitset.set(i)
-	}
-
-	fun interference(other: LiveRange): Boolean {
-		return bitset.intersects(other.bitset)
-	}
-
-	fun union(other: LiveRange): LiveRange {
-		val result = LiveRange()
-		result.bitset.or(bitset)
-		result.bitset.or(other.bitset)
-		return result
-	}
-}
-
 private fun findLabelAbove(instructions: List<Inst>, start: Inst): Int {
 	for (i in start.offset - 1 downTo 0) {
 		if (instructions[i] is InstLabel)
@@ -67,17 +43,17 @@ private fun computePhiLiveness(reg: JvmRegister, instructions: List<Inst>): Live
 	if (reg.readers.count != 1)
 		throw IllegalStateException("Expected single phi volatile read")
 
-	val range = LiveRange(reg.writers.count + 1)
+	val range = LiveRangeBuilder()
 
 	val volatileReadEnd = reg.readers.first() as InstRegAssignReg
 	val volatileReadStartOffset = findLabelAbove(instructions, volatileReadEnd)
-	range.addSegment(volatileReadStartOffset, volatileReadEnd.offset)
+	range.add(volatileReadStartOffset, volatileReadEnd.offset)
 
 	for (volatileWriteStart in reg.writers) {
 		val volatileWriteEndOffset = findTerminalBelow(instructions, volatileWriteStart, volatileReadEnd)
-		range.addSegment(volatileWriteStart.offset, volatileWriteEndOffset)
+		range.add(volatileWriteStart.offset, volatileWriteEndOffset)
 	}
-	return range
+	return range.build()
 }
 
 // TODO Quick and dirty. Optimize this. Interesting stuff in https://hal.inria.fr/inria-00558509v2/document.
@@ -87,7 +63,7 @@ private fun computeNormalLiveness(reg: JvmRegister, instructions: List<Inst>): L
 
 	val definition = if (reg.isParameter) null else reg.writers.first()
 	val visitedBlockEnds = HashSet<Inst>()
-	val range = LiveRange()
+	val range = LiveRangeBuilder()
 
 	fun cover(end: Inst) {
 		if (!visitedBlockEnds.add(end)) // Avoid endless loops.
@@ -100,7 +76,7 @@ private fun computeNormalLiveness(reg: JvmRegister, instructions: List<Inst>): L
 				ptr.isTerminal(true) -> {
 					if (!seenLabel)
 						throw IllegalStateException("Dead code")
-					range.addSegment(ptr.offset + 1, end.offset)
+					range.add(ptr.offset + 1, end.offset)
 					return
 				}
 				ptr is InstCmp -> {
@@ -114,24 +90,30 @@ private fun computeNormalLiveness(reg: JvmRegister, instructions: List<Inst>): L
 					}
 					for (ex in ptr.exceptionUsages) {
 						if (ex.handler == ptr) {
-							cover(ex.end)
+							// Exception block are a bit different. Normally we jump to the
+							// terminal, and start about. For exception blocks we can have
+							// "start, ..., terminal, end" so we need to one-off it if that's
+							// the case.
+							val prior = instructions[ex.end.offset - 1]
+							val exEnd = if (prior.isTerminal(true)) prior else ex.end
+							cover(exEnd)
 						}
 					}
 				}
 				ptr == definition -> {
-					range.addSegment(ptr.offset, end.offset)
+					range.add(ptr.offset, end.offset)
 					return
 				}
 			}
 		}
 		if (reg.isParameter)
-			range.addSegment(0, end.offset)
+			range.add(-1, end.offset)
 		else
 			throw IllegalStateException("Reached problem start without finding definition")
 	}
 	for (reader in reg.readers)
 		cover(reader)
-	return range
+	return range.build()
 }
 
 internal fun computeRegisterLiveness(instructions: List<Inst>) {
