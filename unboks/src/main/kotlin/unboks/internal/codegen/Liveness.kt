@@ -43,7 +43,7 @@ private fun computePhiLiveness(reg: JvmRegister, instructions: List<Inst>): Live
 	if (reg.readers.count != 1)
 		throw IllegalStateException("Expected single phi volatile read")
 
-	val range = LiveRangeBuilder()
+	val range = LiveRange.Builder()
 
 	val volatileReadEnd = reg.readers.first() as InstRegAssignReg
 	val volatileReadStartOffset = findLabelAbove(instructions, volatileReadEnd)
@@ -63,7 +63,7 @@ private fun computeNormalLiveness(reg: JvmRegister, instructions: List<Inst>): L
 
 	val definition = if (reg.isParameter) null else reg.writers.first()
 	val visitedBlockEnds = HashSet<Inst>()
-	val range = LiveRangeBuilder()
+	val range = LiveRange.Builder()
 
 	fun cover(end: Inst) {
 		if (!visitedBlockEnds.add(end)) // Avoid endless loops.

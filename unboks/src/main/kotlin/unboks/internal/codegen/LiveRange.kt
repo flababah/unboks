@@ -2,14 +2,10 @@ package unboks.internal.codegen
 
 import java.util.*
 
-private fun trimToFit(array: IntArray, size: Int): IntArray {
-	return if (size == array.size) array else array.copyOf(size)
-}
-
 /**
  * non-empty ordered (by start) segments. Segments should not overlap or be coalescable.
  */
-internal class LiveRange(private val segments: IntArray) {
+internal class LiveRange private constructor(private val segments: IntArray) {
 
 	init {
 		// Sanity check.
@@ -21,6 +17,48 @@ internal class LiveRange(private val segments: IntArray) {
 			// start < end, no overlaps, non-coalescable.
 			assert(point > prev)
 			prev = point
+		}
+	}
+
+	internal class Builder {
+		private var segments = TreeMap<Int, SegmentEnd>()
+
+		private data class SegmentEnd(var end: Int)
+
+		fun add(start: Int, end: Int) {
+			val new = SegmentEnd(end)
+			val existing = segments.put(start, new)
+			if (existing != null && existing.end > end) // Merge segments with same start index.
+				new.end = existing.end
+		}
+
+		fun build(): LiveRange {
+			if (segments.isEmpty())
+				throw IllegalStateException("Empty range")
+
+			val out = IntArray(segments.size * 2) // Safe upper bound (no overlaps).
+			var outIndex = 0
+
+			val iter = segments.iterator()
+			var (currentStart, currentEndBox) = iter.next()
+			var currentEnd = currentEndBox.end
+
+			while (iter.hasNext()) { // Iteration is ordered by start index.
+				val (start, endBox) = iter.next()
+				val end = endBox.end
+				if (start <= currentEnd) { // Overlap. merge.
+					if (end > currentEnd)
+						currentEnd = end
+				} else { // No overlap. Start new segment.
+					out[outIndex++] = currentStart
+					out[outIndex++] = currentEnd
+					currentStart = start
+					currentEnd = end
+				}
+			}
+			out[outIndex++] = currentStart
+			out[outIndex++] = currentEnd
+			return LiveRange(trimToFit(out, outIndex))
 		}
 	}
 
@@ -95,46 +133,10 @@ internal class LiveRange(private val segments: IntArray) {
 		out[outIndex++] = currentEnd
 		return LiveRange(trimToFit(out, outIndex))
 	}
-}
 
-internal class LiveRangeBuilder {
-	private var segments = TreeMap<Int, SegmentEnd>()
-
-	private data class SegmentEnd(var end: Int)
-
-	fun add(start: Int, end: Int) {
-		val new = SegmentEnd(end)
-		val existing = segments.put(start, new)
-		if (existing != null && existing.end > end) // Merge segments with same start index.
-			new.end = existing.end
-	}
-
-	fun build(): LiveRange {
-		if (segments.isEmpty())
-			throw IllegalStateException("Empty range")
-
-		val out = IntArray(segments.size * 2) // Safe upper bound (no overlaps).
-		var outIndex = 0
-
-		val iter = segments.iterator()
-		var (currentStart, currentEndBox) = iter.next()
-		var currentEnd = currentEndBox.end
-
-		while (iter.hasNext()) { // Iteration is ordered by start index.
-			val (start, endBox) = iter.next()
-			val end = endBox.end
-			if (start <= currentEnd) { // Overlap. merge.
-				if (end > currentEnd)
-					currentEnd = end
-			} else { // No overlap. Start new segment.
-				out[outIndex++] = currentStart
-				out[outIndex++] = currentEnd
-				currentStart = start
-				currentEnd = end
-			}
+	private companion object {
+		private fun trimToFit(array: IntArray, size: Int): IntArray {
+			return if (size == array.size) array else array.copyOf(size)
 		}
-		out[outIndex++] = currentStart
-		out[outIndex++] = currentEnd
-		return LiveRange(trimToFit(out, outIndex))
 	}
 }
