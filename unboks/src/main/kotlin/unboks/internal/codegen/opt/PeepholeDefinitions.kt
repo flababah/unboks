@@ -95,6 +95,21 @@ internal val peepholes = PeepholeMatcher {
 		}
 	}
 
+	/**
+	 * Remove useless STORE x, LOAD x.
+	 */
+	pattern<InstRegAssignStack, InstStackAssignReg> { store, load ->
+		if (store.target == load.source &&
+				store.target.writers.count == 1 &&
+				load.source.readers.count == 1) {
+			store.destroy()
+			load.destroy()
+			emptyFold
+		} else {
+			null
+		}
+	}
+
 	// +---------------------------------------------------------------------------
 	// |  Dead code
 	// +---------------------------------------------------------------------------
