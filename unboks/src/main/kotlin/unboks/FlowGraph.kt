@@ -72,7 +72,7 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 	 * Blabla starts with [MethodVisitor.visitCode], and ends with [MethodVisitor.visitEnd].
 	 * Will output 1.7+ bytecode. Frame infos, no JSR/RET.
 	 */
-	fun generate(receiver: MethodVisitor, returnType: Thing) {
+	fun generate(receiver: MethodVisitor) {
 		execute(createConsistencyCheckPass(this))
 		generate(this, receiver)
 	}

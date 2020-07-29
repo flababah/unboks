@@ -42,7 +42,7 @@ class PassThroughClassVisitor(
 				graph.execute(pass)
 
 			// Write "buffered" result to delegate MV.
-			graph.generate(delegateMv, ms.returns)
+			graph.generate(delegateMv)
 		}
 	}
 }

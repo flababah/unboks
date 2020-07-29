@@ -32,7 +32,7 @@ class PeepholeTest {
 	@Test
 	fun testSharedPrefixFold() {
 		val matcher = PeepholeMatcher {
-			pattern<InstLabel, InstThrow> { lbl, thr ->
+			pattern<InstLabel, InstThrow> { lbl, _ ->
 				arrayOf(lbl, InstReturn(Opcodes.RETURN))
 			}
 		}
