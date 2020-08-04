@@ -2,47 +2,31 @@ package unboks.agent
 
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
-import unboks.StringConst
-import unboks.pass.Pass
 import unboks.util.PassThroughClassVisitor
+import java.io.File
+import java.io.PrintWriter
 import java.lang.instrument.ClassFileTransformer
 import java.lang.instrument.Instrumentation
+import java.nio.file.Files
 import java.security.ProtectionDomain
 
 class UnboksAgent private constructor(): ClassFileTransformer {
+	private val dump = PrintWriter("C:\\dump\\UnboksAgent.txt")
 	private val resolver = CommonSuperClassResolver()
 
 	companion object {
 
 		@JvmStatic
 		fun premain(args: String?, inst: Instrumentation) {
-			println("I have been instrumented!: $inst")
+			println("I have been instrumented!: $inst, args: $args")
 
 			inst.addTransformer(UnboksAgent(), true)
 		}
 	}
 
-	private fun createPass() = Pass<Unit> {
-
-		visit<StringConst> {
-			if (it.value == "Hello, World") {
-				val newConst = it.graph.constant("TRANSFORMED!!!")
-				for (use in it.uses)
-					use.defs.replace(it, newConst)
-			}
-		}
-	}
-
 	override fun transform(/*module: Module?,*/ loader: ClassLoader?, className: String, classBeingRedefined: Class<*>?, protectionDomain: ProtectionDomain?, classfileBuffer: ByteArray): ByteArray? {
 		val t = System.currentTimeMillis()
-		var error = ""
-
-//		if (className == "io/netty/util/internal/ThreadLocalRandom") {
-//			Files.write(File("C:\\dump\\dump.class").toPath(), classfileBuffer)
-//		}
-
-		if (className == "org/lwjgl/opengl/GLCapabilities" || className == "bpi" || className == "acy")
-			return null // Generated code is currently too large (MethodTooLargeException).
+		var error: Throwable? = null
 
 		try {
 			val reader = ClassReader(classfileBuffer, 0, classfileBuffer.size)
@@ -52,19 +36,21 @@ class UnboksAgent private constructor(): ClassFileTransformer {
 					return resolver.findLcaClass(loader, type1, type2)
 				}
 			}
-			val visitor = PassThroughClassVisitor(writer) { _, _ ->
-				createPass()
-			}
+			val visitor = PassThroughClassVisitor(writer)
 			reader.accept(visitor, 0)
 			return writer.toByteArray()
 
 		} catch (e: Throwable) {
-			error = " ${e.javaClass.simpleName}: ${e.message}"
+			error = e
+			val name = className.replace("/", ".")
+			Files.write(File("C:\\dump\\fail_$name.class").toPath(), classfileBuffer)
 			throw e
 
 		} finally {
 			val time = System.currentTimeMillis() - t
-			println("Transformed $className ($time ms)$error")
+			dump.println("Visited $className ($time ms)")
+			error?.printStackTrace(dump)
+			dump.flush()
 		}
 	}
 }
