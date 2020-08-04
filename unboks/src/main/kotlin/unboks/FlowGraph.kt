@@ -35,15 +35,9 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 			_root = value
 		}
 
-	private val nameRegistry = NameRegistry()
+	internal val nameRegistry = NameRegistry()
 
 	val parameters: List<Parameter> = parameterTypes.map { Parameter(this, it) }
-
-	internal fun registerAutoName(key: Nameable, prefix: String): ReadWriteProperty<Nameable, String> =
-			nameRegistry.register(key, prefix)
-
-	internal fun unregisterAutoName(key: Nameable) =
-			nameRegistry.unregister(key)
 
 	internal fun detachBlock(block: Block) = _blocks.remove(block)
 

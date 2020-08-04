@@ -67,7 +67,7 @@ sealed class Block(val graph: FlowGraph) : DependencySource(), Nameable, PassTyp
 
 	override fun detachFromParent() {
 		graph.detachBlock(this)
-		graph.unregisterAutoName(this)
+		graph.nameRegistry.unregister(this)
 	}
 
 	internal fun executeInitial(visitor: Pass<*>.InitialVisitor) {
@@ -110,7 +110,7 @@ data class ExceptionEntry(val handler: HandlerBlock, val type: Reference?)
 infix fun HandlerBlock.handles(type: Reference?) = ExceptionEntry(this, type)
 
 class BasicBlock internal constructor(flow: FlowGraph) : Block(flow) {
-	override var name by flow.registerAutoName(this, "B")
+	override var name by flow.nameRegistry.register(this, "B")
 
 	override var root
 		get() = graph.root === this
@@ -135,7 +135,7 @@ class BasicBlock internal constructor(flow: FlowGraph) : Block(flow) {
  */
 class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Block(flow), Def {
 	override val block get() = this
-	override var name by flow.registerAutoName(this, "H")
+	override var name by flow.nameRegistry.register(this, "H")
 
 	/**
 	 * Defaults to the highest possible exception type, [java.lang.Throwable].

@@ -4,38 +4,49 @@ import unboks.Nameable
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
-/**
- * This is just quick and dirty...
- */
 internal class NameRegistry {
-	private val names = mutableSetOf<String>()
-	private val keys = mutableMapOf<Nameable, AutoNameDelegate>()
+	private val keys = HashMap<Nameable, AutoNameDelegate>()
+	private val groups = HashMap<String, Group>()
 
-	private inner class AutoNameDelegate(val key: Nameable, val defaultGroup: String)
-			: ReadWriteProperty<Nameable, String> {
-		var name: String? = null
-		var currentGroup = defaultGroup
-
-		override fun setValue(thisRef: Nameable, property: KProperty<*>, value: String) {
-			val group = if (value == "") defaultGroup else value
-			unregister(key)
-			assign(group, this)
-		}
-
-		override fun getValue(thisRef: Nameable, property: KProperty<*>): String =
-				name ?: "[UNKNOWN]"
+	private class Group(val prefix: String) {
+		val delegates = LinkedHashSet<AutoNameDelegate>()
+		var count = 0
 	}
 
-	private fun assign(prefix: String, delegate: AutoNameDelegate) {
-		var i = 0
-		while (true) {
-			val test = prefix + i++
-			if (names.add(test)) {
-				keys[delegate.key] = delegate
-				delegate.currentGroup = prefix
-				delegate.name = test
-				return
-			}
+	private fun groupRegister(prefix: String, delegate: AutoNameDelegate) {
+		val groupName = if (prefix != "") prefix else delegate.default
+		val group = groups.computeIfAbsent(groupName) { Group(groupName) }
+		group.delegates.add(delegate)
+		delegate.group = group
+		delegate.index = group.count++
+	}
+
+	private fun groupUnregister(delegate: AutoNameDelegate) {
+		val group = delegate.group
+		if (group != null) {
+			group.delegates.remove(delegate)
+			delegate.group = null
+			delegate.index = -1
+
+			if (group.delegates.isEmpty())
+				groups.remove(group.prefix)
+		}
+	}
+
+	private abstract inner class AutoNameDelegate : ReadWriteProperty<Nameable, String> {
+		var group: Group? = null
+		var index = -1
+
+		abstract val default: String
+
+		override fun setValue(thisRef: Nameable, property: KProperty<*>, value: String) {
+			groupUnregister(this)
+			groupRegister(value, this)
+		}
+
+		override fun getValue(thisRef: Nameable, property: KProperty<*>): String {
+			val existing = group
+			return if (existing == null) "[UNKNOWN]" else "${existing.prefix}$index"
 		}
 	}
 
@@ -47,21 +58,26 @@ internal class NameRegistry {
 	fun register(key: Nameable, prefix: String): ReadWriteProperty<Nameable, String> {
 		if (key in keys)
 			throw IllegalArgumentException("$key is already registered")
-
-		return AutoNameDelegate(key, prefix).apply {
-			assign(prefix, this)
+		val delegate = object : AutoNameDelegate() {
+			override val default get() = prefix
 		}
+		groupRegister(prefix, delegate)
+		keys += key to delegate
+		return delegate
 	}
 
 	fun unregister(key: Nameable) {
 		keys.remove(key)?.apply {
-			names.remove(name)
-			name = null
+			groupUnregister(this)
 		}
 	}
 
 	fun prune() {
-		names.clear()
-		keys.values.forEach { assign(it.currentGroup, it) }
+		for (group in groups.values) {
+			var c = 0
+			for (delegate in group.delegates)
+				delegate.index = c++
+			group.count = c
+		}
 	}
 }

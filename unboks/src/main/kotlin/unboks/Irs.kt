@@ -52,7 +52,7 @@ sealed class Ir(val block: Block) : DependencySource(), PassType {
 	override fun detachFromParent() {
 		block.detachIr(this)
 		if (this is Nameable)
-			graph.unregisterAutoName(this)
+			graph.nameRegistry.unregister(this)
 	}
 
 	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
@@ -114,7 +114,7 @@ class IrGoto internal constructor(block: Block, target: BasicBlock)
 class IrInvoke internal constructor(block: Block, val spec: Invocation, arguments: List<Def>)
 		: Ir(block), Def, Use {
 
-	override var name by graph.registerAutoName(this, "inv")
+	override var name by graph.nameRegistry.register(this, "inv")
 
 	override val uses = RefCount<Use>()
 	override val type get() = spec.returnType
@@ -152,7 +152,7 @@ class IrInvoke internal constructor(block: Block, val spec: Invocation, argument
 class IrPhi internal constructor(block: Block, private val explicitType: Thing?)
 		: Ir(block), Def, Use {
 
-	override var name by graph.registerAutoName(this, "phi")
+	override var name by graph.nameRegistry.register(this, "phi")
 
 	override val defs: DependencyMapValues<Block, Def> = dependencyMapValues(
 			key   = phiReferences,
