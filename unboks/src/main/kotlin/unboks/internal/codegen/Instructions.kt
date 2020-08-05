@@ -62,9 +62,9 @@ internal class ExceptionTableEntry(
 		end: InstLabel,
 		handler: InstLabel) : BaseDependencySource() {
 
-	val start by dependencyProperty(exceptions, start)
-	val end by dependencyProperty(exceptions, end)
-	val handler by dependencyProperty(exceptions, handler)
+	var start by dependencyProperty(exceptions, start)
+	var end by dependencyProperty(exceptions, end)
+	var handler by dependencyProperty(exceptions, handler)
 }
 
 /**

@@ -47,16 +47,13 @@ internal val peepholes = PeepholeMatcher {
 				remove += usage // TODO Mark mutation somehow.
 		}
 		remove.forEach { it.destroy() }
-		val l0Unused = l0.unused
-		val l1Unused = l1.unused
-		if (l0Unused && l1Unused)
+		if (l0.unused && l1.unused) {
 			emptyFold
-		else if (l0Unused)
-			arrayOf(l1)
-		else if (l1Unused)
+		} else {
+			mergeLabelUsages(l1, l0)
+			l1.destroy()
 			arrayOf(l0)
-		else
-			null
+		}
 	}
 
 	/**
@@ -337,4 +334,27 @@ private fun invertCmpOpcode(opcode: Int) = when (opcode) {
 	IFNULL -> IFNONNULL
 	IFNONNULL -> IFNULL
 	else -> throw IllegalArgumentException("Bad compare opcode: $opcode")
+}
+
+private fun mergeLabelUsages(source: InstLabel, target: InstLabel) {
+	for (predecessor in ArrayList(source.brancheSources)) {
+		when (predecessor) {
+			is InstCmp -> predecessor.branch = target
+			is InstGoto -> predecessor.target = target
+			is InstSwitch -> {
+				predecessor.cases.replace(source, target)
+				if (predecessor.default == source)
+					predecessor.default = target
+			}
+			else -> throw IllegalStateException("Unexpected predecessor type: $predecessor")
+		}
+	}
+	for (ex in ArrayList(source.exceptionUsages)) {
+		if (ex.start == source)
+			ex.start = target
+		if (ex.end == source)
+			ex.end = target
+		if (ex.handler == source)
+			ex.handler = target
+	}
 }
