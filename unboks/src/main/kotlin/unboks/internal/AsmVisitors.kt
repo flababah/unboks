@@ -544,7 +544,7 @@ internal class FlowGraphVisitor(
 		deferOther(rw = Rw.READ_BEFORE_WRITE to varId) {
 			// IINC doesn't exist in our internal representation. Lower it into IADD.
 			locals[varId] = appender.newInvoke(InvIntrinsic.IADD,
-					locals.getTyped<INT>(varId), // JVMS 6.5: "The local variable at index must contain an int"
+					locals.getTyped<Int32>(varId), // JVMS 6.5: "The local variable at index must contain an int"
 					graph.constant(increment))
 		}
 	}
