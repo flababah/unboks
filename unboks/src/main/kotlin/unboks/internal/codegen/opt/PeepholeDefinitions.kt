@@ -88,8 +88,9 @@ internal val peepholes = PeepholeMatcher {
 	 */
 	pattern<InstRegAssignStack> { copy ->
 		if (copy.target.readers.count == 0) {
+			val dual = copy.target.dualWidth // Note before destroying.
 			copy.destroy()
-			emptyFold
+			arrayOf(InstStackPop(dual))
 		} else {
 			null
 		}
