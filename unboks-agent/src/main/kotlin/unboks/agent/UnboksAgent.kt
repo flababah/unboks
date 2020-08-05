@@ -29,7 +29,7 @@ class UnboksAgent private constructor(): ClassFileTransformer {
 		var error: Throwable? = null
 
 		try {
-			val reader = ClassReader(classfileBuffer, 0, classfileBuffer.size)
+			val reader = ClassReader(classfileBuffer)
 			val writer = object : ClassWriter(COMPUTE_FRAMES) {
 
 				override fun getCommonSuperClass(type1: String, type2: String): String {
