@@ -4,6 +4,7 @@ import org.objectweb.asm.Handle
 import org.objectweb.asm.Label
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.util.Printer
+import unboks.ASM_VERSION
 import java.lang.RuntimeException
 
 internal class DebugException(msg: String) : RuntimeException(msg)

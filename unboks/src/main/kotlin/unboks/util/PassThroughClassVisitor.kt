@@ -4,7 +4,7 @@ import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.MethodVisitor
 import unboks.FlowGraph
 import unboks.Reference
-import unboks.internal.ASM_VERSION
+import unboks.ASM_VERSION
 import unboks.internal.MethodDescriptor
 import unboks.pass.Pass
 import java.lang.reflect.Modifier

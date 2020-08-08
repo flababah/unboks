@@ -2,7 +2,7 @@ package unboks.passthrough.loader
 
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.MethodVisitor
-import unboks.internal.ASM_VERSION
+import unboks.ASM_VERSION
 import unboks.internal.StatMethodVisitor
 
 class StatClassVisitor(delegate: ClassVisitor? = null) : ClassVisitor(ASM_VERSION, delegate) {

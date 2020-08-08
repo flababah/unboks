@@ -1,4 +1,4 @@
-package unboks.internal
+package unboks
 
 import org.objectweb.asm.Opcodes
 
