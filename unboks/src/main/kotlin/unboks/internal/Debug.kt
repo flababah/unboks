@@ -4,6 +4,14 @@ import org.objectweb.asm.Handle
 import org.objectweb.asm.Label
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.util.Printer
+import java.lang.RuntimeException
+
+internal class DebugException(msg: String) : RuntimeException(msg)
+
+internal fun debug(feature: String): Boolean {
+//	return feature == "dominator-correctness"
+	return false
+}
 
 internal class DebugMethodVisitor(delegate: MethodVisitor? = null) : MethodVisitor(ASM_VERSION, delegate) {
 	private val labels = mutableMapOf<Label, String>()
