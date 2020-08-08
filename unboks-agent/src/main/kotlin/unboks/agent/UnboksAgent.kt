@@ -3,24 +3,23 @@ package unboks.agent
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
 import unboks.util.PassThroughClassVisitor
-import java.io.File
 import java.io.PrintWriter
 import java.lang.instrument.ClassFileTransformer
 import java.lang.instrument.Instrumentation
 import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 import java.security.ProtectionDomain
 
-class UnboksAgent private constructor(): ClassFileTransformer {
-	private val dump = PrintWriter("C:\\dump\\UnboksAgent.txt")
+class UnboksAgent private constructor(private val output: Path): ClassFileTransformer {
+	private val dump = PrintWriter(output.resolve("UnboksAgent.txt").toString())
 	private val resolver = CommonSuperClassResolver()
 
 	companion object {
 
 		@JvmStatic
 		fun premain(args: String?, inst: Instrumentation) {
-			println("I have been instrumented!: $inst, args: $args")
-
-			inst.addTransformer(UnboksAgent(), true)
+			inst.addTransformer(UnboksAgent(Paths.get(args ?: "").toAbsolutePath()), true)
 		}
 	}
 
@@ -43,7 +42,8 @@ class UnboksAgent private constructor(): ClassFileTransformer {
 		} catch (e: Throwable) {
 			error = e
 			val name = className.replace("/", ".")
-			Files.write(File("C:\\dump\\fail_$name.class").toPath(), classfileBuffer)
+			output.resolve("fail_$name.class")
+			Files.write(output.resolve("fail_$name.class"), classfileBuffer)
 			throw e
 
 		} finally {
