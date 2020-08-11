@@ -100,6 +100,10 @@ class PassthroughLoader(
 		if (name == "sun.misc.Unsafe")
 			throw ClassNotFoundException(name)
 
+		// TODO Fix this. (java 8)
+		if (name == "sun.reflect.ConstructorAccessorImpl" || name == "sun.reflect.MethodAccessorImpl")
+			throw ClassNotFoundException(name)
+
 		val bytecode = getDefinitionBytecode(name.replace(".", "/")) ?: throw ClassNotFoundException(name)
 
 		println("Defining class '$name' with depth ${getPassthroughParentCount()}.")
