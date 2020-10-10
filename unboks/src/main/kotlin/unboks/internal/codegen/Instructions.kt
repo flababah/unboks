@@ -12,10 +12,10 @@ import unboks.invocation.Invocation
 
 internal const val MAX_INST_ORDINAL = 13
 
-internal val regReader = TargetSpecification<Inst, JvmRegister> { it.readers }
-internal val regWriter = TargetSpecification<Inst, JvmRegister> { it.writers }
-internal val branches = TargetSpecification<Inst, InstLabel> { it.brancheSources }
-internal val exceptions = TargetSpecification<ExceptionTableEntry, InstLabel> { it.exceptionUsages }
+private val regReader = TargetSpecification<Inst, JvmRegister> { it.readers }
+private val regWriter = TargetSpecification<Inst, JvmRegister> { it.writers }
+private val branches = TargetSpecification<Inst, InstLabel> { it.brancheSources }
+private val exceptions = TargetSpecification<ExceptionTableEntry, InstLabel> { it.exceptionUsages }
 
 internal sealed class JvmRegisterOrConst
 
