@@ -59,14 +59,15 @@ internal class FlowGraphVisitor(
 					blocks += AsmBlock.Basic(it.labels, exceptions.currentActives())
 				}
 				is Expecting.FrameInfo -> {
-					if (version >= V1_6)
-						throw ParseException("Missing frame information for 1.6+ bytecode")
+					if (version >= V1_7)
+						throw ParseException("Missing frame information for 1.7+ bytecode")
 
 					// Normally we use the frame information to get the exception types. (For
 					// multiple type in a single handler, some hierarchy knowledge is otherwise
 					// required to get the best upper-bound for the type.)
 					// Bytecode version 1.5 or older does not contain frame information. In that case
 					// we just use Throwable as the type. Could be better, but it's old bytecode...
+					// Only in 1.7+ is it required to have stack maps...?
 					blocks += AsmBlock.Handler(it.labels, exceptions.currentActives(), null)
 				}
 				is Expecting.Any -> {

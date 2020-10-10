@@ -74,6 +74,6 @@ internal fun allocateRegisters(instructions: List<Inst>, offset: Int): Int { // 
 		active += i
 
 	}
-	println("Good: ${slots.offset}, Bad: $naive, Java: $debugJavaSlot")
+//	println("Good: ${slots.offset}, Bad: $naive, Java: $debugJavaSlot")
 	return slots.offset
 }
