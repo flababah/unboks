@@ -185,20 +185,23 @@ private fun emitLoad(source: JvmConstant, mv: MethodVisitor) =  when (source.val
 
 private fun emitLoad(source: JvmRegister, mv: MethodVisitor) = when (source.type) {
 	is Reference -> mv.visitVarInsn(ALOAD, source.jvmSlot)
-	is Fp32      -> mv.visitVarInsn(FLOAD, source.jvmSlot)
-	is Fp64      -> mv.visitVarInsn(DLOAD, source.jvmSlot)
-	is Int64     -> mv.visitVarInsn(LLOAD, source.jvmSlot)
-	is Int32     -> mv.visitVarInsn(ILOAD, source.jvmSlot)
+	is FLOAT     -> mv.visitVarInsn(FLOAD, source.jvmSlot)
+	is DOUBLE    -> mv.visitVarInsn(DLOAD, source.jvmSlot)
+	is LONG      -> mv.visitVarInsn(LLOAD, source.jvmSlot)
+	is INT       -> mv.visitVarInsn(ILOAD, source.jvmSlot)
 	else         -> throw IllegalArgumentException()
 }
 
-private fun emitStore(target: JvmRegister, mv: MethodVisitor) = when (target.type) {
-	is Reference     -> mv.visitVarInsn(ASTORE, target.jvmSlot)
-	is Fp32          -> mv.visitVarInsn(FSTORE, target.jvmSlot)
-	is Fp64          -> mv.visitVarInsn(DSTORE, target.jvmSlot)
-	is Int64         -> mv.visitVarInsn(LSTORE, target.jvmSlot)
-	is Int32         -> mv.visitVarInsn(ISTORE, target.jvmSlot)
-	VOID             -> throw IllegalArgumentException()
+private fun emitStore(target: JvmRegister, mv: MethodVisitor) = when (val type = target.type) {
+	is Reference -> mv.visitVarInsn(ASTORE, target.jvmSlot)
+	is FLOAT     -> mv.visitVarInsn(FSTORE, target.jvmSlot)
+	is DOUBLE    -> mv.visitVarInsn(DSTORE, target.jvmSlot)
+	is LONG      -> mv.visitVarInsn(LSTORE, target.jvmSlot)
+	is INT       -> mv.visitVarInsn(ISTORE, target.jvmSlot)
+	VOID         -> throw IllegalArgumentException()
+
+	// The narrowed INT types should not appear here.
+	else -> throw IllegalStateException("Unsupported return type: $type")
 }
 
 internal class InstRegAssignReg(target: JvmRegister, source: JvmRegister) : Inst() {

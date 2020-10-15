@@ -6,8 +6,6 @@ import kotlin.reflect.KClass
 // |  Markers
 // +---------------------------------------------------------------------------
 
-interface IntegralType
-interface FloatingPointType
 interface T32
 interface T64
 
@@ -30,6 +28,8 @@ sealed class Thing(
 	override fun equals(other: Any?) = other is Thing && descriptor == other.descriptor
 	override fun hashCode() = descriptor.hashCode()
 	override fun toString() = descriptor
+
+	open val widened get() = this
 
 	companion object {
 
@@ -113,10 +113,7 @@ open class Reference internal constructor(val internal: String, descriptor: Stri
 	}
 }
 
-/**
- * Only open so we can have [ARRAY].
- */
-open class ArrayReference(val component: Thing) : Reference("[${component.descriptor}", "[${component.descriptor}") {
+class ArrayReference(val component: Thing) : Reference("[${component.descriptor}", "[${component.descriptor}") {
 
 	/**
 	 * For types like Array<Array<Array<Int>>> gives 3.
@@ -131,8 +128,8 @@ open class ArrayReference(val component: Thing) : Reference("[${component.descri
 
 sealed class Primitive(width: Int, symbol: Char) : Thing(width, "$symbol")
 
+@Deprecated("Remove in parameter type refactor")
 object OBJECT  : Reference("java/lang/Object", "Ljava/lang/Object;")
-object ARRAY   : ArrayReference(OBJECT)
 object VOID    : Thing(0, "V")
 
 // +---------------------------------------------------------------------------
@@ -142,26 +139,25 @@ object VOID    : Thing(0, "V")
 /**
  * Integral computational type 1. See JVMS 2.11.1-B.
  */
-sealed class Int32(desc: Char) : Primitive(1, desc), IntegralType, T32 {
+object INT : Primitive(1, 'I'), T32
 
-	/**
-	 * The sub-types of int are mostly ignored in the JVM...
-	 */
-	override fun common(other: Thing): Thing? {
-		return super.common(other) ?: (if (other is Int32) INT else null)
-	}
+object BOOLEAN : Primitive(1, 'Z'), T32 {
+	override val widened get() = INT
 }
-object INT     : Int32('I')
-object BOOLEAN : Int32('Z')
-object BYTE    : Int32('B')
-object CHAR    : Int32('C')
-object SHORT   : Int32('S')
+object BYTE : Primitive(1, 'B'), T32 {
+	override val widened get() = INT
+}
+object CHAR : Primitive(1, 'C'), T32 {
+	override val widened get() = INT
+}
+object SHORT : Primitive(1, 'S'), T32 {
+	override val widened get() = INT
+}
 
 /**
  * Integral computational type 2.
  */
-sealed class Int64 : Primitive(2, 'J'), IntegralType, T64
-object LONG    : Int64()
+object LONG : Primitive(2, 'J'), T64
 
 // +---------------------------------------------------------------------------
 // |  Floating point types
@@ -169,11 +165,9 @@ object LONG    : Int64()
 /**
  * Floating point computational type 1.
  */
-sealed class Fp32 : Primitive(1, 'F'), FloatingPointType, T32
-object FLOAT   : Fp32()
+object FLOAT : Primitive(1, 'F'), T32
 
 /**
  * Floating point computational type 2.
  */
-sealed class Fp64 : Primitive(2, 'D'), FloatingPointType, T64
-object DOUBLE  : Fp64()
+object DOUBLE : Primitive(2, 'D'), T64

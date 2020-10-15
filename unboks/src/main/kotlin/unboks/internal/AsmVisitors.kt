@@ -247,10 +247,10 @@ internal class FlowGraphVisitor(
 
 			opcode in IRETURN .. RETURN -> deferTerminal {
 				when (opcode) {
-					IRETURN -> appender.newReturn(stack.pop<Int32>())
-					LRETURN -> appender.newReturn(stack.pop<Int64>())
-					FRETURN -> appender.newReturn(stack.pop<Fp32>())
-					DRETURN -> appender.newReturn(stack.pop<Fp64>())
+					IRETURN -> appender.newReturn(stack.pop<INT>())
+					LRETURN -> appender.newReturn(stack.pop<LONG>())
+					FRETURN -> appender.newReturn(stack.pop<FLOAT>())
+					DRETURN -> appender.newReturn(stack.pop<DOUBLE>())
 					ARETURN -> appender.newReturn(stack.pop<Reference>())
 					RETURN  -> appender.newReturn()
 				}
@@ -376,21 +376,21 @@ internal class FlowGraphVisitor(
 			when (opcode) {
 				GOTO      -> appender.newGoto(resolveBlock(label))
 
-				IFEQ      -> newCmp1(Cmp.EQ,       stack.pop<Int32>())
-				IFNE      -> newCmp1(Cmp.NE,       stack.pop<Int32>())
-				IFLT      -> newCmp1(Cmp.LT,       stack.pop<Int32>())
-				IFGE      -> newCmp1(Cmp.GE,       stack.pop<Int32>())
-				IFGT      -> newCmp1(Cmp.GT,       stack.pop<Int32>())
-				IFLE      -> newCmp1(Cmp.LE,       stack.pop<Int32>())
+				IFEQ      -> newCmp1(Cmp.EQ,       stack.pop<INT>())
+				IFNE      -> newCmp1(Cmp.NE,       stack.pop<INT>())
+				IFLT      -> newCmp1(Cmp.LT,       stack.pop<INT>())
+				IFGE      -> newCmp1(Cmp.GE,       stack.pop<INT>())
+				IFGT      -> newCmp1(Cmp.GT,       stack.pop<INT>())
+				IFLE      -> newCmp1(Cmp.LE,       stack.pop<INT>())
 				IFNULL    -> newCmp1(Cmp.IS_NULL,  stack.pop<Reference>())
 				IFNONNULL -> newCmp1(Cmp.NOT_NULL, stack.pop<Reference>())
 
-				IF_ICMPEQ -> newCmp2(Cmp.EQ,       stack.popPair<Int32>())
-				IF_ICMPNE -> newCmp2(Cmp.NE,       stack.popPair<Int32>())
-				IF_ICMPLT -> newCmp2(Cmp.LT,       stack.popPair<Int32>())
-				IF_ICMPGE -> newCmp2(Cmp.GE,       stack.popPair<Int32>())
-				IF_ICMPGT -> newCmp2(Cmp.GT,       stack.popPair<Int32>())
-				IF_ICMPLE -> newCmp2(Cmp.LE,       stack.popPair<Int32>())
+				IF_ICMPEQ -> newCmp2(Cmp.EQ,       stack.popPair<INT>())
+				IF_ICMPNE -> newCmp2(Cmp.NE,       stack.popPair<INT>())
+				IF_ICMPLT -> newCmp2(Cmp.LT,       stack.popPair<INT>())
+				IF_ICMPGE -> newCmp2(Cmp.GE,       stack.popPair<INT>())
+				IF_ICMPGT -> newCmp2(Cmp.GT,       stack.popPair<INT>())
+				IF_ICMPLE -> newCmp2(Cmp.LE,       stack.popPair<INT>())
 				IF_ACMPEQ -> newCmp2(Cmp.EQ,       stack.popPair<Reference>())
 				IF_ACMPNE -> newCmp2(Cmp.NE,       stack.popPair<Reference>())
 
@@ -405,7 +405,7 @@ internal class FlowGraphVisitor(
 			if (labels.size + min - 1 != max)
 				throw ParseException("Wrong number of labels (${labels.size}) for $min..$max")
 
-			val switch = appender.newSwitch(stack.pop<Int32>(), resolveBlock(dflt))
+			val switch = appender.newSwitch(stack.pop<INT>(), resolveBlock(dflt))
 			for ((i, label) in labels.withIndex())
 				switch.cases[min + i] = resolveBlock(label)
 		}
@@ -416,7 +416,7 @@ internal class FlowGraphVisitor(
 			if (labels.size != keys.size)
 				throw ParseException("Lookup switch key/label size mismatch")
 
-			val switch = appender.newSwitch(stack.pop<Int32>(), resolveBlock(dflt))
+			val switch = appender.newSwitch(stack.pop<INT>(), resolveBlock(dflt))
 			for (i in keys.indices)
 				switch.cases[keys[i]] = resolveBlock(labels[i])
 		}
@@ -451,7 +451,7 @@ internal class FlowGraphVisitor(
 		when (opcode) {
 			in ILOAD .. ALOAD -> deferOther(rw = Rw.READ to index) {
 				when (opcode) {
-					ILOAD -> stack.push(locals.getTyped<Int32>(index))
+					ILOAD -> stack.push(locals.getTyped<INT>(index))
 					LLOAD -> stack.push(locals.getTyped<LONG>(index))
 					FLOAD -> stack.push(locals.getTyped<FLOAT>(index))
 					DLOAD -> stack.push(locals.getTyped<DOUBLE>(index))
@@ -460,7 +460,7 @@ internal class FlowGraphVisitor(
 			}
 			in ISTORE .. ASTORE -> deferOther(rw = Rw.WRITE to index) {
 				when (opcode) {
-					ISTORE -> locals[index] = stack.pop<Int32>()
+					ISTORE -> locals[index] = stack.pop<INT>()
 					LSTORE -> locals[index] = stack.pop<LONG>()
 					FSTORE -> locals[index] = stack.pop<FLOAT>()
 					DSTORE -> locals[index] = stack.pop<DOUBLE>()
@@ -545,7 +545,7 @@ internal class FlowGraphVisitor(
 		deferOther(rw = Rw.READ_BEFORE_WRITE to varId) {
 			// IINC doesn't exist in our internal representation. Lower it into IADD.
 			locals[varId] = appender.newInvoke(InvIntrinsic.IADD,
-					locals.getTyped<Int32>(varId), // JVMS 6.5: "The local variable at index must contain an int"
+					locals.getTyped<INT>(varId),
 					graph.constant(increment))
 		}
 	}

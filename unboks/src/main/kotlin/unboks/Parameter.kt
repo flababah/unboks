@@ -2,7 +2,9 @@ package unboks
 
 import unboks.pass.PassType
 
-class Parameter(val graph: FlowGraph, override val type: Thing) : Def, PassType {
+class Parameter(val graph: FlowGraph, val exactType: Thing) : Def, PassType {
+
+	override val type get() = exactType.widened
 
 	override val block get() = graph.root
 

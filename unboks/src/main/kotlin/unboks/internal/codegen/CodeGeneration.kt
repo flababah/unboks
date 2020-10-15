@@ -138,13 +138,16 @@ private fun cmpOpcode(ir: IrCmp2) = when (ir.cmp) {
 	else -> throw Error("${ir.cmp} not supported for IrCmp2")
 }
 
-private fun returnOpcode(ir: IrReturn) = when (ir.value?.type) {
+private fun returnOpcode(ir: IrReturn) = when (val type = ir.value?.type) {
 	is Reference -> ARETURN
-	is Fp32 -> FRETURN
-	is Fp64 -> DRETURN
-	is Int64 -> LRETURN
-	is Int32 -> IRETURN
+	is FLOAT -> FRETURN
+	is DOUBLE -> DRETURN
+	is LONG -> LRETURN
+	is INT -> IRETURN
 	null, VOID -> RETURN
+
+	// The narrowed INT types should not appear here.
+	else -> throw IllegalStateException("Unsupported return type: $type")
 }
 
 /**
