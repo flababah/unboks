@@ -440,7 +440,7 @@ internal class FlowGraphVisitor(
 				T_LONG -> unboks.LONG
 				else -> throw ParseException("Bad operand for NEWARRAY: $operand")
 			}
-			deferInvocation(InvNewArray(ArrayReference(type), 1))
+			deferInvocation(InvNewArray(type, 1))
 
 		} else {
 			throw ParseException("Illegal opcode: $opcode")
@@ -476,7 +476,7 @@ internal class FlowGraphVisitor(
 		val ownerType = Reference.create(type)
 		val inv = when (opcode) {
 			NEW        -> InvNew(ownerType)
-			ANEWARRAY  -> InvNewArray(ArrayReference(ownerType), 1)
+			ANEWARRAY  -> InvNewArray(ownerType, 1)
 			CHECKCAST  -> InvCheckcast(ownerType)
 			INSTANCEOF -> InvInstanceof(ownerType)
 			else       -> throw ParseException("Illegal opcode: $opcode")
@@ -551,7 +551,7 @@ internal class FlowGraphVisitor(
 		if (type !is ArrayReference || type.dimensions != dims)
 			throw ParseException("Bad descriptor '$descriptor' for order $dims array")
 
-		deferInvocation(InvNewArray(type, dims))
+		deferInvocation(InvNewArray(type.bottomComponent, dims))
 	}
 }
 

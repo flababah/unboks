@@ -3,51 +3,67 @@ package unboks.invocation
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
 import unboks.*
-import unboks.internal.TODO_C
+import unboks.internal.INT_C
 
 /**
- * Covers
- * NEWARRAY visitIntInsn
- * ANEWARRAY visitTypeInsn
- * MULTIANEWARRAY visitMultiANewArrayInsn
+ * Invocation of the NEWARRAY, ANEWARRAY and MULTIANEWARRAY opcodes.
+ *
+ * Note that an explicit [dimensions] property is needed to distinguish how many dimensions should
+ * be allocated. There is a difference between allocating an array of int[] and allocating a 2D
+ * array of int, even tough both types are [[I.
+ *
+ * The examples above should be implemented as InvNewArray(ArrayReference(INT), 1) and
+ * InvNewArray(INT, 2), respectively.
  */
-class InvNewArray(val returnTypeArray: ArrayReference, val dimensions: Int) : Invocation { // TODO Cleanup
-
-//	override val parameterTypes = (0 until dimensions).map { INT }
-//
-//	override val representation get() = "new $returnType"
+class InvNewArray(val component: Thing, val dimensions: Int) : Invocation {
 
 	/**
-	 * "If count is less than zero, newarray throws a NegativeArraySizeException."
+	 * Wrapped array of component representing the proper array type.
+	 *
+	 * Eg. ArrayReference(ArrayReference(INT)) for the examples in class doc.
+	 */
+	val arrayType: ArrayReference
+
+	init {
+		if (dimensions <= 0)
+			throw IllegalArgumentException("Array must have at least 1 dimension")
+
+		var acc = ArrayReference(component)
+		for (x in 1 until dimensions)
+			acc = ArrayReference(acc)
+		arrayType = acc
+
+		if (arrayType.bottomComponent == VOID)
+			throw IllegalArgumentException("VOID arrays are not allowed")
+	}
+
+	/**
+	 * If a dimension length is less than zero, [NegativeArraySizeException] is thrown.
 	 */
 	override val safe get() = false
-	override val parameterChecks: Array<out ParameterCheck>
-		get() = Array(dimensions) { TODO_C }
-	override val voidReturn: Boolean
-		get() = false
+	override val parameterChecks: Array<out ParameterCheck> get() = Array(dimensions) { INT_C }
+	override val voidReturn get() = false
 
 	override fun returnType(args: DependencyArray<Def>): Thing {
-		return returnTypeArray
+		return ArrayReference(component)
 	}
 
 	override fun visit(visitor: MethodVisitor) {
-		val wrapped = returnTypeArray.component
-
 		when {
-			dimensions > 1      -> visitor.visitMultiANewArrayInsn(returnTypeArray.descriptor, dimensions)
-			wrapped is Primitive -> visitor.visitIntInsn(Opcodes.NEWARRAY, primitiveToOpcode(wrapped))
-			wrapped is Reference -> visitor.visitTypeInsn(Opcodes.ANEWARRAY, wrapped.internal)
+			dimensions > 1         -> visitor.visitMultiANewArrayInsn(arrayType.descriptor, dimensions)
+			component is Primitive -> visitor.visitIntInsn(Opcodes.NEWARRAY, primitiveToOpcode(component))
+			component is Reference -> visitor.visitTypeInsn(Opcodes.ANEWARRAY, component.internal)
 		}
 	}
 
 	private fun primitiveToOpcode(type: Primitive) =  when (type) {
 		BOOLEAN -> Opcodes.T_BOOLEAN
-		CHAR -> Opcodes.T_CHAR
-		FLOAT -> Opcodes.T_FLOAT
-		DOUBLE -> Opcodes.T_DOUBLE
-		BYTE -> Opcodes.T_BYTE
-		SHORT -> Opcodes.T_SHORT
-		INT -> Opcodes.T_INT
-		LONG -> Opcodes.T_LONG
+		CHAR    -> Opcodes.T_CHAR
+		FLOAT   -> Opcodes.T_FLOAT
+		DOUBLE  -> Opcodes.T_DOUBLE
+		BYTE    -> Opcodes.T_BYTE
+		SHORT   -> Opcodes.T_SHORT
+		INT     -> Opcodes.T_INT
+		LONG    -> Opcodes.T_LONG
 	}
 }
