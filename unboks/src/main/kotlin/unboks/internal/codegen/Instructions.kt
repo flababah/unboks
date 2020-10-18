@@ -96,7 +96,7 @@ internal fun updateOffsets(instructions: List<Inst>) {
 
 internal class InstInvoke(val spec: Invocation) : Inst() {
 	override val ordinal get() = 0
-	override fun toString() = spec.representation
+	override fun toString() = spec.toString()
 	override fun emit(mv: MethodVisitor) = spec.visit(mv)
 }
 

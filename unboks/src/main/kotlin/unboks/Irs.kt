@@ -117,13 +117,13 @@ class IrInvoke internal constructor(block: Block, val spec: Invocation, argument
 	override var name by graph.nameRegistry.register(this, "inv")
 
 	override val uses = RefCount<Use>()
-	override val type get() = spec.returnType.widened
+	override val type get() = spec.returnType(defs).widened
 
 	// XXX Do we need variable size list here -- only if methods change signature?
 	override val defs: DependencyArray<Def> = dependencyArray(defUses, *arguments.toTypedArray())
 
 	override fun toString() = defs.joinToString(
-			prefix = "$name = ${spec.representation}(", separator = ", ", postfix = ")") { it.name }
+			prefix = "$name = $spec(", separator = ", ", postfix = ")") { it.name }
 }
 
 /**

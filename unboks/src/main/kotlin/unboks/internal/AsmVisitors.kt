@@ -484,22 +484,18 @@ internal class FlowGraphVisitor(
 		deferInvocation(inv)
 	}
 
-	override fun visitFieldInsn(opcode: Int, owner: String, name: String, descriptor: String) {
-		// Real quick and dirty.
+	override fun visitFieldInsn(opcode: Int, ownerInternal: String, name: String, descriptor: String) {
 		val type = Thing.create(descriptor)
-		val ownerType = Reference.create(owner)
-		val params = when (opcode) {
-			GETFIELD -> listOf(ownerType)
-			PUTFIELD -> listOf(ownerType, type)
-			GETSTATIC -> listOf()
-			PUTSTATIC -> listOf(type)
+		val owner = Reference.create(ownerInternal)
+
+		val invocation = when (opcode) {
+			GETFIELD  -> InvField.Get(owner, name, type)
+			PUTFIELD  -> InvField.Put(owner, name, type)
+			GETSTATIC -> InvField.GetStatic(owner, name, type)
+			PUTSTATIC -> InvField.PutStatic(owner, name, type)
 			else -> throw ParseException("unknown field opcode")
 		}
-		val ret = when (opcode) {
-			GETSTATIC, GETFIELD -> type
-			else -> VOID
-		}
-		deferInvocation(InvField(opcode, ownerType, name, ret, type, params))
+		deferInvocation(invocation)
 	}
 
 	override fun visitMethodInsn(opcode: Int, owner: String, name: String, desc: String, itf: Boolean) {
@@ -742,10 +738,10 @@ private fun <T : Block> reify(graph: FlowGraph, block: AsmBlock<T>, pred: Block?
 				if (!spec.safe)
 					unsafe = true
 
-				val arguments = context.stack.pop(spec.parameterTypes.size)
+				val arguments = context.stack.pop(spec.parameterChecks.size)
 				val retValue = context.appender.newInvoke(spec, arguments)
 
-				if (spec.returnType != VOID)
+				if (!spec.voidReturn)
 					context.stack.push(retValue)
 			}
 

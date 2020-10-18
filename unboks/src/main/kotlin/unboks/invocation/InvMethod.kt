@@ -2,10 +2,11 @@ package unboks.invocation
 
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
-import unboks.Reference
+import unboks.*
 import unboks.internal.MethodDescriptor
+import unboks.internal.TODO_C
 
-sealed class InvMethod(
+sealed class InvMethod( // TODO Cleanup
 		private val owner: Reference,
 		private val name: String,
 		private val desc: String,
@@ -18,16 +19,25 @@ sealed class InvMethod(
 	 */
 	override val safe get() = false
 
-	private val signature = MethodDescriptor(desc)
+	override val parameterChecks: Array<out ParameterCheck>
+		get() = Array((if (opcode == Opcodes.INVOKESTATIC) 0 else 1) + signature.parameters.size) { TODO_C }
+	override val voidReturn: Boolean
+		get() = signature.returns == VOID
 
-	override val parameterTypes get() = when (opcode) {
-		Opcodes.INVOKESTATIC -> signature.parameters
-		else -> listOf(owner) + signature.parameters
+	override fun returnType(args: DependencyArray<Def>): Thing {
+		return signature.returns
 	}
 
-	override val returnType get() = signature.returns
+	private val signature = MethodDescriptor(desc)
 
-	override val representation get() = "$owner#$name[${this::class.java.name}]" // TODO Hmm...
+//	override val parameterTypes get() = when (opcode) {
+//		Opcodes.INVOKESTATIC -> signature.parameters
+//		else -> listOf(owner) + signature.parameters
+//	}
+//
+//	override val returnType get() = signature.returns
+//
+//	override val representation get() = "$owner#$name[${this::class.java.name}]" // TODO Hmm...
 
 	override fun visit(visitor: MethodVisitor) = visitor.visitMethodInsn(opcode, owner.internal, name, desc, itf)
 

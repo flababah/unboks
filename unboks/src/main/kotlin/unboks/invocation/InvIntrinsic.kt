@@ -1,149 +1,182 @@
 package unboks.invocation
 
 import org.objectweb.asm.MethodVisitor
-import org.objectweb.asm.Opcodes
 import unboks.*
+import unboks.internal.*
+import unboks.internal.ARRAY_C
+import unboks.internal.DOUBLE_C
+import unboks.internal.FLOAT_C
+import unboks.internal.INT_C
+import unboks.internal.LONG_C
 
+/**
+ * Represents "static" opcodes - ie. opcodes that don't carry additional information, like
+ * field type accesses, method signatures and so on.
+ */
 enum class InvIntrinsic(
-		override val returnType: Thing,
-		vararg parameterTypes: Thing,
-		override val safe: Boolean = true
-) : Invocation {
-	IALOAD(INT, OBJECT, INT, safe = false),
-	LALOAD(LONG, OBJECT, INT, safe = false),
-	FALOAD(FLOAT, OBJECT, INT, safe = false),
-	DALOAD(DOUBLE, OBJECT, INT, safe = false),
-	AALOAD(OBJECT, OBJECT, INT, safe = false),
-	BALOAD(BOOLEAN, OBJECT, INT, safe = false),
-	CALOAD(CHAR, OBJECT, INT, safe = false),
-	SALOAD(SHORT, OBJECT, INT, safe = false),
+		private val exactReturn: Thing?,
+		override vararg val parameterChecks: ParameterCheck,
+		override val safe: Boolean = true) : Invocation {
 
-	IASTORE(VOID, OBJECT, INT, INT, safe = false),
-	LASTORE(VOID, OBJECT, INT, LONG, safe = false),
-	FASTORE(VOID, OBJECT, INT, FLOAT, safe = false),
-	DASTORE(VOID, OBJECT, INT, DOUBLE, safe = false),
-	AASTORE(VOID, OBJECT, INT, OBJECT, safe = false),
-	BASTORE(VOID, OBJECT, INT, BOOLEAN, safe = false),
-	CASTORE(VOID, OBJECT, INT, CHAR, safe = false),
-	SASTORE(VOID, OBJECT, INT, SHORT, safe = false),
+	// +---------------------------------------------------------------------------
+	// |  LOAD OPCODES
+	// +---------------------------------------------------------------------------
 
-	IADD(INT, INT, INT),
-	LADD(LONG, LONG, LONG),
-	FADD(FLOAT, FLOAT, FLOAT),
-	DADD(DOUBLE, DOUBLE, DOUBLE),
-	ISUB(INT, INT, INT),
-	LSUB(LONG, LONG, LONG),
-	FSUB(FLOAT, FLOAT, FLOAT),
-	DSUB(DOUBLE, DOUBLE, DOUBLE),
-	IMUL(INT, INT, INT),
-	LMUL(LONG, LONG, LONG),
-	FMUL(FLOAT, FLOAT, FLOAT),
-	DMUL(DOUBLE, DOUBLE, DOUBLE),
+	// Loads are unsafe since they may throw NullPointerException and
+	// ArrayIndexOutOfBoundsException.
 
-	/**
-	 * Throws [ArithmeticException] when the divisor is 0.
-	 */
-	IDIV(INT, INT, INT, safe = false),
-	LDIV(LONG, LONG, LONG, safe = false),
-	FDIV(FLOAT, FLOAT, FLOAT), // Is safe, NaN is used instead of exception.
-	DDIV(DOUBLE, DOUBLE, DOUBLE), // Is safe, NaN is used instead of exception.
-	IREM(INT, INT, INT, safe = false), // ArithmeticException
-	LREM(LONG, LONG, LONG, safe = false), // ArithmeticException
-	FREM(FLOAT, FLOAT, FLOAT), // Is safe, NaN is used instead of exception.
-	DREM(DOUBLE, DOUBLE, DOUBLE), // Is safe, NaN is used instead of exception.
-	INEG(INT, INT),
-	LNEG(LONG, LONG),
-	FNEG(FLOAT, FLOAT),
-	DNEG(DOUBLE, DOUBLE),
-	ISHL(INT, INT, INT),
-	LSHL(LONG, LONG, INT),
-	ISHR(INT, INT, INT),
-	LSHR(LONG, LONG, INT),
-	IUSHR(INT, INT, INT),
-	LUSHR(LONG, LONG, INT),
-	IAND(INT, INT, INT),
-	LAND(LONG, LONG, LONG),
-	IOR(INT, INT, INT),
-	LOR(LONG, LONG, LONG),
-	IXOR(INT, INT, INT),
-	LXOR(LONG, LONG, LONG),
-	I2L(LONG, INT),
-	I2F(FLOAT, INT),
-	I2D(DOUBLE, INT),
-	I2B(CHAR, INT),
-	I2C(CHAR, INT),
-	I2S(SHORT, INT),
+	IALOAD(INT, ARRAY_C(INT_C), INT_C, safe = false),
+	LALOAD(LONG, ARRAY_C(LONG_C), INT_C, safe = false),
+	FALOAD(FLOAT, ARRAY_C(FLOAT_C), INT_C, safe = false),
+	DALOAD(DOUBLE, ARRAY_C(DOUBLE_C), INT_C, safe = false),
+	AALOAD(null, ARRAY_C(REF_C), INT_C, safe = false) {
 
-	L2I(INT, LONG),
-	L2F(FLOAT, LONG),
-	L2D(DOUBLE, LONG),
+		// The exact return type depends on the component type of the supplied array.
+		override fun returnType(args: DependencyArray<Def>) = args[0].type
+	},
+	BALOAD(INT, ARRAY_C(BYTE_OR_BOOLEAN_C), INT_C, safe = false),
+	CALOAD(INT, ARRAY_C(CHAR_C), INT_C, safe = false),
+	SALOAD(INT, ARRAY_C(SHORT_C), INT_C, safe = false),
 
-	F2I(INT, FLOAT),
-	F2L(LONG, FLOAT),
-	F2D(DOUBLE, FLOAT),
+	// +---------------------------------------------------------------------------
+	// |  STORE OPCODES
+	// +---------------------------------------------------------------------------
 
-	D2I(INT, DOUBLE),
-	D2L(LONG, DOUBLE),
-	D2F(FLOAT, DOUBLE),
+	// Stores are unsafe since they may throw NullPointerException, ArrayIndexOutOfBoundsException
+	// (and ArrayStoreException for AASTORE).
 
-	LCMP(INT, LONG, LONG),
-	FCMPL(INT, FLOAT, FLOAT),
-	FCMPG(INT, FLOAT, FLOAT),
-	DCMPL(INT, DOUBLE, DOUBLE),
-	DCMPG(INT, DOUBLE, DOUBLE),
-	ARRAYLENGTH(INT, OBJECT), // TODO Array type.
+	IASTORE(VOID, ARRAY_C(INT_C), INT_C, INT_C, safe = false),
+	LASTORE(VOID, ARRAY_C(LONG_C), INT_C, LONG_C, safe = false),
+	FASTORE(VOID, ARRAY_C(FLOAT_C), INT_C, FLOAT_C, safe = false),
+	DASTORE(VOID, ARRAY_C(DOUBLE_C), INT_C, DOUBLE_C, safe = false),
+	AASTORE(VOID, ARRAY_C(REF_C), INT_C, REF_C, safe = false),
+	BASTORE(VOID, ARRAY_C(BYTE_OR_BOOLEAN_C), INT_C, INT_C, safe = false),
+	CASTORE(VOID, ARRAY_C(CHAR_C), INT_C, INT_C, safe = false),
+	SASTORE(VOID, ARRAY_C(SHORT_C), INT_C, INT_C, safe = false),
 
-	MONITORENTER(VOID, OBJECT, safe = false),
-	MONITOREXIT(VOID, OBJECT, safe = false),
-	;
+	// +---------------------------------------------------------------------------
+	// |  BITWISE AND ARITHMETIC OPCODES
+	// +---------------------------------------------------------------------------
 
-/*
-MAY THROW EXCEPTIONS:
+	IADD(INT, INT_C, INT_C),
+	LADD(LONG, LONG_C, LONG_C),
+	FADD(FLOAT, FLOAT_C, FLOAT_C),
+	DADD(DOUBLE, DOUBLE_C, DOUBLE_C),
+	ISUB(INT, INT_C, INT_C),
+	LSUB(LONG, LONG_C, LONG_C),
+	FSUB(FLOAT, FLOAT_C, FLOAT_C),
+	DSUB(DOUBLE, DOUBLE_C, DOUBLE_C),
+	IMUL(INT, INT_C, INT_C),
+	LMUL(LONG, LONG_C, LONG_C),
+	FMUL(FLOAT, FLOAT_C, FLOAT_C),
+	DMUL(DOUBLE, DOUBLE_C, DOUBLE_C),
+	FDIV(FLOAT, FLOAT_C, FLOAT_C),
+	DDIV(DOUBLE, DOUBLE_C, DOUBLE_C),
+	FREM(FLOAT, FLOAT_C, FLOAT_C),
+	DREM(DOUBLE, DOUBLE_C, DOUBLE_C),
+	INEG(INT, INT_C),
+	LNEG(LONG, LONG_C),
+	FNEG(FLOAT, FLOAT_C),
+	DNEG(DOUBLE, DOUBLE_C),
+	ISHL(INT, INT_C, INT_C),
+	LSHL(LONG, LONG_C, INT_C),
+	ISHR(INT, INT_C, INT_C),
+	LSHR(LONG, LONG_C, INT_C),
+	IUSHR(INT, INT_C, INT_C),
+	LUSHR(LONG, LONG_C, INT_C),
+	IAND(INT, INT_C, INT_C),
+	LAND(LONG, LONG_C, LONG_C),
+	IOR(INT, INT_C, INT_C),
+	LOR(LONG, LONG_C, LONG_C),
+	IXOR(INT, INT_C, INT_C),
+	LXOR(LONG, LONG_C, LONG_C),
+
+	// Integer div/rems are unsafe since they may throw ArithmeticException when the divisor is 0.
+	// Note that the float/double equivalents are safe since they return NaN instead of throwing.
+	IDIV(INT, INT_C, INT_C, safe = false),
+	LDIV(LONG, LONG_C, LONG_C, safe = false),
+	IREM(INT, INT_C, INT_C, safe = false),
+	LREM(LONG, LONG_C, LONG_C, safe = false),
+
+	// +---------------------------------------------------------------------------
+	// |  CONVERSION OPCODES
+	// +---------------------------------------------------------------------------
+
+	I2L(LONG, INT_C),
+	I2F(FLOAT, INT_C),
+	I2D(DOUBLE, INT_C),
+	I2B(INT, INT_C),
+	I2C(INT, INT_C),
+	I2S(INT, INT_C),
+	L2I(INT, LONG_C),
+	L2F(FLOAT, LONG_C),
+	L2D(DOUBLE, LONG_C),
+	F2I(INT, FLOAT_C),
+	F2L(LONG, FLOAT_C),
+	F2D(DOUBLE, FLOAT_C),
+	D2I(INT, DOUBLE_C),
+	D2L(LONG, DOUBLE_C),
+	D2F(FLOAT, DOUBLE_C),
+
+	// +---------------------------------------------------------------------------
+	// |  COMPARISON OPCODES
+	// +---------------------------------------------------------------------------
+
+	LCMP(INT, LONG_C, LONG_C),
+	FCMPL(INT, FLOAT_C, FLOAT_C),
+	FCMPG(INT, FLOAT_C, FLOAT_C),
+	DCMPL(INT, DOUBLE_C, DOUBLE_C),
+	DCMPG(INT, DOUBLE_C, DOUBLE_C),
+
+	// +---------------------------------------------------------------------------
+	// |  MISC OPCODES
+	// +---------------------------------------------------------------------------
+
+	// May throw NullPointerException.
+	ARRAYLENGTH(INT, ARRAY_C(ANY_C), safe = false),
+
+	// May throw NullPointerException.
+	MONITORENTER(VOID, REF_C, safe = false),
+
+	// May throw NullPointerException, IllegalMonitorStateException and
+	// IllegalMonitorStateException.
+	MONITOREXIT(VOID, REF_C, safe = false),
 
 
-anewarray
-	linking, size < 0
-arraylength
-	a is null
 
-checkcast -- duuh
+	; // --------------------------------------------------------------------------
 
-getfield
-getstatic
-putfield
-putstatic
-idiv
 
-irem
-ldiv
-lrem
-monitorenter
-monitorexit
-newarray
 
-multianewarray
-new
+	private val opcode = org.objectweb.asm.Opcodes::class.java.getField(name).getInt(null)
 
-*aload
-	if array is null
-*astore
-	if array is null, oob, types
+	override val voidReturn get() = exactReturn == VOID
 
-invokeinterface
-spec
-static
-invdynamic
-virt
-
-	 */
-
-	private val opcode: Int = Opcodes::class.java.getField(name).getInt(null)
-	override val parameterTypes: List<Thing> = parameterTypes.toList()
-	override val representation get() = name
+	override fun returnType(args: DependencyArray<Def>) = exactReturn
+			?: throw IllegalStateException("No exact type for $this and no returnType overload")
 
 	override fun visit(visitor: MethodVisitor) = visitor.visitInsn(opcode)
 
+	init {
+		@Suppress("LeakingThis") // Is only used after initialization.
+		Lookup.opcodes[opcode] = this
+	}
+
 	companion object {
-		fun fromJvmOpcode(opcode: Int) = values().find { it.opcode == opcode }
+
+		/**
+		 * Finds the [InvIntrinsic] corresponding to the JVM opcode.
+		 */
+		fun fromJvmOpcode(opcode: Int) = try {
+			Lookup.opcodes[opcode]
+		} catch (e: ArrayIndexOutOfBoundsException) {
+			null
+		}
+
+		private class Lookup {
+			companion object {
+				val opcodes = arrayOfNulls<InvIntrinsic>(200)
+			}
+		}
 	}
 }

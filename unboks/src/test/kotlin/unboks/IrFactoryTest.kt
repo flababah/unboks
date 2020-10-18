@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.objectweb.asm.MethodVisitor
 import unboks.invocation.Invocation
+import unboks.invocation.ParameterCheck
 import kotlin.test.assertEquals
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -14,10 +15,9 @@ class IrFactoryTest {
 
 	private class DummyInv : Invocation {
 		override val safe get() = true
-		override val parameterTypes get() = emptyList<Thing>()
-		override val returnType get() = VOID
-		override val representation get() = "Dummy"
-
+		override val parameterChecks: Array<out ParameterCheck> get() = emptyArray()
+		override val voidReturn get() = true
+		override fun returnType(args: DependencyArray<Def>) = VOID
 		override fun visit(visitor: MethodVisitor) { }
 	}
 

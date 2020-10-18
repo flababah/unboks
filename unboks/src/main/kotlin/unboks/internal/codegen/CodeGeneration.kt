@@ -61,7 +61,7 @@ private class IrToInstMapping {
 	}
 
 	fun resolveInvoke(invoke: IrInvoke): JvmRegister? {
-		return if (invoke.spec.returnType != VOID)
+		return if (!invoke.spec.voidReturn)
 			resolveDef(invoke) as JvmRegister // Invoke result is always a register.
 		else
 			null
