@@ -48,6 +48,10 @@ class InvNewArray(val component: Thing, val dimensions: Int) : Invocation {
 		return ArrayReference(component)
 	}
 
+	override fun toString(): String {
+		return "NEWARRAY $component"
+	}
+
 	override fun visit(visitor: MethodVisitor) {
 		when {
 			dimensions > 1         -> visitor.visitMultiANewArrayInsn(arrayType.descriptor, dimensions)
