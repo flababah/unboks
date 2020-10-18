@@ -3,7 +3,7 @@ package unboks
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
-import unboks.invocation.InvType
+import unboks.invocation.InvNew
 import unboks.pass.builtin.InconsistencyException
 import unboks.pass.builtin.createConsistencyCheckPass
 
@@ -30,7 +30,7 @@ class ConsistencyTest {
 		val B = graph.newBasicBlock()
 		val H = graph.newHandlerBlock()
 
-		val x = A.append().newInvoke(InvType.New(Reference.create(Object::class)))
+		val x = A.append().newInvoke(InvNew(Reference.create(Object::class)))
 		A.append().newGoto(B)
 
 		B.append().newThrow(graph.nullConst)
@@ -50,7 +50,7 @@ class ConsistencyTest {
 		val A = graph.newBasicBlock()
 		val H = graph.newHandlerBlock()
 
-		val x = A.append().newInvoke(InvType.New(Reference.create(Object::class)))
+		val x = A.append().newInvoke(InvNew(Reference.create(Object::class)))
 		A.append().newThrow(graph.nullConst)
 		A.exceptions.add(H handles Reference.create(Throwable::class))
 
@@ -71,10 +71,10 @@ class ConsistencyTest {
 //		val B = graph.newBasicBlock()
 //		val H = graph.newHandlerBlock()
 //
-//		val x = A.append().newInvoke(InvType.New(Reference.create(Object::class)))
+//		val x = A.append().newInvoke(InvNew(Reference.create(Object::class)))
 //		A.append().newGoto(B)
 //
-//		val y = B.append().newInvoke(InvType.New(Reference.create(Object::class)))
+//		val y = B.append().newInvoke(InvNew(Reference.create(Object::class)))
 //		B.append().newThrow(graph.nullConst)
 //		B.exceptions.add(H handles Reference.create(Throwable::class))
 //
@@ -101,10 +101,10 @@ class ConsistencyTest {
 		val C = graph.newBasicBlock()
 		val H = graph.newHandlerBlock()
 
-		val x = A.append().newInvoke(InvType.New(Reference.create(Object::class)))
+		val x = A.append().newInvoke(InvNew(Reference.create(Object::class)))
 		A.append().newGoto(B)
 
-		val y = B.append().newInvoke(InvType.New(Reference.create(Object::class)))
+		val y = B.append().newInvoke(InvNew(Reference.create(Object::class)))
 		B.append().newGoto(C)
 		B.exceptions.add(H handles Reference.create(Throwable::class))
 
@@ -136,7 +136,7 @@ class ConsistencyTest {
 		val R = graph.newBasicBlock()
 		val H = graph.newHandlerBlock()
 
-		val x = A.append().newInvoke(InvType.New(Reference.create(Object::class)))
+		val x = A.append().newInvoke(InvNew(Reference.create(Object::class)))
 		A.append().newGoto(R)
 		A.exceptions.add(H handles Reference.create(Throwable::class))
 

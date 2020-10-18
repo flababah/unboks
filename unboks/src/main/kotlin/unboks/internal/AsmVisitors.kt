@@ -475,10 +475,10 @@ internal class FlowGraphVisitor(
 	override fun visitTypeInsn(opcode: Int, type: String) {
 		val ownerType = Reference.create(type)
 		val inv = when (opcode) {
-			NEW        -> InvType.New(ownerType)
+			NEW        -> InvNew(ownerType)
 			ANEWARRAY  -> InvNewArray(ArrayReference(ownerType), 1)
-			CHECKCAST  -> InvType.Checkcast(ownerType)
-			INSTANCEOF -> InvType.Instanceof(ownerType)
+			CHECKCAST  -> InvCheckcast(ownerType)
+			INSTANCEOF -> InvInstanceof(ownerType)
 			else       -> throw ParseException("Illegal opcode: $opcode")
 		}
 		deferInvocation(inv)
