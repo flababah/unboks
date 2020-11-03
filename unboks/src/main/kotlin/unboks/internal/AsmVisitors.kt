@@ -23,7 +23,6 @@ private fun panic(reason: String = "Fail"): Nothing {
  * than the block itself.
  */
 internal class FlowGraphVisitor(
-		private val version: Int,
 		private val graph: FlowGraph,
 		delegate: MethodVisitor?,
 		private val completion: () -> Unit) : MethodVisitor(ASM_VERSION, delegate) {
@@ -59,8 +58,8 @@ internal class FlowGraphVisitor(
 					blocks += AsmBlock.Basic(it.labels, exceptions.currentActives())
 				}
 				is Expecting.FrameInfo -> {
-					if (version >= V1_7)
-						throw ParseException("Missing frame information for 1.7+ bytecode")
+//					if (version >= V1_7)
+//						throw ParseException("Missing frame information for 1.7+ bytecode")
 
 					// Normally we use the frame information to get the exception types. (For
 					// multiple type in a single handler, some hierarchy knowledge is otherwise

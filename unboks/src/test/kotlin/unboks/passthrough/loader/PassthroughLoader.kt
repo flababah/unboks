@@ -1,12 +1,14 @@
 package unboks.passthrough.loader
 
 import org.objectweb.asm.ClassReader
+import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.ClassWriter
+import org.objectweb.asm.MethodVisitor
+import unboks.ASM_VERSION
+import unboks.FlowGraph
 import unboks.Reference
 import unboks.Thing
-import unboks.internal.StatMethodVisitor
 import unboks.pass.Pass
-import unboks.util.PassThroughClassVisitor
 import java.io.IOException
 
 class PassthroughLoader(
@@ -53,6 +55,24 @@ class PassthroughLoader(
 		}
 	}
 
+	private inner class TransformingClassVisitor(delegate: ClassVisitor) : ClassVisitor(ASM_VERSION, delegate) {
+		private lateinit var type: String
+
+		override fun visit(version: Int, mod: Int, name: String, sig: String?, superName: String?, ifs: Array<out String>?) {
+			this.type = name
+			super.visit(version, mod, name, sig, superName, ifs)
+		}
+
+		override fun visitMethod(mod: Int, name: String, desc: String, sig: String?, exs: Array<out String>?): MethodVisitor? {
+
+			return FlowGraph.visitMethod(type, cv, mod, name, desc, sig, exs) {
+				val pass = transformer(Reference.create(type), name)
+				if (pass != null)
+					it.execute(pass)
+			}
+		}
+	}
+
 	private fun resolveClass(name: Thing): ByteArray? {
 		val internalName = when (name) {
 			is Reference -> name.internal
@@ -61,7 +81,7 @@ class PassthroughLoader(
 		val reader = resolver(internalName) ?: return null
 		val writer = ClassWriter(ClassWriter.COMPUTE_FRAMES)
 		statsOutput = statsOutput.copy(writer) // TODO Oh dear ugly.... Make the stat stuff better!
-		statsInput = statsInput.copy(PassThroughClassVisitor(statsOutput, transformer))
+		statsInput = statsInput.copy(TransformingClassVisitor(statsOutput))
 		reader.accept(statsInput, 0)
 		return writer.toByteArray()
 	}

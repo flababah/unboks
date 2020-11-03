@@ -1,13 +1,15 @@
 package unboks
 
+import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.MethodVisitor
 import unboks.internal.FlowGraphVisitor
+import unboks.internal.MethodDescriptor
 import unboks.internal.NameRegistry
 import unboks.internal.codegen.generate
 import unboks.pass.Pass
 import unboks.pass.PassType
 import unboks.pass.builtin.createConsistencyCheckPass
-import kotlin.properties.ReadWriteProperty
+import java.lang.reflect.Modifier
 
 /**
  * Entry point into the API.
@@ -73,9 +75,11 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 
 	/**
 	 * Blablla blocks visitCode until (and including) visitEnd -> passes rest to delegate
+	 *
+	 * @see Companion.visitMethod
 	 */
-	fun createInputVisitor(version: Int, delegate: MethodVisitor?, completion: () -> Unit): MethodVisitor {
-		return FlowGraphVisitor(version, this, delegate, completion)
+	fun visitMethod(delegate: MethodVisitor?, completion: () -> Unit): MethodVisitor {
+		return FlowGraphVisitor(this, delegate, completion)
 	}
 
 	fun compactNames() {
@@ -100,6 +104,51 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 			out.append("$block\n")
 			for (ir in block.opcodes)
 				out.append("- $ir\n")
+		}
+	}
+
+	companion object {
+
+		/**
+		 * Convenience-method for doing transformations in [ClassVisitor.visitMethod].
+		 *
+		 * @param typeName internal name of the type this method is defined in (from [ClassVisitor.visit])
+		 * @param delegate delegate class visitor (super) [ClassVisitor.cv]
+		 * @param access see [ClassVisitor.visitMethod]
+		 * @param name see [ClassVisitor.visitMethod]
+		 * @param descriptor see [ClassVisitor.visitMethod]
+		 * @param signature see [ClassVisitor.visitMethod]
+		 * @param exceptions see [ClassVisitor.visitMethod]
+		 * @param transformation call back allowing modifications to the graph before emitting code
+		 * @return transforming visitor or [ClassVisitor.cv].visitMethod(...) if abstract or native
+		 */
+		fun visitMethod(
+				typeName: String,
+				delegate: ClassVisitor?,
+				access: Int,
+				name: String,
+				descriptor: String,
+				signature: String?,
+				exceptions: Array<out String>?,
+				transformation: (FlowGraph) -> Unit): MethodVisitor? {
+
+			val type = Reference.create(typeName)
+			val delegateMv = delegate?.visitMethod(access, name, descriptor, signature, exceptions)
+			if (Modifier.isAbstract(access) || Modifier.isNative(access))
+				return delegateMv
+
+			val ms = MethodDescriptor(descriptor)
+			val parameterTypes =
+					if (Modifier.isStatic(access)) ms.parameters
+					else listOf(type) + ms.parameters
+			val graph = FlowGraph(*parameterTypes.toTypedArray())
+
+			return graph.visitMethod(delegateMv) {
+				transformation(graph)
+
+				if (delegateMv != null)
+					graph.generate(delegateMv)
+			}
 		}
 	}
 }

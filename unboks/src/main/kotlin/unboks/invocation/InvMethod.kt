@@ -6,7 +6,7 @@ import unboks.*
 import unboks.internal.MethodDescriptor
 import unboks.internal.TODO_C
 
-sealed class InvMethod( // TODO Cleanup
+sealed class InvMethod( // TODO Cleanup - InvCall
 		private val owner: Reference,
 		private val name: String,
 		private val desc: String,
