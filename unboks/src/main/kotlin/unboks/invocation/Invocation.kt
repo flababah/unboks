@@ -11,9 +11,10 @@ import unboks.*
 interface Invocation {
 
 	/**
-	 * If an invocation is safe it may never throw exceptions. In this context "safe" invocations
-	 * may throw class resolution and linking errors. This is a compromise, since LDC can also
-	 * do that, and we don't want to extend the scope of "unsafe" to outside invocations for now...
+	 * If an invocation is safe it may never throw exceptions during runtime. Instructions
+	 * that can throw class resolution and linking errors (but no runtime errors) are considered
+	 * "safe". There are no semantic consequences for marking a safe instruction as unsafe. This
+	 * might just lead to a more bloated bytecode (more watched-block splitting and phi joins).
 	 */
 	val safe: Boolean
 
