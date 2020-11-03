@@ -42,6 +42,6 @@ internal object NON_ARRAY_REF_C : ParameterCheck {
 
 @Deprecated("TODO implement")
 internal object TODO_C : ParameterCheck {
-	override val expected = "... to be implemented"
-	override fun check(type: Thing) = TODO("implement me")
+	override val expected = "[to be implemented]"
+	override fun check(type: Thing) = false
 }

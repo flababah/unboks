@@ -10,7 +10,7 @@ import unboks.internal.INT_C
 import unboks.internal.MethodDescriptor
 import unboks.internal.TODO_C
 
-class InvDynamic( // TODO Cleanup
+class InvDynamic( // TODO Cleanup -- merge med andre...
 		val name: String,
 		val desc: String,
 		val handle: Handle,

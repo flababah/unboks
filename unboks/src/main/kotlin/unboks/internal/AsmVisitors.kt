@@ -492,7 +492,7 @@ internal class FlowGraphVisitor(
 			PUTFIELD  -> InvField.Put(owner, name, type)
 			GETSTATIC -> InvField.GetStatic(owner, name, type)
 			PUTSTATIC -> InvField.PutStatic(owner, name, type)
-			else -> throw ParseException("unknown field opcode")
+			else -> throw ParseException("Illegal opcode: $opcode")
 		}
 		deferInvocation(invocation)
 	}
@@ -500,10 +500,10 @@ internal class FlowGraphVisitor(
 	override fun visitMethodInsn(opcode: Int, owner: String, name: String, desc: String, itf: Boolean) {
 		val ownerReference = Reference.create(owner)
 		val inv = when(opcode) {
-			INVOKEVIRTUAL   -> InvMethod.Virtual(ownerReference, name, desc, itf)
-			INVOKESPECIAL   -> InvMethod.Special(ownerReference, name, desc, itf)
-			INVOKESTATIC    -> InvMethod.Static(ownerReference, name, desc, itf)
-			INVOKEINTERFACE -> InvMethod.Interface(ownerReference, name, desc, itf)
+			INVOKEVIRTUAL   -> InvVirtual(ownerReference, name, desc)
+			INVOKESPECIAL   -> InvSpecial(ownerReference, name, desc, itf)
+			INVOKESTATIC    -> InvStatic(ownerReference, name, desc, itf)
+			INVOKEINTERFACE -> InvInterface(ownerReference, name, desc)
 			else -> throw ParseException("Illegal opcode: $opcode")
 		}
 		deferInvocation(inv)
@@ -1121,7 +1121,7 @@ private class LocalsMap(predecessor: Map<Int, Def>) {
 		if (def is WideDef)
 			throw ParseException("Trying to read upper wide slot: $index")
 		if (def.type !is T)
-			throw ParseException("Trying to read type ${T::class}, but got ${def.type::class}")
+			throw ParseException("Trying to read type ${T::class.java.name}, but got ${def.type::class}")
 		return def
 	}
 
@@ -1163,7 +1163,7 @@ private class StackMap(predecessor: List<Def>): Iterable<Def> {
 
 	inline fun <reified T> pop(): Def = stack.removeAt(stack.size - 1).apply {
 		if (type !is T)
-			throw ParseException("Expected type ${T::class}, got $type")
+			throw ParseException("Expected type ${T::class.java.name}, got $type")
 	}
 
 	inline fun <reified T> popPair(): Pair<Def, Def> {
@@ -1182,7 +1182,7 @@ private class StackMap(predecessor: List<Def>): Iterable<Def> {
 
 	inline fun <reified T> peek(reverseIndex: Int = 0) = stack[stack.size - reverseIndex - 1].apply {
 		if (type !is T)
-			throw ParseException("Expected type ${T::class}, got $type")
+			throw ParseException("Expected type ${T::class.java.name}, got $type")
 	}
 
 	fun mergeInto(phis: List<IrPhi>, definedIn: Block) {

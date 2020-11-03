@@ -32,7 +32,9 @@ enum class InvIntrinsic(
 	AALOAD(null, ARRAY_C(REF_C), INT_C, safe = false) {
 
 		// The exact return type depends on the component type of the supplied array.
-		override fun returnType(args: DependencyArray<Def>) = args[0].type
+		override fun returnType(args: DependencyArray<Def>): Thing {
+			return (args[0].type as ArrayReference).component
+		}
 	},
 	BALOAD(INT, ARRAY_C(BYTE_OR_BOOLEAN_C), INT_C, safe = false),
 	CALOAD(INT, ARRAY_C(CHAR_C), INT_C, safe = false),

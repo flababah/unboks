@@ -3,6 +3,7 @@ package unboks.pass.builtin
 import unboks.*
 import unboks.analysis.Dominance
 import unboks.internal.traverseGraph
+import unboks.invocation.InvDynamic
 import unboks.pass.Pass
 import unboks.util.handlerSafeDef
 
@@ -158,7 +159,22 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 
 	// Type check arguments
 	visit<IrInvoke> {
-		// TODO args vs spec.
+
+//		if (it.spec !is InvDynamic) { // TODO Fix InvokeDynamic and phi(null, array) resulting in OBJECT.
+//
+//			val checks = it.spec.parameterChecks
+//			val defs = it.defs
+//
+//			if (checks.size != defs.size)
+//				fail("Invocation expected ${checks.size} arguments, not ${defs.size}")
+//
+//			for (i in checks.indices) {
+//				val check = checks[i]
+//				val type = defs[i].type
+//				if (!check.check(type))
+//					fail("Invocation argument $i should be ${check.expected}, not $type")
+//			}
+//		}
 	}
 
 

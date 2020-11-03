@@ -48,7 +48,7 @@ class InvNewArray(val component: Thing, val dimensions: Int) : Invocation {
 	override val voidReturn get() = false
 
 	override fun returnType(args: DependencyArray<Def>): Thing {
-		return ArrayReference(component)
+		return arrayType
 	}
 
 	override fun toString(): String {
