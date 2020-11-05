@@ -28,89 +28,86 @@ internal class FlowGraphVisitor(
 		private val completion: () -> Unit) : MethodVisitor(ASM_VERSION, delegate) {
 
 	private val slotIndex = SlotIndexMap(graph.parameters)
-	private lateinit var state: State
 
 	/**
-	 * Convenience method for [defer].
+	 * Labels that are jumped to (either normal jump instructions or exception handlers)
+	 * but NOT used as markers for exception bounds or by fallthrough.
 	 */
+	private val targetLabels = mutableSetOf<Label>()
+
+	private val exceptions = ExceptionIntervals()
+	private val blocks = mutableListOf<AsmBlock<*>>()
+
+	private var pendingBlock: PendingBlock? = PendingBlock()
+
+	private fun expectReference(item: FrameItem): Reference {
+		if (item !is FrameItem.Type || item.type !is Reference)
+			throw ParseException("Top stack type is not a reference")
+		return item.type
+	}
+
+	private fun defer(f: Deferred) {
+		val pending = pendingBlock
+		if (pending != null) {
+			val precedingLabels = pending.labels.toSet()
+			val handlerBlock = precedingLabels.any { exceptions.isHandlerLabel(it) }
+			blocks += if (handlerBlock) {
+				val stackTop = when (val frame = pending.frame) {
+					null -> null // Old bytecode. Best we can do is java.lang.Throwable.
+					is FrameDiff.Full -> expectReference(frame.stack[0])
+					is FrameDiff.Same1 -> expectReference(frame.stackSingle)
+					else -> throw ParseException("Bad handler frame: $frame")
+				}
+				AsmBlock.Handler(precedingLabels, exceptions.currentActives(), stackTop)
+			} else {
+				AsmBlock.Basic(precedingLabels, exceptions.currentActives())
+			}
+			pendingBlock = null
+		}
+		val current = blocks.last()
+		current.operations += f
+	}
+
 	private fun deferInvocation(spec: Invocation) {
 		defer(Deferred.Inv(spec))
 	}
 
-	/**
-	 * Convenience method for [defer].
-	 */
 	private fun deferTerminal(jumps: Set<Label> = emptySet(), fallthrough: Boolean = false, f: DeferContext.() -> Unit) {
 		defer(Deferred.Terminal(jumps, fallthrough, f))
+		targetLabels += jumps
+		pendingBlock = PendingBlock()
 	}
 
-	/**
-	 * Convenience method for [defer].
-	 */
 	private fun deferOther(rw: Pair<Rw, Int>? = null, f: DeferContext.() -> Unit) {
 		defer(Deferred.Other(rw, f))
-	}
-
-	private fun defer(f: Deferred) {
-		state.mutate {
-			when (it) {
-				is Expecting.NewBlock -> {
-					blocks += AsmBlock.Basic(it.labels, exceptions.currentActives())
-				}
-				is Expecting.FrameInfo -> {
-//					if (version >= V1_7)
-//						throw ParseException("Missing frame information for 1.7+ bytecode")
-
-					// Normally we use the frame information to get the exception types. (For
-					// multiple type in a single handler, some hierarchy knowledge is otherwise
-					// required to get the best upper-bound for the type.)
-					// Bytecode version 1.5 or older does not contain frame information. In that case
-					// we just use Throwable as the type. Could be better, but it's old bytecode...
-					// Only in 1.7+ is it required to have stack maps...?
-					blocks += AsmBlock.Handler(it.labels, exceptions.currentActives(), null)
-				}
-				is Expecting.Any -> {
-					if (blocks.isEmpty())
-						blocks += AsmBlock.Basic(emptySet(), exceptions.currentActives()) // Root block without a label prior.
-				}
-			}
+		if (rw != null) {
 			val current = blocks.last()
-			current.operations += f
-			f.updateState(this)
-			when {
-				// No labels associated here, since this split was caused by encountering
-				// a terminal op, not by a visiting a label.
-				f is Deferred.Terminal -> Expecting.NewBlock()
-				it != Expecting.Any -> Expecting.Any
-				else -> it
-			}
+			val (op, slot) = rw
+			current.rw[slot] += op
 		}
 	}
 
 	override fun visitCode() {
-		state = State()
+		if (blocks.isNotEmpty() || targetLabels.isNotEmpty())
+			throw IllegalStateException("Visitor already ran")
 	}
 
 	override fun visitLabel(label: Label) {
-		state.mutate {
-			// In case multiple labels without anything of interest (line number markers) appeared
-			// before we need to make sure all those labels are registered for the resulting block.
-			val accumulatedLabels = when (it) {
-				is Expecting.FrameInfo -> throw ParseException("Expected frame info after handler label, not another label")
-				is Expecting.NewBlock -> it.labels + label
-				is Expecting.Any -> setOf(label)
+		exceptions.visitLabel(label)
+
+		val pending = pendingBlock
+		if (pending != null) {
+			pending.labels += label
+		} else {
+			pendingBlock = PendingBlock().also {
+				it.labels += label
 			}
-			exceptions.visitLabel(label)
-			if (exceptions.isHandlerLabel(label))
-				Expecting.FrameInfo(accumulatedLabels)
-			else
-				Expecting.NewBlock(accumulatedLabels)
 		}
 	}
 
 	override fun visitTryCatchBlock(start: Label, end: Label, handler: Label, type: String?) {
-		state.exceptions.addEntry(start, end, handler, type?.let { Reference.create(it) })
-		state.targetLabels += handler
+		exceptions.addEntry(start, end, handler, type?.let { Reference.create(it) })
+		targetLabels += handler
 	}
 
 	override fun visitLocalVariable(name: String, desc: String?, sig: String?, start: Label?, end: Label?, index: Int) {
@@ -125,19 +122,12 @@ internal class FlowGraphVisitor(
 	}
 
 	override fun visitFrame(type: Int, nLocal: Int, local: Array<out Any>?, nStack: Int, stack: Array<out Any>?) {
-		state.mutate {
-			if (it is Expecting.FrameInfo) {
-				when (type) {
-					F_FULL, F_SAME1 -> assert(nStack == 1) { "Stack size at handler is not 1" }
-					else -> TODO("Some other frame info type, yo")
-				}
-				val exceptionType = Reference.create(stack!![0] as String) // Mmm, unsafe Java.
-				blocks += AsmBlock.Handler(it.labels, exceptions.currentActives(), exceptionType)
-				Expecting.Any
-			} else {
-				it
-			}
-		}
+		val pending = pendingBlock ?: throw ParseException("Unexpected frame")
+
+		if (pending.frame != null)
+			throw ParseException("Pending block already has frame info")
+
+		pending.frame = FrameDiff.fromVisitFrame(type, nLocal, local, nStack, stack)
 	}
 
 	private fun createMergedBlocks(): List<AsmBlock<*>> {
@@ -154,8 +144,8 @@ internal class FlowGraphVisitor(
 			return merged
 		}
 
-		return consolidateList(state.blocks) { previous, current ->
-			val currentUsed = current.labels.any { it in state.targetLabels }
+		return consolidateList(blocks) { previous, current ->
+			val currentUsed = current.labels.any { it in targetLabels }
 			val sameExceptions = previous.exceptions == current.exceptions
 
 			if (previous.terminal == null && !currentUsed && sameExceptions)
@@ -554,50 +544,24 @@ internal class FlowGraphVisitor(
 	}
 }
 
-private class State {
-
-	/**
-	 * Labels that are jumped to (either normal jump instructions or exception handlers)
-	 * but NOT used as markers for exception bounds or by fallthrough.
-	 */
-	val targetLabels = mutableSetOf<Label>()
-
-	val exceptions = ExceptionIntervals()
-	val blocks = mutableListOf<AsmBlock<*>>()
-
-	private var expecting: Expecting = Expecting.NewBlock()
-
-	inline fun mutate(f: State.(Expecting) -> Expecting) {
-		val current = expecting
-		val new = f(current)
-		if (new != current)
-			expecting = new
-	}
+private class PendingBlock {
+	val labels = HashSet<Label>()
+	var frame: FrameDiff? = null
 }
 
 private sealed class Deferred {
 
-	abstract fun updateState(state: State)
+	class Inv(
+			val spec: Invocation) : Deferred()
 
-	class Inv(val spec: Invocation) : Deferred() {
-		override fun updateState(state: State) { }
-	}
+	class Terminal(
+			val jumps: Set<Label> = emptySet(),
+			val fallthrough: Boolean = false,
+			val f: DeferContext.() -> Unit) : Deferred()
 
-	class Terminal(val jumps: Set<Label> = emptySet(), val fallthrough: Boolean = false, val f: DeferContext.() -> Unit) : Deferred() {
-		override fun updateState(state: State) {
-			state.targetLabels += jumps
-		}
-	}
-
-	class Other(val rw: Pair<Rw, Int>? = null, val f: DeferContext.() -> Unit) : Deferred() {
-		override fun updateState(state: State) {
-			if (rw != null) {
-				val current = state.blocks.last()
-				val (op, slot) = rw
-				current.rw[slot] += op
-			}
-		}
-	}
+	class Other(
+			val rw: Pair<Rw, Int>? = null,
+			val f: DeferContext.() -> Unit) : Deferred()
 }
 
 private class DeferContext(
