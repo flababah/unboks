@@ -159,22 +159,20 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 
 	// Type check arguments
 	visit<IrInvoke> {
+		if (it.spec !is InvDynamic) {
+			val checks = it.spec.parameterChecks
+			val defs = it.defs
 
-//		if (it.spec !is InvDynamic) { // TODO Fix InvokeDynamic and phi(null, array) resulting in OBJECT.
-//
-//			val checks = it.spec.parameterChecks
-//			val defs = it.defs
-//
-//			if (checks.size != defs.size)
-//				fail("Invocation expected ${checks.size} arguments, not ${defs.size}")
-//
-//			for (i in checks.indices) {
-//				val check = checks[i]
-//				val type = defs[i].type
-//				if (!check.check(type))
-//					fail("Invocation argument $i should be ${check.expected}, not $type")
-//			}
-//		}
+			if (checks.size != defs.size)
+				fail("Invocation expected ${checks.size} arguments, not ${defs.size}")
+
+			for (i in checks.indices) {
+				val check = checks[i]
+				val type = defs[i].type
+				if (!check.check(type))
+					fail("Invocation argument $i should be ${check.expected}, not $type")
+			}
+		}
 	}
 
 
@@ -235,8 +233,8 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 
 			if (firstType == null)
 				firstType = def.type
-			else if (def.type.common(firstType) == null)
-				fail("Phi defs type mismatch: $firstType vs ${def.type}")
+//			else if (def.type.common(firstType) == null) // TODO Reimplement this.
+//				fail("Phi defs type mismatch: $firstType vs ${def.type}")
 		}
 		for ((assignedIn, def) in it.defs.entries) {
 			if (assignedIn !in allPredecessors) {

@@ -160,22 +160,59 @@ class IrPhi internal constructor(block: Block, private val explicitType: Thing?)
 
 	override val uses = RefCount<Use>()
 
-	// explicitType is to prevent stack overflows in case we get stuck in a phi cycle.
-	override val type: Thing get() = if (explicitType != null) explicitType else commonType()
+	override val type: Thing get() = explicitType ?: computeRoughType()
 
-	// XXX Do we need to be more aggressive if no common type can be found?
-	private fun commonType(): Thing {
-		val iter = defs.iterator()
-		if (!iter.hasNext())
+	private fun computeRoughType(acc: TypeAcc = TypeAcc()): Thing {
+		if (!acc.visited.add(this))
 			return VOID
-		var acc = iter.next().type
-		while (iter.hasNext())
-			acc = acc.common(iter.next().type) ?: return VOID
-		return acc
+
+		for (def in defs) {
+			val type = if (def is IrPhi)
+				def.computeRoughType(acc)
+			else
+				def.type
+
+			when (type) {
+				is Primitive,
+				is ArrayReference -> return type // Exact.
+				is Reference -> {
+					if (acc.best == null)
+						acc.best = type
+					// Throwable joins should remain as Throwable super type to satisfy
+					// verification. (Verification fails when trying to ATHROW something
+					// that is not Throwable -- eg. Object.) The lack of frames also means
+					// that handler block are type Throwable, so this should hopefully
+					// work.
+					else if (acc.best != THROWABLE || type != THROWABLE)
+						acc.best = OBJECT
+				}
+				NULL -> acc.foundNull = true
+				VOID -> { }
+			}
+		}
+		val best = acc.best
+		if (best != null)
+			return best
+
+		if (acc.foundNull)
+			return OBJECT
+
+		return VOID
 	}
 
 	override fun toString() = defs.entries.joinToString(
 			prefix = "$name = PHI(", separator = ", ", postfix = ")") { "${it.second.name} in ${it.first.name}" }
+
+	private companion object {
+		class TypeAcc {
+			val visited = HashSet<IrPhi>()
+			var best: Thing? = null
+			var foundNull = false
+		}
+
+		val OBJECT = Reference.create(Object::class)
+		val THROWABLE = Reference.create(Throwable::class)
+	}
 }
 
 class IrReturn internal constructor(block: Block, value: Def?)

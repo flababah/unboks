@@ -35,33 +35,28 @@ internal class FlowGraphVisitor(
 	 */
 	private val targetLabels = mutableSetOf<Label>()
 
+	private var lastLabel: Label? = null
+	private val lastLabelsForNew = HashMap<Label, Reference>()
+
+	private var currentFrame = createInitialFrame()
+
 	private val exceptions = ExceptionIntervals()
 	private val blocks = mutableListOf<AsmBlock<*>>()
 
 	private var pendingBlock: PendingBlock? = PendingBlock()
-
-	private fun expectReference(item: FrameItem): Reference {
-		if (item !is FrameItem.Type || item.type !is Reference)
-			throw ParseException("Top stack type is not a reference")
-		return item.type
-	}
 
 	private fun defer(f: Deferred) {
 		val pending = pendingBlock
 		if (pending != null) {
 			val precedingLabels = pending.labels.toSet()
 			val handlerBlock = precedingLabels.any { exceptions.isHandlerLabel(it) }
-			blocks += if (handlerBlock) {
-				val stackTop = when (val frame = pending.frame) {
-					null -> null // Old bytecode. Best we can do is java.lang.Throwable.
-					is FrameDiff.Full -> expectReference(frame.stack[0])
-					is FrameDiff.Same1 -> expectReference(frame.stackSingle)
-					else -> throw ParseException("Bad handler frame: $frame")
-				}
-				AsmBlock.Handler(precedingLabels, exceptions.currentActives(), stackTop)
-			} else {
-				AsmBlock.Basic(precedingLabels, exceptions.currentActives())
-			}
+			val frame = if (pending.hasFrame) currentFrame else null
+
+			blocks += if (handlerBlock)
+				AsmBlock.Handler(precedingLabels, exceptions.currentActives(), frame)
+			else
+				AsmBlock.Basic(precedingLabels, exceptions.currentActives(), frame)
+
 			pendingBlock = null
 		}
 		val current = blocks.last()
@@ -94,6 +89,7 @@ internal class FlowGraphVisitor(
 
 	override fun visitLabel(label: Label) {
 		exceptions.visitLabel(label)
+		lastLabel = label
 
 		val pending = pendingBlock
 		if (pending != null) {
@@ -123,19 +119,23 @@ internal class FlowGraphVisitor(
 
 	override fun visitFrame(type: Int, nLocal: Int, local: Array<out Any>?, nStack: Int, stack: Array<out Any>?) {
 		val pending = pendingBlock ?: throw ParseException("Unexpected frame")
-
-		if (pending.frame != null)
+		if (pending.hasFrame)
 			throw ParseException("Pending block already has frame info")
 
-		pending.frame = FrameDiff.fromVisitFrame(type, nLocal, local, nStack, stack)
+		pending.hasFrame = true
+		currentFrame = currentFrame.add(type, nLocal, local, nStack, stack)
 	}
 
 	private fun createMergedBlocks(): List<AsmBlock<*>> {
 		fun AsmBlock<*>.merge(with: AsmBlock.Basic): AsmBlock<*> {
 			val unionLabels = labels + with.labels
+			val headFrame = frame
+			if (with.frame != null)
+				panic("Trying to merge block with other that has frame")
+
 			val merged = when (this) {
-				is AsmBlock.Basic   -> AsmBlock.Basic(unionLabels, exceptions)
-				is AsmBlock.Handler -> AsmBlock.Handler(unionLabels, exceptions, type)
+				is AsmBlock.Basic   -> AsmBlock.Basic(unionLabels, exceptions, headFrame)
+				is AsmBlock.Handler -> AsmBlock.Handler(unionLabels, exceptions, headFrame)
 			}
 			merged.operations += operations + with.operations
 			merged.rw.putAll(rw)
@@ -170,7 +170,7 @@ internal class FlowGraphVisitor(
 		// 2. If the root block has an exception handler and that handler reads a parameter
 		//    that is redefined in somewhere in root. In that case the handler needs a phi
 		//    join from the indirect predecessor (eg. predecessor of root).
-		val pseudoRoot = AsmBlock.Basic(emptySet(), emptyList())
+		val pseudoRoot = AsmBlock.Basic(emptySet(), emptyList(), null)
 		val blocks = listOf(pseudoRoot) + mergedBlocks
 
 		// Phase 1 ends.
@@ -183,12 +183,31 @@ internal class FlowGraphVisitor(
 		// Phase 3.
 		val locals = LocalsMap(createInitialLocalsMap())
 		val stack = StackMap(emptyList())
-		reify(graph, pseudoRoot, null, locals, stack)
+		reify(graph, lastLabelsForNew, pseudoRoot, null, locals, stack)
 
 		graph.execute(createPhiPruningPass())
 		graph.compactNames()
 
+		// Finally, notify hook that the flow graph has been built.
 		completion()
+	}
+
+	private fun createInitialFrame(): Frame {
+		// 4.10.1.6: The initial type state of a method consists of an empty operand stack and
+		// local variable types derived from the type of this and the arguments, as well as
+		// the appropriate flag, depending on whether this is an <init> method.
+		//
+		// We don't actually care about "uninitialized-this" in constructors since we just need
+		// exact types for phi joins. When encountering "uninitialized-this" in a stackmap frame,
+		// we can derive the exact type from the first parameter.
+		val locals = ArrayList<Frame.Item>()
+
+		for (parameter in graph.parameters) {
+			locals += Frame.Item.Type(parameter.exactType.widened)
+			if (parameter.type.width == 2)
+				locals += Frame.Item.Wide
+		}
+		return Frame(locals, emptyList())
 	}
 
 	private fun createInitialLocalsMap(): Map<Int, Def> = mutableMapOf<Int, Def>().apply {
@@ -463,6 +482,13 @@ internal class FlowGraphVisitor(
 
 	override fun visitTypeInsn(opcode: Int, type: String) {
 		val ownerType = Reference.create(type)
+
+		if (opcode == NEW) {
+			val last = lastLabel
+			if (last != null)
+				lastLabelsForNew[last] = ownerType
+		}
+
 		val inv = when (opcode) {
 			NEW        -> InvNew(ownerType)
 			ANEWARRAY  -> InvNewArray(ownerType, 1)
@@ -546,7 +572,7 @@ internal class FlowGraphVisitor(
 
 private class PendingBlock {
 	val labels = HashSet<Label>()
-	var frame: FrameDiff? = null
+	var hasFrame = false
 }
 
 private sealed class Deferred {
@@ -565,6 +591,7 @@ private sealed class Deferred {
 }
 
 private class DeferContext(
+		private val uninitMap: Map<Label, Reference>,
 		private val block: AsmBlock<*>,
 		private val reification: Reification<*>,
 		val locals: LocalsMap,
@@ -609,7 +636,7 @@ private class DeferContext(
 			target
 		} else {
 			// Recursively reify successor block.
-			reify(backing.graph, successor, backing, this.locals, this.stack)
+			reify(backing.graph, uninitMap, successor, backing, this.locals, this.stack)
 		}
 	}
 
@@ -630,7 +657,7 @@ private fun handlerReadDependencies(block: AsmBlock<*>): Set<Int> {
 	return handlerReads
 }
 
-private fun <T : Block> reify(graph: FlowGraph, block: AsmBlock<T>, pred: Block?, predLocals: LocalsMap, predStack: StackMap): T {
+private fun <T : Block> reify(graph: FlowGraph, uninitMap: Map<Label, Reference>, block: AsmBlock<T>, pred: Block?, predLocals: LocalsMap, predStack: StackMap): T {
 	val backing = block.create(graph)
 	val appender = backing.append()
 	val reads = block.rw.asSequence()
@@ -640,6 +667,16 @@ private fun <T : Block> reify(graph: FlowGraph, block: AsmBlock<T>, pred: Block?
 
 	val locals: Map<Int, Def>
 	val stack: List<Def>
+
+	fun frameJoinType(item: Frame.Item) = when (item) {
+		Frame.Item.Top -> throw ParseException("Trying to join TOP type")
+		Frame.Item.Wide -> throw ParseException("Trying to join WIDE type")
+		Frame.Item.UninitializedThis -> graph.parameters[0].type
+		is Frame.Item.Type -> item.type
+		is Frame.Item.Uninitialized -> uninitMap[item.offset] ?: throw ParseException("Unknown uninitialized type")
+	}
+
+	val frame = block.frame
 
 	// Number of distinct predecessors. For multiple predecessors from the same block
 	// (eg. lookup switch), but only a single predecessor block, we shouldn't phi join.
@@ -651,14 +688,26 @@ private fun <T : Block> reify(graph: FlowGraph, block: AsmBlock<T>, pred: Block?
 			stack = listOf(backing)
 			stackJoin = null
 		} else {
-			stack = predStack.map { appender.newPhi(it.type) }
+			stack = predStack.mapIndexed { i, _ ->
+				val type = if (frame != null)
+					frameJoinType(frame.stack[i])
+				else
+					null
+				appender.newPhi(type)
+			}
 			stackJoin = stack
 			predStack.mergeInto(stack, checkedPred)
 		}
 
 		// We need to insert a phi join for every read.
 		locals = reads.asSequence()
-				.map { it to appender.newPhi(predLocals[it].type) }
+				.map {
+					val type = if (frame != null)
+						frameJoinType(frame.locals[it])
+					else
+						null
+					it to appender.newPhi(type)
+				}
 				.toMap()
 
 		predLocals.mergeInto(locals, checkedPred)
@@ -686,6 +735,7 @@ private fun <T : Block> reify(graph: FlowGraph, block: AsmBlock<T>, pred: Block?
 	block.reification = reification
 
 	val context = DeferContext(
+			uninitMap,
 			block,
 			reification,
 			LocalsMap(locals),
@@ -945,8 +995,10 @@ private class SlotIndexMap(parameters: Iterable<Def>) {
 
 private data class AsmExceptionEntry(val handler: Label, val type: Reference?)
 
-private sealed class AsmBlock<T : Block>(val labels: Set<Label>, val exceptions: List<AsmExceptionEntry>)
-		: BaseDependencySource() {
+private sealed class AsmBlock<T : Block>(
+		val labels: Set<Label>,
+		val exceptions: List<AsmExceptionEntry>,
+		val frame: Frame?) : BaseDependencySource() {
 
 	// Phase 1 - Build info during the ASM visit.
 	val operations = mutableListOf<Deferred>()
@@ -973,14 +1025,30 @@ private sealed class AsmBlock<T : Block>(val labels: Set<Label>, val exceptions:
 
 	abstract fun create(graph: FlowGraph): T
 
-	class Basic(labels: Set<Label>, exceptions: List<AsmExceptionEntry>)
-			: AsmBlock<BasicBlock>(labels, exceptions) {
+	class Basic(labels: Set<Label>, exceptions: List<AsmExceptionEntry>, frame: Frame?)
+			: AsmBlock<BasicBlock>(labels, exceptions, frame) {
+
 		override fun create(graph: FlowGraph): BasicBlock = graph.newBasicBlock()
 	}
 
-	class Handler(labels: Set<Label>, exceptions: List<AsmExceptionEntry>, val type: Reference?)
-			: AsmBlock<HandlerBlock>(labels, exceptions) {
-		override fun create(graph: FlowGraph): HandlerBlock = graph.newHandlerBlock(type)
+	class Handler(labels: Set<Label>, exceptions: List<AsmExceptionEntry>, frame: Frame?)
+			: AsmBlock<HandlerBlock>(labels, exceptions, frame) {
+
+		override fun create(graph: FlowGraph): HandlerBlock {
+			val stackTop = if (frame != null) {
+				val stack = frame.stack
+				if (stack.size != 1)
+					throw ParseException("Stack size at exception handler not 1: ${stack.size}")
+				val top = stack[0]
+				if (top !is Frame.Item.Type || top.type !is Reference)
+					throw ParseException("Top stack type is not a reference: $top")
+				top.type
+			} else {
+				null // Old bytecode. Best we can do is java.lang.Throwable.
+			}
+
+			return graph.newHandlerBlock(stackTop)
+		}
 	}
 }
 
@@ -1017,12 +1085,6 @@ private data class Reification<T : Block>(val backing: T, val join: Join?) {
 		current.append().newGoto(tail)
 		return tail
 	}
-}
-
-private sealed class Expecting {
-	class NewBlock(val labels: Set<Label> = emptySet()) : Expecting()
-	class FrameInfo(val labels: Set<Label>) : Expecting()
-	object Any : Expecting()
 }
 
 private class ExceptionIntervals {

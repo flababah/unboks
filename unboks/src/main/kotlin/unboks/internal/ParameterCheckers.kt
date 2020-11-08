@@ -27,7 +27,9 @@ internal object REF_C : ParameterCheck {
 
 internal class ARRAY_C(private val inner: ParameterCheck) : ParameterCheck {
 	override val expected = "${inner.expected}[]"
-	override fun check(type: Thing) = type is ArrayReference && inner.check(type.component)
+	override fun check(type: Thing) =
+			type == NULL || // Special check since NULL is a Reference.
+			(type is ArrayReference && inner.check(type.component))
 }
 
 internal object ANY_C : ParameterCheck {

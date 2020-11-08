@@ -57,13 +57,13 @@ class StringConst internal constructor(graph: FlowGraph, value: String)
  * @see FlowGraph.constant
  */
 class TypeConst internal constructor(graph: FlowGraph, value: Thing)
-	: Constant<Thing>(graph, value, OBJECT)
+	: Constant<Thing>(graph, value, value)
 
 /**
  * @see FlowGraph.constant
  */
 class NullConst internal constructor(graph: FlowGraph)
-	: Constant<Reference>(graph, OBJECT, OBJECT) {
+	: Constant<Reference>(graph, NULL, NULL) {
 
 	override var name: String
 		get() = "null"

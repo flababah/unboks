@@ -19,12 +19,6 @@ sealed class Thing(
 		val width: Int,
 		val descriptor: String) {
 
-	/**
-	 * Returns some common compatible ancestor of the two types, if one exists.
-	 * Not too well-defined at the moment...
-	 */
-	open fun common(other: Thing): Thing? = if (this == other) this else null
-
 	override fun equals(other: Any?) = other is Thing && descriptor == other.descriptor
 	override fun hashCode() = descriptor.hashCode()
 	override fun toString() = descriptor
@@ -82,10 +76,6 @@ sealed class Thing(
  */
 open class Reference internal constructor(val internal: String, descriptor: String) : Thing(1, descriptor), T32 {
 
-	override fun common(other: Thing): Thing? {
-		return super.common(other) ?: (if (other is Reference) OBJECT else null)
-	}
-
 	companion object {
 
 		/**
@@ -128,9 +118,8 @@ class ArrayReference(val component: Thing) : Reference("[${component.descriptor}
 
 sealed class Primitive(width: Int, symbol: Char) : Thing(width, "$symbol")
 
-@Deprecated("Remove in parameter type refactor")
-object OBJECT  : Reference("java/lang/Object", "Ljava/lang/Object;")
-object VOID    : Thing(0, "V")
+object VOID : Thing(0, "V")
+object NULL : Reference("null", "null")
 
 // +---------------------------------------------------------------------------
 // |  Integer types
