@@ -41,9 +41,3 @@ internal object NON_ARRAY_REF_C : ParameterCheck {
 	override val expected = "Non-array reference"
 	override fun check(type: Thing) = type is Reference && type !is ArrayReference
 }
-
-@Deprecated("TODO implement")
-internal object TODO_C : ParameterCheck {
-	override val expected = "[to be implemented]"
-	override fun check(type: Thing) = false
-}

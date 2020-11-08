@@ -159,19 +159,17 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 
 	// Type check arguments
 	visit<IrInvoke> {
-		if (it.spec !is InvDynamic) {
-			val checks = it.spec.parameterChecks
-			val defs = it.defs
+		val checks = it.spec.parameterChecks
+		val defs = it.defs
 
-			if (checks.size != defs.size)
-				fail("Invocation expected ${checks.size} arguments, not ${defs.size}")
+		if (checks.size != defs.size)
+			fail("Invocation expected ${checks.size} arguments, not ${defs.size}")
 
-			for (i in checks.indices) {
-				val check = checks[i]
-				val type = defs[i].type
-				if (!check.check(type))
-					fail("Invocation argument $i should be ${check.expected}, not $type")
-			}
+		for (i in checks.indices) {
+			val check = checks[i]
+			val type = defs[i].type
+			if (!check.check(type))
+				fail("Invocation argument $i should be ${check.expected}, not $type")
 		}
 	}
 
