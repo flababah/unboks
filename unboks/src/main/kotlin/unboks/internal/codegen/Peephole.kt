@@ -42,7 +42,7 @@ internal class PeepholeMatcher(init: Builder.() -> Unit) {
 	internal inner class Builder(private val acc: MutableList<Pair<IntArray, Pattern>>) {
 
 		private fun ordinalOf(type: KClass<out Inst>): Int {
-			// This is arguable less "unsafe" than adding some duplicated static information about
+			// This is arguably less "unsafe" than adding some duplicated static information about
 			// each type's ordinal. We know the "ordinal" doesn't access the instance's state.
 			val hollowInstance = unsafe.allocateInstance(type.java) as Inst
 			return hollowInstance.ordinal
