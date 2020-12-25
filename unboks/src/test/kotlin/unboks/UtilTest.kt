@@ -31,7 +31,7 @@ class UtilTest {
 		val universe = 3
 		val inputLength = 1_000_000
 		val patternFrom = 2
-		val patternTo = 30
+		val patternTo = 20
 		val patternsPerLength = 25
 
 		val random = Random(0)
