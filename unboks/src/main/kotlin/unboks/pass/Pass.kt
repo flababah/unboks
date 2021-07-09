@@ -3,6 +3,9 @@ package unboks.pass
 import unboks.Block
 import unboks.DependencySource
 import unboks.FlowGraph
+import java.util.function.BiFunction
+import java.util.function.Consumer
+import java.util.function.Function
 import kotlin.reflect.KClass
 
 /**
@@ -14,6 +17,11 @@ class Pass<R>(private val initBlock: Builder<R>.() -> Unit) {
 	private val context = Context(this)
 	private val values = mutableMapOf<PassType, R>()
 	private val backlog = mutableSetOf<PassType>()
+
+	/**
+	 * Convenience constructor for Java usage.
+	 */
+	constructor(initBlock: Consumer<Builder<R>>) : this({ initBlock.accept(this) })
 
 	/**
 	 * Not a big DSL, but we need to mark it anyway to prevent nested [Builder.visit]
@@ -39,6 +47,24 @@ class Pass<R>(private val initBlock: Builder<R>.() -> Unit) {
 		@Suppress("UNCHECKED_CAST") // Checked in visitItem.
 		fun <T : PassType> visit(type: KClass<T>, block: Context.(T) -> R?) {
 			visitors += type to block as Context.(PassType) -> R?
+		}
+
+		/**
+		 * Convenience method for Java usage.
+		 *
+		 * @see visit
+		 */
+		fun <T : PassType> visit(type: Class<T>, block: BiFunction<Context, T, R?>) {
+			visit(type.kotlin) { block.apply(this, it) }
+		}
+
+		/**
+		 * Convenience method for Java usage.
+		 *
+		 * @see visit
+		 */
+		fun <T : PassType> visit(type: Class<T>, block: Function<T, R?>) {
+			visit(type.kotlin) { block.apply(it) }
 		}
 	}
 
