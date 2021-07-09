@@ -10,6 +10,7 @@ import unboks.pass.Pass
 import unboks.pass.PassType
 import unboks.pass.builtin.createConsistencyCheckPass
 import java.lang.reflect.Modifier
+import java.util.function.Consumer
 
 /**
  * Entry point into the API.
@@ -122,7 +123,6 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 		 * @param transformation call back allowing modifications to the graph before emitting code
 		 * @return transforming visitor or [ClassVisitor.cv].visitMethod(...) if abstract or native
 		 */
-		@JvmStatic
 		fun visitMethod(
 				typeName: String,
 				delegate: ClassVisitor?,
@@ -149,6 +149,27 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 
 				if (delegateMv != null)
 					graph.generate(delegateMv)
+			}
+		}
+
+		/**
+		 * Convenience method for Java usage.
+		 *
+		 * @see visitMethod
+		 */
+		@JvmStatic
+		fun visitMethod(
+				typeName: String,
+				delegate: ClassVisitor?,
+				access: Int,
+				name: String,
+				descriptor: String,
+				signature: String?,
+				exceptions: Array<out String>?,
+				transformation: Consumer<FlowGraph>): MethodVisitor? {
+
+			return visitMethod(typeName, delegate, access, name, descriptor, signature, exceptions) {
+				transformation.accept(it)
 			}
 		}
 	}
