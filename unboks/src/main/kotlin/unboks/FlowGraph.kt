@@ -122,6 +122,7 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 		 * @param transformation call back allowing modifications to the graph before emitting code
 		 * @return transforming visitor or [ClassVisitor.cv].visitMethod(...) if abstract or native
 		 */
+		@JvmStatic
 		fun visitMethod(
 				typeName: String,
 				delegate: ClassVisitor?,
