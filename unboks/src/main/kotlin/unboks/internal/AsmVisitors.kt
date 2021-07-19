@@ -130,8 +130,18 @@ internal class FlowGraphVisitor(
 		fun AsmBlock<*>.merge(with: AsmBlock.Basic): AsmBlock<*> {
 			val unionLabels = labels + with.labels
 			val headFrame = frame
-			if (with.frame != null)
-				panic("Trying to merge block with other that has frame")
+
+			// We should only get here if the blocks have been deemed mergeable. In particular,
+			// the second block cannot be used as jump target. That, in turn, means that no
+			// stack frames are required at the beginning of the second block, given the 1.7+
+			// verification rules. However, javac (OpenJDK 11.0.11 under Linux) has been observed
+			// to insert stack frames here in one rare case. Ie. "with.frame" is non-null.
+			// The verifier only seems to care that stack map frames are present at the expected
+			// positions, not that they are inserted in unnecessary places. For that reason, we
+			// just ignore this situation and carry on...
+
+			//if (with.frame != null)
+			//	panic("Trying to merge block with other that has frame")
 
 			val merged = when (this) {
 				is AsmBlock.Basic   -> AsmBlock.Basic(unionLabels, exceptions, headFrame)
