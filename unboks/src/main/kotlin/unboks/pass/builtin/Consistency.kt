@@ -274,18 +274,10 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 	/**
 	 * Check that definitions dominate uses.
 	 */
-
-	/**
-	 * Check that definitions dominate uses.
-	 */
 	visit<Use> {
 		if (it is IrPhi)
 			checkDefDomUsePhis(it)
 		else
 			checkDefDomUseNormal(it)
 	}
-
-	// TODO Check that mut dominates its writes
-	// TODO Check that any def (from another block) used in an exception handler,
-	//  must be at a safe point. <--- Not allowed in bytecode verification, use IrMutable.
 }
