@@ -142,6 +142,9 @@ class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Blo
 	 */
 	override val type: Reference = type ?: Reference.create(Throwable::class)
 
+	/**
+	 * Usages of the exception-def caught in this handler.
+	 */
 	override val uses = RefCount<Use>()
 
 	/**
