@@ -11,7 +11,7 @@ import unboks.*
 internal class TargetSpecification<A, B>(val accessor: (B) -> RefCount<A>)
 
 // +---------------------------------------------------------------------------
-// |  Publicly used specifications below
+// |  Specifications used by the API below:
 // +---------------------------------------------------------------------------
 
 internal val blockInputs = TargetSpecification<Block, BasicBlock> { it.predecessors }
