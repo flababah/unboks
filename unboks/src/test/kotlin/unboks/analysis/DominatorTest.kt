@@ -20,32 +20,19 @@ class DominatorTest {
 		val graph = FlowGraph()
 
 		// https://tanujkhattar.files.wordpress.com/2016/01/fig1.jpg
-		val r = graph.newBasicBlock() // Root.
-		r.name = "r" // TODO Name in newBasicBlock somehow.
-		val a = graph.newBasicBlock()
-		a.name = "a"
-		val b = graph.newBasicBlock()
-		b.name = "b"
-		val c = graph.newBasicBlock()
-		c.name = "c"
-		val d = graph.newBasicBlock()
-		d.name = "d"
-		val e = graph.newBasicBlock()
-		e.name = "e"
-		val f = graph.newBasicBlock()
-		f.name = "f"
-		val g = graph.newBasicBlock()
-		g.name = "g"
-		val h = graph.newBasicBlock()
-		h.name = "h"
-		val i = graph.newBasicBlock()
-		i.name = "i"
-		val j = graph.newBasicBlock()
-		j.name = "j"
-		val k = graph.newBasicBlock()
-		k.name = "k"
-		val l = graph.newBasicBlock()
-		l.name = "l"
+		val r = graph.newBasicBlock("r") // Root.
+		val a = graph.newBasicBlock("a")
+		val b = graph.newBasicBlock("b")
+		val c = graph.newBasicBlock("c")
+		val d = graph.newBasicBlock("d")
+		val e = graph.newBasicBlock("e")
+		val f = graph.newBasicBlock("f")
+		val g = graph.newBasicBlock("g")
+		val h = graph.newBasicBlock("h")
+		val i = graph.newBasicBlock("i")
+		val j = graph.newBasicBlock("j")
+		val k = graph.newBasicBlock("k")
+		val l = graph.newBasicBlock("l")
 
 		addEdges(r, a, b, c)
 		addEdges(a, d)

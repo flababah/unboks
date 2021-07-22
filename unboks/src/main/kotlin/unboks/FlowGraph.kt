@@ -44,14 +44,36 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 
 	internal fun detachBlock(block: Block) = _blocks.remove(block)
 
-	fun newBasicBlock(): BasicBlock = BasicBlock(this).apply {
-		_blocks += this
+	/**
+	 * Creates and adds a new basic block to this control flow graph.
+	 *
+	 * @param name of the new block, see [Nameable]. If empty, a generic name is used
+	 */
+	fun newBasicBlock(name: String = ""): BasicBlock {
+		val block = BasicBlock(this)
+		_blocks += block
 		if (_root == null)
-			_root = this
+			_root = block
+		if (name.isNotEmpty())
+			block.name = name
+		return block
 	}
 
-	fun newHandlerBlock(type: Reference? = null): HandlerBlock =
-			HandlerBlock(this, type).apply { _blocks += this }
+	/**
+	 * Creates and adds a new handler block to this control flow graph.
+	 *
+	 * @param defType of the exception def. Used as a hint -- does not dictate which exceptions
+	 * are caught since multiple blocks with different handled type can be caught by the same
+	 * handler. See [Block.exceptions] for actual types. TODO remove hint altogether?
+	 * @param name of the new block, see [Nameable]. If empty, a generic name is used
+	 */
+	fun newHandlerBlock(defType: Reference? = null, name: String = ""): HandlerBlock {
+		val block = HandlerBlock(this, defType)
+		_blocks += block
+		if (name.isNotEmpty())
+			block.name = name
+		return block
+	}
 
 	/**
 	 * Execute a pass on this flow.
