@@ -18,8 +18,17 @@ import java.util.function.Consumer
 class FlowGraph(vararg parameterTypes: Thing) : PassType {
 	private val constantMap = mutableMapOf<Any, Constant<*>>() // TODO WeakReference
 	private val _blocks = mutableSetOf<Block>()
+	private var _root: BasicBlock? = null
+	internal val nameRegistry = NameRegistry()
+
+	/**
+	 * Set of basic/handler blocks in this flow.
+	 */
 	val blocks: Set<Block> get() = _blocks
 
+	/**
+	 * NULL-literal.
+	 */
 	val nullConst = NullConst(this)
 
 	/**
@@ -29,7 +38,9 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 			.filter { it.uses.count > 0 }
 			.toSet()
 
-	private var _root: BasicBlock? = null
+	/**
+	 * Root/entry block of this flow. The first basic block added automatically becomes the root.
+	 */
 	var root: BasicBlock
 		get() = _root ?: throw IllegalStateException("No root")
 		set(value) {
@@ -38,11 +49,7 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 			_root = value
 		}
 
-	internal val nameRegistry = NameRegistry()
-
 	val parameters: List<Parameter> = parameterTypes.map { Parameter(this, it) }
-
-	internal fun detachBlock(block: Block) = _blocks.remove(block)
 
 	/**
 	 * Creates and adds a new basic block to this control flow graph.
@@ -88,7 +95,7 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 	/**
 	 * Compile the CFG for the method and emit it into an ASM [MethodVisitor].
 	 *
-	 * Blabla starts with [MethodVisitor.visitCode], and ends with [MethodVisitor.visitEnd].
+	 * TODO Blabla starts with [MethodVisitor.visitCode], and ends with [MethodVisitor.visitEnd].
 	 * Will output 1.7+ bytecode. Frame infos, no JSR/RET.
 	 */
 	fun generate(receiver: MethodVisitor) {
@@ -97,7 +104,7 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 	}
 
 	/**
-	 * Blablla blocks visitCode until (and including) visitEnd -> passes rest to delegate
+	 * TODO Blablla blocks visitCode until (and including) visitEnd -> passes rest to delegate
 	 *
 	 * @see Companion.visitMethod
 	 */
@@ -108,9 +115,6 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 	fun compactNames() {
 		nameRegistry.prune()
 	}
-
-	@Suppress("UNCHECKED_CAST")
-	private fun <C : Constant<*>> reuseConstant(const: C) = constantMap.computeIfAbsent(const.value) { const } as C
 
 	fun constant(value: Int): IntConst = reuseConstant(IntConst(this, value))
 	fun constant(value: Long): LongConst = reuseConstant(LongConst(this, value))
@@ -129,6 +133,11 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 				out.append("- $ir\n")
 		}
 	}
+
+	internal fun detachBlock(block: Block) = _blocks.remove(block)
+
+	@Suppress("UNCHECKED_CAST")
+	private fun <C : Constant<*>> reuseConstant(const: C) = constantMap.computeIfAbsent(const.value) { const } as C
 
 	companion object {
 
