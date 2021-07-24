@@ -35,8 +35,8 @@ internal fun <T> consolidateList(input: List<T>, f: (T, T) -> T?): List<T> = whe
 }
 
 internal fun <T> traverseGraph(seeds: Set<T>, visitor: (T, (T) -> Unit) -> Unit): Set<T> {
-	val seen = seeds.toMutableSet()
-	val work = seeds.toMutableList()
+	val seen = HashSet(seeds)
+	val work = ArrayList(seeds)
 
 	while (work.isNotEmpty()) {
 		val current = work.removeAt(work.size - 1)
@@ -62,7 +62,7 @@ internal fun <T> traverseGraph(seed: T, visitor: (T, (T) -> Unit) -> Unit): Set<
  */
 internal inline fun <reified T> permutations(universe: List<List<T>>): Sequence<List<T>> {
 	if (universe.isEmpty())
-		return emptySequence();
+		return emptySequence()
 	if (universe.any { it.isEmpty() })
 		throw IllegalArgumentException("All dimensions must have at least one value")
 

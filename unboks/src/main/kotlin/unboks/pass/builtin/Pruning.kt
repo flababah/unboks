@@ -43,7 +43,7 @@ fun createPhiPruningPass() = Pass<Unit> {
 	// by non-phi uses).
 	visit<IrPhi> {
 		if (it.defs.isEmpty()) {
-			val chain = traverseGraph(it as Def) { node, acc ->
+			val chain = traverseGraph(it) { node, acc ->
 				for (use in node.uses) {
 					if (use is IrPhi) {
 						acc(use)
@@ -54,7 +54,7 @@ fun createPhiPruningPass() = Pass<Unit> {
 
 				}
 			}
-			it.remove(chain as Set<DependencySource>) // TODO Fix this shit.
+			it.remove(chain)
 		}
 	}
 
