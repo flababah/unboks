@@ -9,7 +9,7 @@ import unboks.internal.codegen.PeepholeMatcher
 import unboks.invocation.InvIntrinsic
 
 // Note that these operations shouldn't mutate the list of instructions since they are
-// intended to be run after liveness analysis. The point it is coalesce some obvious
+// intended to be run after liveness analysis. The point is to coalesce some obvious
 // situations before the register allocation is run (which might not catch these situations).
 //
 // We intend to rerun the main peephole definitions again after register allocation, in
