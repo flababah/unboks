@@ -383,34 +383,34 @@ internal class FlowGraphVisitor(
 	override fun visitJumpInsn(opcode: Int, label: Label) {
 		deferTerminal(jumps = setOf(label), fallthrough = opcode != GOTO) {
 
-			fun newCmp1(cmp: Cmp, op: Def) {
+			fun newCmp1(cmp: Cmp1, op: Def) {
 				appender.newCmp(cmp, resolveBlock(label), resolveBlock(null), op)
 			}
 
-			fun newCmp2(cmp: Cmp, ops: Pair<Def, Def>) {
+			fun newCmp2(cmp: Cmp2, ops: Pair<Def, Def>) {
 				appender.newCmp(cmp, resolveBlock(label), resolveBlock(null), ops.first, ops.second)
 			}
 
 			when (opcode) {
 				GOTO      -> appender.newGoto(resolveBlock(label))
 
-				IFEQ      -> newCmp1(Cmp.EQ,       stack.pop<INT>())
-				IFNE      -> newCmp1(Cmp.NE,       stack.pop<INT>())
-				IFLT      -> newCmp1(Cmp.LT,       stack.pop<INT>())
-				IFGE      -> newCmp1(Cmp.GE,       stack.pop<INT>())
-				IFGT      -> newCmp1(Cmp.GT,       stack.pop<INT>())
-				IFLE      -> newCmp1(Cmp.LE,       stack.pop<INT>())
-				IFNULL    -> newCmp1(Cmp.IS_NULL,  stack.pop<Reference>())
-				IFNONNULL -> newCmp1(Cmp.NOT_NULL, stack.pop<Reference>())
+				IFEQ      -> newCmp1(EQ,       stack.pop<INT>())
+				IFNE      -> newCmp1(NE,       stack.pop<INT>())
+				IFLT      -> newCmp1(LT,       stack.pop<INT>())
+				IFGE      -> newCmp1(GE,       stack.pop<INT>())
+				IFGT      -> newCmp1(GT,       stack.pop<INT>())
+				IFLE      -> newCmp1(LE,       stack.pop<INT>())
+				IFNULL    -> newCmp1(IS_NULL,  stack.pop<Reference>())
+				IFNONNULL -> newCmp1(NOT_NULL, stack.pop<Reference>())
 
-				IF_ICMPEQ -> newCmp2(Cmp.EQ,       stack.popPair<INT>())
-				IF_ICMPNE -> newCmp2(Cmp.NE,       stack.popPair<INT>())
-				IF_ICMPLT -> newCmp2(Cmp.LT,       stack.popPair<INT>())
-				IF_ICMPGE -> newCmp2(Cmp.GE,       stack.popPair<INT>())
-				IF_ICMPGT -> newCmp2(Cmp.GT,       stack.popPair<INT>())
-				IF_ICMPLE -> newCmp2(Cmp.LE,       stack.popPair<INT>())
-				IF_ACMPEQ -> newCmp2(Cmp.EQ,       stack.popPair<Reference>())
-				IF_ACMPNE -> newCmp2(Cmp.NE,       stack.popPair<Reference>())
+				IF_ICMPEQ -> newCmp2(EQ,       stack.popPair<INT>())
+				IF_ICMPNE -> newCmp2(NE,       stack.popPair<INT>())
+				IF_ICMPLT -> newCmp2(LT,       stack.popPair<INT>())
+				IF_ICMPGE -> newCmp2(GE,       stack.popPair<INT>())
+				IF_ICMPGT -> newCmp2(GT,       stack.popPair<INT>())
+				IF_ICMPLE -> newCmp2(LE,       stack.popPair<INT>())
+				IF_ACMPEQ -> newCmp2(EQ,       stack.popPair<Reference>())
+				IF_ACMPNE -> newCmp2(NE,       stack.popPair<Reference>())
 
 				JSR       -> throw ParseException("JSR opcode not supported")
 				else      -> throw ParseException("Unknown visitJumpInsn opcode: $opcode")

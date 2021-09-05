@@ -29,7 +29,7 @@ class GraphTest {
 		assertEquals(setOf(goto.block), target.predecessors)
 
 		val b2 = graph.newBasicBlock()
-		val cmp = b2.append().newCmp(Cmp.EQ, target, target, graph.parameters[0])
+		val cmp = b2.append().newCmp(EQ, target, target, graph.parameters[0])
 
 		assertEquals(target, cmp.yes)
 		assertEquals(target, cmp.no)

@@ -113,11 +113,11 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 		val type = it.op.type
 
 		when (val cmp = it.cmp) {
-			Cmp.EQ, Cmp.NE, Cmp.LT, Cmp.GT, Cmp.LE, Cmp.GE -> {
+			EQ, NE, LT, GT, LE, GE -> {
 				if (type != INT)
 					fail("IrCmp1[$cmp]'s argument must be INT, not $type")
 			}
-			Cmp.IS_NULL, Cmp.NOT_NULL -> {
+			IS_NULL, NOT_NULL -> {
 				if (type !is Reference)
 					fail("IrCmp1[$cmp]'s argument must be a reference, not $type")
 			}
@@ -130,17 +130,13 @@ fun createConsistencyCheckPass(graph: FlowGraph) = Pass<Unit> {
 		val type2 = it.op2.type
 
 		when (val cmp = it.cmp) {
-			Cmp.EQ, Cmp.NE -> {
+			EQ, NE -> {
 				if ((type1 != INT || type2 != INT) && (type1 !is Reference || type2 !is Reference))
 					fail("IrCmp2[$cmp]'s arguments must be INTs or references, not $type1 and $type2")
 			}
-			Cmp.LT, Cmp.GT, Cmp.LE, Cmp.GE -> {
+			LT, GT, LE, GE -> {
 				if (type1 != INT || type2 != INT)
 					fail("IrCmp2[$cmp]'s arguments must be INTs, not $type1 and $type2")
-			}
-			Cmp.IS_NULL, Cmp.NOT_NULL -> {
-				if (type1 !is Reference || type2 !is Reference)
-					fail("IrCmp2[$cmp]'s arguments must be references, not $type1 and $type2")
 			}
 		}
 	}

@@ -4,39 +4,6 @@ import unboks.internal.*
 import unboks.invocation.Invocation
 import unboks.pass.PassType
 
-///**
-// * Represent a comparison that can either use one or two operands.
-// *
-// * TODO examples
-// */
-//sealed class Cmp
-//object EQ: Cmp()
-//object NE: Cmp()
-//object LT: Cmp()
-//object GT: Cmp()
-//object LE: Cmp()
-//object GE: Cmp()
-//
-///**
-// * A "comparison" that is evaluated based on a single operand.
-// */
-//sealed class SingleCmp : Cmp()
-//object IS_NULL : SingleCmp()
-//object NOT_NULL : SingleCmp()
-
-enum class Cmp(val repr: String) { // TODO Figure something out...
-	EQ("=="),
-	NE("!="),
-	LT("<"),
-	GT(">"),
-	LE("<="),
-	GE(">="),
-	IS_NULL("is_null"),
-	NOT_NULL("not_null");
-
-	override fun toString() = repr
-}
-
 sealed class Ir(val block: Block) : DependencySource(), PassType {
 
 	val graph get() = block.graph
@@ -70,7 +37,7 @@ sealed class IrTerminal(block: Block) : Ir(block) {
 	abstract val successors: Set<BasicBlock>
 }
 
-class IrCmp1 internal constructor(block: Block, var cmp: Cmp, yes: BasicBlock, no: BasicBlock, op: Def)
+class IrCmp1 internal constructor(block: Block, var cmp: Cmp1, yes: BasicBlock, no: BasicBlock, op: Def)
 		: IrTerminal(block), Use {
 
 	override val defs: DependencyArray<Def> = dependencyArray(defUses, op)
@@ -85,7 +52,7 @@ class IrCmp1 internal constructor(block: Block, var cmp: Cmp, yes: BasicBlock, n
 	override fun toString() = "$cmp ${op.name} --> ${yes.name} else ${no.name}"
 }
 
-class IrCmp2 internal constructor(block: Block, var cmp: Cmp, yes: BasicBlock, no: BasicBlock, op1: Def, op2: Def)
+class IrCmp2 internal constructor(block: Block, var cmp: Cmp2, yes: BasicBlock, no: BasicBlock, op1: Def, op2: Def)
 		: IrTerminal(block), Use {
 
 	override val defs: DependencyArray<Def> = dependencyArray(defUses, op1, op2)

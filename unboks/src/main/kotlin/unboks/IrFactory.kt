@@ -7,10 +7,10 @@ class IrFactory internal constructor(private val block: Block, private val offse
 	/**
 	 * @see IrCmp1
 	 */
-	fun newCmp(cmp: Cmp, yes: BasicBlock, no: BasicBlock, op: Def): IrCmp1 =
+	fun newCmp(cmp: Cmp1, yes: BasicBlock, no: BasicBlock, op: Def): IrCmp1 =
 			register(IrCmp1(block, cmp, yes, no, op))
 
-	fun newCmp(cmp: Cmp, yes: BasicBlock, no: BasicBlock, op1: Def, op2: Def): IrCmp2 =
+	fun newCmp(cmp: Cmp2, yes: BasicBlock, no: BasicBlock, op1: Def, op2: Def): IrCmp2 =
 			register(IrCmp2(block, cmp, yes, no, op1, op2))
 
 	fun newGoto(target: BasicBlock): IrGoto =

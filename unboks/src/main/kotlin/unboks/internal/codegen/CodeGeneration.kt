@@ -118,24 +118,23 @@ private fun regLoad(source: JvmRegisterOrConst) = when (source) {
 }
 
 private fun cmpOpcode(ir: IrCmp1) = when (ir.cmp) {
-	Cmp.EQ -> IFEQ
-	Cmp.NE -> IFNE
-	Cmp.LT -> IFLT
-	Cmp.GT -> IFGT
-	Cmp.LE -> IFLE
-	Cmp.GE -> IFGE
-	Cmp.IS_NULL -> IFNULL
-	Cmp.NOT_NULL -> IFNONNULL
+	EQ -> IFEQ
+	NE -> IFNE
+	LT -> IFLT
+	GT -> IFGT
+	LE -> IFLE
+	GE -> IFGE
+	IS_NULL -> IFNULL
+	NOT_NULL -> IFNONNULL
 }
 
 private fun cmpOpcode(ir: IrCmp2) = when (ir.cmp) {
-	Cmp.EQ -> if (ir.op1.type is Reference) IF_ACMPEQ else IF_ICMPEQ
-	Cmp.NE -> if (ir.op1.type is Reference) IF_ACMPNE else IF_ICMPNE
-	Cmp.LT -> IF_ICMPLT
-	Cmp.GT -> IF_ICMPGT
-	Cmp.LE -> IF_ICMPLE
-	Cmp.GE -> IF_ICMPGE
-	else -> throw Error("${ir.cmp} not supported for IrCmp2")
+	EQ -> if (ir.op1.type is Reference) IF_ACMPEQ else IF_ICMPEQ
+	NE -> if (ir.op1.type is Reference) IF_ACMPNE else IF_ICMPNE
+	LT -> IF_ICMPLT
+	GT -> IF_ICMPGT
+	LE -> IF_ICMPLE
+	GE -> IF_ICMPGE
 }
 
 private fun returnOpcode(ir: IrReturn) = when (val type = ir.value?.type) {
