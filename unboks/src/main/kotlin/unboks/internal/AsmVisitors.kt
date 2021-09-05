@@ -246,7 +246,7 @@ internal class FlowGraphVisitor(
 	}
 
 	override fun visitMaxs(maxStack: Int, maxLocals: Int) {
-		debugJavaSlot = maxLocals
+
 	}
 
 	//
