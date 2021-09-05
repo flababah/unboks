@@ -307,8 +307,14 @@ private fun createInstRepresentation(graph: FlowGraph): Pair<List<Inst>, List<Ex
 							.map { (case, target) -> case to map.resolveBlock(target) }
 							.toMap()
 					val default = map.resolveBlock(ir.default)
-					instructions.add(regLoad(map.resolveDef(ir.key)))
-					instructions.add(InstSwitch(cases, default))
+
+					if (cases.isEmpty()) {
+						instructions.add(InstStackPop(false))
+						instructions.add(InstGoto(default))
+					} else {
+						instructions.add(regLoad(map.resolveDef(ir.key)))
+						instructions.add(InstSwitch(cases, default))
+					}
 				}
 
 				is IrThrow -> {

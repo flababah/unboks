@@ -121,22 +121,31 @@ internal class InstSwitch(cases: Map<Int, InstLabel>, default: InstLabel) : Inst
 	var default by dependencyProperty(branches, default)
 
 	init {
+		assert(cases.isNotEmpty())
 		cases.forEach { (key, value) ->
 			this.cases[key] = value
 		}
 	}
 
 	override val ordinal get() = 3
-	override fun toString() = "switch TODO"
+	override fun toString() = "SWITCH[${cases.size}]"
 	override fun emit(mv: MethodVisitor) {
-		// TODO Use tableswitch when appropriate
-
 		val entries = cases.entries
-				.sortedBy { it.first }
-				.toList()
-		val keys = IntArray(entries.size) { entries[it].first }
+			.sortedBy { it.first }
+			.toList()
+
 		val handlers = Array(entries.size) { entries[it].second.label }
-		mv.visitLookupSwitchInsn(default.label, keys, handlers)
+		val min = entries.first().first
+		val max = entries.last().first
+
+		// Emit table for contiguous numbers. Keep it simple and don't try to "patch" holes.
+		// Eg. [3,4,5]: 5-3+1 == 3
+		if (max - min + 1 == entries.size) {
+			mv.visitTableSwitchInsn(min, max, default.label, *handlers)
+		} else {
+			val keys = IntArray(entries.size) { entries[it].first }
+			mv.visitLookupSwitchInsn(default.label, keys, handlers)
+		}
 	}
 }
 

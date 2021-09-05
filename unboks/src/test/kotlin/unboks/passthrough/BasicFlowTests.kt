@@ -89,9 +89,9 @@ class BasicFlowTests {
 
 	@PermutationTest
 	fun testSwapProblem(
-		@Ints(77) _x: Int,
-		@Ints(88) _y: Int,
-		@Ints(0, 1, 2, 3) c: Int) {
+			@Ints(77) _x: Int,
+			@Ints(88) _y: Int,
+			@Ints(0, 1, 2, 3) c: Int) {
 		var x = _x
 		var y = _y
 		for (i in (0 .. c)) {
@@ -109,5 +109,28 @@ class BasicFlowTests {
 		for (i in (0 .. c))
 			x = i
 		trace(x)
+	}
+
+	// Note that the both javac and the Kotlin compiler actually emits a tablelookup for
+	// this situation. The VM probably makes its own internal decisions, so newer compilers
+	// are lazy and just use lookup...?
+	@PermutationTest
+	fun testTableSwitch(@Ints(0, 1, 2, 3) x: Int) {
+		trace(when (x) {
+			1 -> 11
+			2 -> 22
+			3 -> 33
+			else -> -1
+		})
+	}
+
+	@PermutationTest
+	fun testTableLookup(@Ints(0, 1, 22, 33) x: Int) {
+		trace(when (x) {
+			1 -> 11
+			22 -> 222
+			33 -> 333
+			else -> -1
+		})
 	}
 }

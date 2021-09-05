@@ -34,6 +34,8 @@ http://www.iro.umontreal.ca/~feeley/papers/FeeleyFPCA93.pdf
 Normal async exceptions does not trigger exception handlers -- only Thread.stop() does with its ThreadDeath.
 Can this actually occur inside a basic block? The above notes seem to imply that such exceptions are caught
 in the edges between blocks (which makes our approach safe -- even if the verifier does not totally agree).
+
+   ^ TODO Outdated comment. We fully handle this with "implicit predecessors".
 */
 
 @ExtendWith(PassthroughAssertExtension::class)
