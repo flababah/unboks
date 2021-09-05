@@ -21,7 +21,5 @@ class FormattedTableTest {
                 .toString()
 
         println(table)
-
-        // TODO assert.
     }
 }
