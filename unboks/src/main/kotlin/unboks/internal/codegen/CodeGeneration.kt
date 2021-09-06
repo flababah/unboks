@@ -309,7 +309,6 @@ private fun createInstRepresentation(graph: FlowGraph): Pair<List<Inst>, List<Ex
 					val default = map.resolveBlock(ir.default)
 
 					if (cases.isEmpty()) {
-						instructions.add(InstStackPop(false))
 						instructions.add(InstGoto(default))
 					} else {
 						instructions.add(regLoad(map.resolveDef(ir.key)))
