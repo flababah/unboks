@@ -37,7 +37,14 @@ private fun parameterSlotEnd(graph: FlowGraph): Int {
 }
 
 private fun linearizeBlocks(graph: FlowGraph): List<Block> {
-	return graph.blocks.toList() // TODO Maybe implement a better heuristic? :)
+	val res = ArrayList<Block>()
+	res += graph.root
+
+	for (block in graph.blocks) { // TODO Maybe implement a better heuristic? :)
+		if (graph.root != block)
+			res += block
+	}
+	return res
 }
 
 private fun phiCount(block: Block): Int {
