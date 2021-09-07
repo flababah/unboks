@@ -121,9 +121,14 @@ class BasicBlock internal constructor(flow: FlowGraph) : Block(flow) {
 		}
 
 	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
-		predecessors.forEach { addObjection(Objection.BlockHasInput(this, it)) } // TODO Check batch.
-		phiReferences.forEach { addObjection(Objection.BlockHasPhiReference(this, it)) }
-
+		for (predecessor in predecessors) {
+			if (predecessor !in batch)
+				addObjection(Objection.BlockHasInput(this, predecessor))
+		}
+		for (phiReference in phiReferences) {
+			if (phiReference !in batch)
+				addObjection(Objection.BlockHasPhiReference(this, phiReference))
+		}
 		if (root)
 			addObjection(Objection.BlockIsRoot(this))
 	}
@@ -153,9 +158,14 @@ class HandlerBlock internal constructor(flow: FlowGraph, type: Reference?) : Blo
 	override val root get() = false
 
 	override fun checkRemove(batch: Set<DependencySource>, addObjection: (Objection) -> Unit) {
-		predecessors.forEach { addObjection(Objection.HandlerIsUsed(this, it)) } // TODO Check batch.
-		phiReferences.forEach { addObjection(Objection.BlockHasPhiReference(this, it)) }
-
+		for (predecessor in predecessors) {
+			if (predecessor !in batch)
+				addObjection(Objection.HandlerIsUsed(this, predecessor))
+		}
+		for (phiReference in phiReferences) {
+			if (phiReference !in batch)
+				addObjection(Objection.BlockHasPhiReference(this, phiReference))
+		}
 		for (use in uses) {
 			// At the moment all Uses are also Entities, but check anyway...
 			if (use !is DependencySource || use !in batch)

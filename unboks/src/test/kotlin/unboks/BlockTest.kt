@@ -3,9 +3,10 @@ package unboks
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class GraphTest {
+class BlockTest {
 
 	@Test
 	fun simpleBlocksTest() {
@@ -80,5 +81,30 @@ class GraphTest {
 
 		switch.remove()
 		assertEquals(emptySet(), a.predecessors as Set<Block>)
+	}
+
+	@Test
+	fun testRemoveRoot() {
+		val graph = FlowGraph()
+		val root = graph.newBasicBlock()
+		assertEquals(setOf(Objection.BlockIsRoot(root)), root.remove(throws = false))
+	}
+
+	@Test
+	fun testRemoveBBBatch() {
+		val graph = FlowGraph()
+		val root = graph.newBasicBlock()
+
+		val a = graph.newBasicBlock()
+		val b = graph.newBasicBlock()
+		a.append().newGoto(b)
+		b.append().newGoto(a)
+
+		assertEquals(setOf(Objection.BlockHasInput(a, b)), a.remove(throws = false))
+		assertEquals(setOf(Objection.BlockHasInput(b, a)), b.remove(throws = false))
+		assertEquals(3, graph.blocks.size)
+
+		assertTrue(a.remove(batch = setOf(a, b), throws = false).isEmpty())
+		assertEquals(setOf(root), graph.blocks)
 	}
 }
