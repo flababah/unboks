@@ -3,8 +3,7 @@ package unboks.agent
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.ClassWriter
-import org.objectweb.asm.Opcodes
-import java.lang.IllegalStateException
+import unboks.ASM_VERSION
 
 /**
  * Uses the same questionable algorithm as ASM's [ClassWriter.getCommonSuperClass], which
@@ -18,7 +17,7 @@ import java.lang.IllegalStateException
 internal class CommonSuperClassResolver {
 	private val cache = mutableMapOf<ClassLoader, MutableMap<String, String>>()
 
-	private class SuperClassVisitor : ClassVisitor(Opcodes.ASM8) {
+	private class SuperClassVisitor : ClassVisitor(ASM_VERSION) {
 		var superName: String? = null
 
 		override fun visit(version: Int, access: Int, name: String?, signature: String?, superName: String?, interfaces: Array<out String>?) {
