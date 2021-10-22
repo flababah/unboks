@@ -42,14 +42,14 @@ class IrCmp1 internal constructor(block: Block, var cmp: Cmp1, yes: BasicBlock, 
 
 	override val defs: DependencyArray<Def> = dependencyArray(defUses, op)
 
-	override val successors get() = setOf(yes, no) // TODO view? -- lav set of properties "PropertyBackedSet"
+	override val successors get() = setOf(yes, no)
 
 	var yes: BasicBlock by dependencyProxyProperty(blockInputs, block, yes)
 	var no: BasicBlock by dependencyProxyProperty(blockInputs, block, no)
 
 	var op: Def by defs.asProperty(0)
 
-	override fun toString() = "$cmp ${op.name} --> ${yes.name} else ${no.name}"
+	override fun toString() = "IF ($cmp ${op.name}) --> ${yes.name} else ${no.name}"
 }
 
 class IrCmp2 internal constructor(block: Block, var cmp: Cmp2, yes: BasicBlock, no: BasicBlock, op1: Def, op2: Def)
@@ -57,7 +57,7 @@ class IrCmp2 internal constructor(block: Block, var cmp: Cmp2, yes: BasicBlock, 
 
 	override val defs: DependencyArray<Def> = dependencyArray(defUses, op1, op2)
 
-	override val successors get() = setOf(yes, no) // TODO same
+	override val successors get() = setOf(yes, no)
 
 	var yes: BasicBlock by dependencyProxyProperty(blockInputs, block, yes)
 	var no: BasicBlock by dependencyProxyProperty(blockInputs, block, no)
@@ -65,7 +65,7 @@ class IrCmp2 internal constructor(block: Block, var cmp: Cmp2, yes: BasicBlock, 
 	var op1: Def by defs.asProperty(0)
 	var op2: Def by defs.asProperty(1)
 
-	override fun toString() = "${op1.name} $cmp ${op2.name} --> ${yes.name} else ${no.name}"
+	override fun toString() = "IF (${op1.name} $cmp ${op2.name}) --> ${yes.name} else ${no.name}"
 }
 
 class IrGoto internal constructor(block: Block, target: BasicBlock)
@@ -199,7 +199,7 @@ class IrReturn internal constructor(block: Block, value: Def?)
 class IrSwitch internal constructor(block: Block, key: Def, default: BasicBlock)
 		: IrTerminal(block), Use {
 
-	override val successors get() = cases.toMutableList().toSet() + default // TODO make a view of default and cases.
+	override val successors get() = cases.toMutableList().toSet() + default
 
 	override val defs: DependencySingleton<Def> = dependencyProperty(defUses, key)
 

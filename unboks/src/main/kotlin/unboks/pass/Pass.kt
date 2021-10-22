@@ -31,6 +31,11 @@ class Pass<R>(private val initBlock: Builder<R>.() -> Unit) {
 	@DslMarker
 	annotation class Dsl
 
+	/**
+	 * The set of non-null items returned from pass visitors.
+	 */
+	val collected: Collection<R> get() = values.values
+
 	@Dsl
 	class Builder<R> internal constructor(val graph: FlowGraph) {
 		internal val visitors = mutableListOf<Pair<KClass<out PassType>, Context.(PassType) -> R?>>()

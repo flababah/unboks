@@ -95,8 +95,8 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 	/**
 	 * Compile the CFG for the method and emit it into an ASM [MethodVisitor].
 	 *
-	 * TODO Blabla starts with [MethodVisitor.visitCode], and ends with [MethodVisitor.visitEnd].
-	 * Will output 1.7+ bytecode. Frame infos, no JSR/RET.
+	 * Calls the visit methods starting with [MethodVisitor.visitCode] and ends with [MethodVisitor.visitEnd].
+	 * Will output 1.7+ compatible bytecode. For now, the receiving visitor must compute stack frames.
 	 */
 	fun generate(receiver: MethodVisitor) {
 		execute(createConsistencyCheckPass(this))
@@ -104,7 +104,11 @@ class FlowGraph(vararg parameterTypes: Thing) : PassType {
 	}
 
 	/**
-	 * TODO Blablla blocks visitCode until (and including) visitEnd -> passes rest to delegate
+	 * Returns a method visitor that uses visit calls from [MethodVisitor.visitCode] until (and including)
+	 * [MethodVisitor.visitEnd]. These calls are not invoked on the delegate. All other calls are passed
+	 * through to the delegate.
+	 *
+	 * @param completion is invoked after [MethodVisitor.visitEnd] has been invoked and the graph has been built
 	 *
 	 * @see Companion.visitMethod
 	 */

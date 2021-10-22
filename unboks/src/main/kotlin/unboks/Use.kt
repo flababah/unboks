@@ -16,7 +16,7 @@ import unboks.pass.PassType
  * then handler block use of a is DISALLOWED. Needs to be wrapped in a
  * [IrPhi] with some initial pre-might-throw def. This is a special case
  * for uses in exception handlers. Business as usual in successor blocks,
- * since any exception throw before is either handled or propagated out of
+ * since any exception thrown before is either handled or propagated out of
  * the function.
  */
 interface Use : PassType {

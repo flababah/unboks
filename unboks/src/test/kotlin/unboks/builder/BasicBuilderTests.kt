@@ -25,7 +25,6 @@ class BasicBuilderTests {
 		val main = FlowGraph(*parameters)
 		builder(main)
 		main.generate(mainMv)
-		mainMv.visitEnd()
 
 		// Load bytecode.
 		cw.visitEnd()

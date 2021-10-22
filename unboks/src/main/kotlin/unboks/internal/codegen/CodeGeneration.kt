@@ -27,6 +27,7 @@ internal fun generate(graph: FlowGraph, target: MethodVisitor) {
 		instruction.emit(target)
 
 	target.visitMaxs(15, locals) // TODO Simulate stack.
+	target.visitEnd()
 }
 
 private fun parameterSlotEnd(graph: FlowGraph): Int {
