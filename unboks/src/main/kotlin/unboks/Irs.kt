@@ -109,12 +109,14 @@ class IrInvoke internal constructor(block: Block, val spec: Invocation, argument
  * c = phi(in A, in B) in C
  * phi(c, in D)
  *
- * The graph becomes a bit more bloated but it might lead to better register allocation
- * and it's easier to reason about.
+ * The graph becomes a bit more bloated, but it might lead to better register allocation,
+ * and is easier to reason about.
  *
- * TODO Handler blocks:
- * The one def per block rule cannot apply. Maybe at least one def before any unsafe
- * instruction?
+ * Handler blocks depending on values defined in a "handled" block also need a phi join:
+ * A value from inside each handled block, and a value from each of the immediate predecessors
+ * of the handled blocks. Even if the value from a handled block is defined as the first
+ * thing (with no risk of synchronous exception) the rule still applies. This is due to
+ * the way JVM class verification works (asynchronous exceptions might occur).
  */
 class IrPhi internal constructor(block: Block, val explicitType: Thing?)
 		: Ir(block), Def, Use {
