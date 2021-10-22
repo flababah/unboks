@@ -3,9 +3,6 @@ package unboks
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
-// TODO tag BaseDependencySource med og registrer selv.
-// TODO equals/hashcode ?
-
 /**
  *
  * Will iterate the same element multiple times, if it's present more than once in the view.
