@@ -1,8 +1,8 @@
 unboks - JVM Bytecode Transformation Framework
 ==============================================
----
-<span style="color:red">Read the [State of the Project](#State of the Project) section before considering use!</span>
 
+:warning: Read the [State of the Project](#state-of-the-project) section before considering use! :warning:
+  
 This framework exposes a graph-based representation of JVM methods that can be used to make transformations.
 Variable definitions and usages are modelled using
 [static single assignment form (SSA)](https://en.wikipedia.org/wiki/Static_single_assignment_form).
