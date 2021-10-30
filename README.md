@@ -479,7 +479,7 @@ Some of the bigger missing areas and future ideas are listed below:
 ### Parser
 - **Parser Cleanup** - The IR-building visitor has gone through a few iterations; some major ones when figuring out how to deal
 with exception handler blocks. Values defined in blocks that throw exceptions, with said values being read in 
-handler blocks, was a pain-point in earlier iterations. Essentially, the problem was that it was a value might be one
+handler blocks, was a pain-point in earlier iterations. Essentially, the problem was that a value might be one
 thing or another depending on whether an exception was thrown. An early solution was to define an `IrMutable` opcode that
 allowed mutation. Since that went against the concept of SSA, it was removed. The current version strategically splits
 exception-handled blocks into multiple blocks (depending on where a handler-read variable is updated and which opcodes
@@ -487,7 +487,7 @@ that potentially throw). These values are then phi-joined in the handler block. 
 probably be optimized.
 - **JSR/RET Handling** - The IR-builder does not support old bytecode containing the `JSR` and `RET` opcodes. These
 are no longer allowed in newer bytecode versions, but it seems doable to convert them to the intermediate representation.
-Coincidentally, this would also make it possible to convert old bytecode to new (using the code generator). `JSR` jumps to
+Incidentally, this would also make it possible to convert old bytecode to new (using the code generator). `JSR` jumps to
 a sub-routine. Essentially a `GOTO`, except that a return-address type is pushed to the top of the stack when entering
 the routine. `RET` allows returning to the call-site using the return-address. We could make it work by treating the
 return-address as a special int-value, and "replacing" the `JSR` with a `GOTO` and pushing a constant value, representing
